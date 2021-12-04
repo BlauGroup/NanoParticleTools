@@ -44,13 +44,13 @@
 # species_id_1|species_id_2|left_state_1|left_state_2|right_state_1|right_state_2|rate
 
 # metadata
-# number_of_species|number_of_sites|single_site_interaction_factor|double_site_interaction_factor|spatial_decay_method
+# number_of_species|number_of_sites|single_site_interaction_factor|double_site_interaction_factor|spatial_decay_radius
 
 
 # test model
 # two species: red and black
 # black species internal state = { empty, unexcited, excited }
-# red species have two states = { empty, occupied }
+# red species have two states = { nothing, occupied }
 
 # one site interactions:
 # black: (unexcited; excited) -> 1                              // heating
@@ -60,8 +60,79 @@
 # two site interactions:
 # black black: (excited, empty; empty, unexcited) -> 1          // black motion. requires energy
 #              (empty, excited; unexcited, empty) -> 1
-# black red:   (unexcited, occupied; excited, empty) -> 1       // black absorbing red
-#              (excited, empty; unexcited, occupied) -> 1       // black emitting red
-# red red:     (occupied, empty; empty, occupied) -> 1          // red motion. free
-#              (empty, occupied; occupied, empty) -> 1
-#              (occupied, occupied; empty, empty) -> 1          // radiation
+# black red:   (unexcited, occupied; excited, nothing) -> 1       // black absorbing red
+#              (excited, nothing; unexcited, occupied) -> 1       // black emitting red
+# red red:     (occupied, nothing; nothing, occupied) -> 1          // red motion. free
+#              (nothing, occupied; occupied, nothing) -> 1
+#              (occupied, occupied; nothing, nothing) -> 1          // radiation
+
+# test model has sites at (i,j,k) where 0 <= i,j,k < 10.
+# if i + j + k is even, species is black, otherwise species is red.
+# 1000 sites in total.
+
+import sqlite3
+
+
+species = {
+    'black' : {
+        'index_to_state' : [ 'empty', 'unexcited', 'excited' ],
+        'state_to_index' : {
+            'empty' : 0,
+            'unexcited' : 1,
+            'excited' : 2
+        }
+    },
+
+    'red' : {
+        'index_to_state' : [ 'nothing', 'occupied' ],
+        'state_to_index' : {
+            'nothing' : 0,
+            'occupied' : 1
+        }
+    }
+}
+
+one_site_interactions = {
+    'black' : {
+        ('unexcited', 'excited') : 1.0
+    },
+
+    'red' : {}
+}
+
+two_site_interactions = {
+    ('black', 'black') : {
+        ('excited','empty',
+         'empty','unexcited') : 1.0,
+
+        ('empty', 'excited',
+         'unexcited', 'empty') : 1.0,
+    },
+
+    ('black', 'red') : {
+        ('unexcited', 'occupied',
+         'excited', 'nothing') : 1.0,
+
+        ('excited', 'nothing',
+         'unexcited', 'occupied') : 1.0,
+    },
+
+    ('red', 'black') : {
+        ('occupied', 'unexcited',
+         'nothing', 'excited') : 1.0,
+
+        ('nothing', 'excited',
+         'occupied', 'unexcited') : 1.0
+    },
+
+    ('red', 'red') : {
+        ('occupied', 'nothing',
+         'nothing', 'occupied') : 1.0,
+
+        ('nothing', 'occupied',
+         'occupied', 'nothing') : 1.0,
+
+        ('occupied', 'occupied',
+         'nothing', 'nothing') : 1.0
+    },
+}
