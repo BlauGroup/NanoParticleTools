@@ -38,6 +38,8 @@
 # one_site_interactions
 # species_id|left_state|right_state|rate
 
+
+# for two site interactions, we include both directions in the database
 # two_site_interactions
 # species_id_1|species_id_2|left_state_1|left_state_2|right_state_1|right_state_2|rate
 
@@ -51,8 +53,7 @@
 # red species have two states = { empty, occupied }
 
 # one site interactions:
-# 
-# black: (unexcited; excited) -> 1 // bottom absorption
+# black: (unexcited; excited) -> 1                              // heating
 # red:   None
 
 
@@ -63,6 +64,4 @@
 #              (excited, empty; unexcited, occupied) -> 1       // black emitting red
 # red red:     (occupied, empty; empty, occupied) -> 1          // red motion. free
 #              (empty, occupied; occupied, empty) -> 1
-#              (occupied, occupied; empty, empty) -> 1          // top radiation
-
-
+#              (occupied, occupied; empty, empty) -> 1          // radiation
