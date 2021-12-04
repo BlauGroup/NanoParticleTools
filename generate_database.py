@@ -51,17 +51,18 @@
 # red species have two states = { empty, occupied }
 
 # one site interactions:
-# black: (unexcited; excited) -> 1
+# 
+# black: (unexcited; excited) -> 1 // bottom absorption
 # red:   None
 
 
 # two site interactions:
-# black black: (excited, empty; empty, unexcited) -> 1
+# black black: (excited, empty; empty, unexcited) -> 1          // black motion. requires energy
 #              (empty, excited; unexcited, empty) -> 1
-#              (excited, unexcited; unexcited, excited) -> 1
-#              (unexcited, excited; excited, unexcited) -> 1
-# black red:   (unexcited, occupied; excited, empty) -> 1
-#              (excited, empty; unexcited, occupied) -> 1
-# red red:     (occupied, empty; empty, occupied) -> 1
+# black red:   (unexcited, occupied; excited, empty) -> 1       // black absorbing red
+#              (excited, empty; unexcited, occupied) -> 1       // black emitting red
+# red red:     (occupied, empty; empty, occupied) -> 1          // red motion. free
 #              (empty, occupied; occupied, empty) -> 1
-#              (occupied, occupied; empty, empty) -> 1
+#              (occupied, occupied; empty, empty) -> 1          // top radiation
+
+
