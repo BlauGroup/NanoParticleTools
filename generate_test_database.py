@@ -30,7 +30,7 @@
 # our tables look as follows:
 
 # species
-# species_id|local_degrees_of_freedom_bound
+# species_id|degrees_of_freedom
 
 # sites
 # site_id|x|y|z|species_id
@@ -71,7 +71,7 @@
 # 1000 sites in total.
 
 import sqlite3
-
+import os
 
 species = {
     'black' : {
@@ -163,3 +163,25 @@ two_site_interactions = {
          'nothing', 'nothing') : 1.0
     },
 }
+
+os.system('rm -rf ./scratch; mkdir scratch')
+con = sqlite3.connect('./scratch/test_nanoparticle.sqlite')
+cur = con.cursor()
+
+
+create_species_table_sql = """
+    CREATE TABLE species (
+        species_id          INTEGER NOT NULL PRIMARY KEY,
+        degrees_of_freedom  INTEGER NOT NULL
+    );
+"""
+
+create_sites_table_sql = """
+    CREATE TABLE sites (
+        site_id             INTEGER NOT NULL PRIMARY KEY,
+        x                   REAL NOT NULL,
+        y                   REAL NOT NULL,
+        z                   REAL NOT NULL,
+        species_id          INTEGER NOT NULL
+    );
+"""
