@@ -92,6 +92,33 @@ species = {
     }
 }
 
+sites = {
+    'index_to_site' : {},
+    'site_to_index' : {}
+}
+
+
+index = 0
+for i in range(10):
+    for j in range(10):
+        for k in range(10):
+            if (i + j + k) % 2 == 0:
+                site_species = 'black'
+            else:
+                site_species = 'red'
+
+
+            sites['index_to_site'][index] = (
+                float(i),
+                float(j),
+                float(k),
+                site_species)
+
+            sites['site_to_index'][(i,j,k)] = index
+
+            index += 1
+
+
 one_site_interactions = {
     'black' : {
         ('unexcited', 'excited') : 1.0
