@@ -13,7 +13,7 @@
         mkShell {
           buildInputs = [
             (python38.withPackages (ps: [ ]))
-            sqlitebrowser
+            sqlite
           ];
         };
 

@@ -75,6 +75,7 @@ import os
 
 species = {
     'black' : {
+        'species_id' : 0,
         'index_to_state' : [ 'empty', 'unexcited', 'excited' ],
         'state_to_index' : {
             'empty' : 0,
@@ -84,6 +85,7 @@ species = {
     },
 
     'red' : {
+        'species_id' : 1,
         'index_to_state' : [ 'nothing', 'occupied' ],
         'state_to_index' : {
             'nothing' : 0,
@@ -244,3 +246,10 @@ cur.execute(create_one_site_interactions_table_sql)
 cur.execute(create_two_site_interactions_table_sql)
 cur.execute(create_metadata_table_sql)
 
+# insert species
+for s in species:
+    cur.execute(insert_species_sql,
+                ( species[s]['species_id'],
+                  len(species[s]['index_to_state'])))
+
+con.commit()
