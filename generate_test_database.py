@@ -35,21 +35,17 @@
 # sites
 # site_id|x|y|z|species_id
 
-# one_site_interactions
-# species_id|left_state|right_state|rate
-
-
 # for two site interactions, we include both directions in the database
-# two_site_interactions
-# species_id_1|species_id_2|
+# if it is a one site interaction, species_id_2, left_state_2 and right_state_2 are -1.
+# interactions
+# interaction_id|species_id_1|species_id_2|
 # left_state_1|left_state_2|
 # right_state_1|right_state_2|rate
 
 # metadata
 # number_of_species|number_of_sites|
-# number_of_one_site_interactions|number_of_two_site_interactions|
-# single_site_interaction_factor|double_site_interaction_factor|
-# spatial_decay_radius
+# number_of_interactions|single_site_interaction_factor|
+# double_site_interaction_factor|spatial_decay_radius
 
 
 # test model
@@ -75,6 +71,17 @@
 # if i + j + k is even, species is black, otherwise species is red.
 # 1000 sites in total.
 
+# initial state of a simulation is a mapping from sites to internal degrees of freedom
+# at the given site.
+
+# initial_state
+# site_id|internal_state_id
+
+# we record trajectories as follows. If site_id_2 = -1, then it is a one site interaction
+# otherwise, it is a two site interaction.
+# trajectories
+# seed|step|time|site_id_1|site_id_2|interaction_id
+
 import sqlite3
 import os
 
@@ -99,10 +106,7 @@ species = {
     }
 }
 
-sites = {
-    'index_to_site' : {},
-    'site_to_index' : {}
-}
+sites = {}
 
 
 index = 0
@@ -114,61 +118,118 @@ for i in range(10):
             else:
                 site_species = 'red'
 
+            site = {
+                'site_id' : index,
+                'x' : float(i),
+                'y' : float(j),
+                'z' : float(k),
+                'species' : site_species
+            }
 
-            sites['index_to_site'][index] = (
-                float(i),
-                float(j),
-                float(k),
-                site_species)
-
-            sites['site_to_index'][(i,j,k)] = index
+            sites[index] = site
 
             index += 1
 
 
 one_site_interactions = {
-    'black' : {
-        ('unexcited', 'excited') : 1.0
-    },
+    'black' : [
+        {
+            'interaction_id' : 0,
+            'left_state' : 'unexcited',
+            'right_state' : 'excited',
+            'rate' : 1.0
+        }
+    ],
 
-    'red' : {}
+    'red' : []
 }
 
 two_site_interactions = {
-    ('black', 'black') : {
-        ('excited','empty',
-         'empty','unexcited') : 1.0,
+    ('black', 'black') : [
+        {
+            'interaction_id' : 1,
+            'left_state_1'   : 'excited',
+            'left_state_2'   : 'empty',
+            'right_state_1'  : 'empty',
+            'right_state_2'  : 'unexcited',
+            'rate'           : 1.0
+        },
 
-        ('empty', 'excited',
-         'unexcited', 'empty') : 1.0,
-    },
+        {
+            'interaction_id' : 2,
+            'left_state_1'   : 'empty',
+            'left_state_2'   : 'excited',
+            'right_state_1'  : 'unexcited',
+            'right_state_2'  : 'empty',
+            'rate'           : 1.0
+        },
 
-    ('black', 'red') : {
-        ('unexcited', 'occupied',
-         'excited', 'nothing') : 1.0,
+    ],
 
-        ('excited', 'nothing',
-         'unexcited', 'occupied') : 1.0,
-    },
+    ('black', 'red') : [
+        {
+            'interaction_id' : 3,
+            'left_state_1'   : 'unexcited',
+            'left_state_2'   : 'occupied',
+            'right_state_1'  : 'excited',
+            'right_state_2'  : 'nothing',
+            'rate'           : 1.0
+        },
+        {
+            'interaction_id' : 4,
+            'left_state_1'   : 'excited',
+            'left_state_2'   : 'nothing',
+            'right_state_1'  : 'unexcited',
+            'right_state_2'  : 'occupied',
+            'rate'           : 1.0
+        },
+    ],
 
-    ('red', 'black') : {
-        ('occupied', 'unexcited',
-         'nothing', 'excited') : 1.0,
+    ('red', 'black') : [
+        {
+            'interaction_id' : 5,
+            'left_state_1'   : 'occupied',
+            'left_state_2'   : 'unexcited',
+            'right_state_1'  : 'nothing',
+            'right_state_2'  : 'excited',
+            'rate'           : 1.0
+        },
+        {
+            'interaction_id' : 6,
+            'left_state_1'   : 'nothing',
+            'left_state_2'   : 'excited',
+            'right_state_1'  : 'occupied',
+            'right_state_2'  : 'unexcited',
+            'rate'           : 1.0
+        },
+    ],
 
-        ('nothing', 'excited',
-         'occupied', 'unexcited') : 1.0
-    },
-
-    ('red', 'red') : {
-        ('occupied', 'nothing',
-         'nothing', 'occupied') : 1.0,
-
-        ('nothing', 'occupied',
-         'occupied', 'nothing') : 1.0,
-
-        ('occupied', 'occupied',
-         'nothing', 'nothing') : 1.0
-    },
+    ('red', 'red') : [
+        {
+            'interaction_id' : 7,
+            'left_state_1'   : 'occupied',
+            'left_state_2'   : 'nothing',
+            'right_state_1'  : 'nothing',
+            'right_state_2'  : 'occupied',
+            'rate'           : 1.0
+        },
+        {
+            'interaction_id' : 8,
+            'left_state_1'   : 'nothing',
+            'left_state_2'   : 'occupied',
+            'right_state_1'  : 'occupied',
+            'right_state_2'  : 'nothing',
+            'rate'           : 1.0
+        },
+        {
+            'interaction_id' : 9,
+            'left_state_1'   : 'occupied',
+            'left_state_2'   : 'occupied',
+            'right_state_1'  : 'nothing',
+            'right_state_2'  : 'nothing',
+            'rate'           : 1.0
+        }
+    ]
 }
 
 create_species_table_sql = """
@@ -197,21 +258,10 @@ insert_site_sql = """
 """
 
 
-create_one_site_interactions_table_sql = """
-    CREATE TABLE one_site_interactions (
-        species_id          INTEGER NOT NULL PRIMARY KEY,
-        left_state          INTEGER NOT NULL,
-        right_state         INTEGER NOT NULL,
-        rate                REAL NOT NULL
-    );
-"""
 
-insert_one_site_interaction_sql = """
-    INSERT INTO one_site_interactions VALUES (?,?,?,?);
-"""
-
-create_two_site_interactions_table_sql = """
-    CREATE TABLE two_site_interactions (
+create_interactions_table_sql = """
+    CREATE TABLE interactions (
+        interaction_id      INTEGER NOT NULL PRIMARY KEY,
         species_id_1        INTEGER NOT NULL,
         species_id_2        INTEGER NOT NULL,
         left_state_1        INTEGER NOT NULL,
@@ -222,16 +272,15 @@ create_two_site_interactions_table_sql = """
     );
 """
 
-insert_two_site_interaction_sql = """
-    INSERT INTO two_site_interactions VALUES (?,?,?,?,?,?,?);
+insert_interaction_sql = """
+    INSERT INTO interactions VALUES (?,?,?,?,?,?,?,?);
 """
 
 create_metadata_table_sql = """
     CREATE TABLE metadata (
         number_of_species                   INTEGER NOT NULL,
         number_of_sites                     INTEGER NOT NULL,
-        number_of_one_site_interactions     INTEGER NOT NULL,
-        number_of_two_site_interactions     INTEGER NOT NULL,
+        number_of_interactions              INTEGER NOT NULL,
         single_site_interaction_factor      REAL NOT NULL,
         double_site_interaction_factor      REAL NOT NULL,
         spatial_decay_radius                REAL NOT NULL
@@ -239,80 +288,112 @@ create_metadata_table_sql = """
 """
 
 insert_metadata_sql = """
-    INSERT INTO metadata VALUES (?,?,?,?,?,?,?);
+    INSERT INTO metadata VALUES (?,?,?,?,?,?);
 """
 
 os.system('rm -rf ./scratch; mkdir scratch')
-con = sqlite3.connect('./scratch/test_nanoparticle.sqlite')
-cur = con.cursor()
 
-# create tables
-cur.execute(create_species_table_sql)
-cur.execute(create_sites_table_sql)
-cur.execute(create_one_site_interactions_table_sql)
-cur.execute(create_two_site_interactions_table_sql)
-cur.execute(create_metadata_table_sql)
+def setup_nanoparticle_database():
+    con = sqlite3.connect('./scratch/np.sqlite')
+    cur = con.cursor()
 
-# insert species
-for s in species:
-    cur.execute(insert_species_sql,
-                ( species[s]['species_id'],
-                  len(species[s]['index_to_state'])))
+    # create tables
+    cur.execute(create_species_table_sql)
+    cur.execute(create_sites_table_sql)
+    cur.execute(create_interactions_table_sql)
+    cur.execute(create_metadata_table_sql)
 
-con.commit()
-
-# insert sites
-for site_id in sites['index_to_site']:
-    site_data = sites['index_to_site'][site_id]
-    cur.execute(insert_site_sql,
-                ( site_id,
-                  site_data[0],
-                  site_data[1],
-                  site_data[2],
-                  species[site_data[3]]['species_id']))
-
-con.commit()
-
-number_of_one_site_interactions = 0
-# inserting single site interactions
-for s in one_site_interactions:
-    for (l,r) in one_site_interactions[s]:
-        number_of_one_site_interactions += 1
-        rate = one_site_interactions[s][(l,r)]
-        cur.execute(insert_one_site_interaction_sql,
+    # insert species
+    for s in species:
+        cur.execute(insert_species_sql,
                     ( species[s]['species_id'],
-                      species[s]['state_to_index'][l],
-                      species[s]['state_to_index'][r],
-                      rate))
+                      len(species[s]['index_to_state'])))
 
-con.commit()
+    con.commit()
 
-number_of_two_site_interactions = 0
-# inserting two site interactions
-for (s1,s2) in two_site_interactions:
-    for (l1,l2,r1,r2) in two_site_interactions[(s1,s2)]:
-        number_of_two_site_interactions += 1
-        rate = two_site_interactions[(s1,s2)][
-            (l1,l2,r1,r2)]
-        cur.execute(insert_two_site_interaction_sql,
-                    ( species[s1]['species_id'],
-                      species[s2]['species_id'],
-                      species[s1]['state_to_index'][l1],
-                      species[s2]['state_to_index'][l2],
-                      species[s1]['state_to_index'][r1],
-                      species[s2]['state_to_index'][r2],
-                      rate))
+    # insert sites
+    for site_id in sites:
+        site_data = sites[site_id]
+        cur.execute(insert_site_sql,
+                    ( site_data['site_id'],
+                      site_data['x'],
+                      site_data['y'],
+                      site_data['z'],
+                      species[site_data['species']]['species_id']))
 
-con.commit()
+    con.commit()
 
-# insert metadata
-cur.execute(insert_metadata_sql,
-            ( len(species),
-              len(sites['index_to_site']),
-              number_of_one_site_interactions,
-              number_of_two_site_interactions,
-              1.0,
-              1.0,
-              4.0))
+    number_of_interactions = 0
+    # inserting single site interactions
+    for s in one_site_interactions:
+        for interaction_data in one_site_interactions[s]:
+            number_of_interactions += 1
+            cur.execute(insert_interaction_sql,
+                        ( interaction_data['interaction_id'],
+                          species[s]['species_id'],
+                          -1,
+                          species[s]['state_to_index'][
+                              interaction_data['left_state']],
+                          -1,
+                          species[s]['state_to_index'][
+                              interaction_data['right_state']],
+                          -1,
+                          interaction_data['rate']))
 
-con.commit()
+    con.commit()
+
+    # inserting two site interactions
+    for (s1,s2) in two_site_interactions:
+        for interaction_data in two_site_interactions[(s1,s2)]:
+            number_of_interactions += 1
+            cur.execute(insert_interaction_sql,
+                        ( interaction_data['interaction_id'],
+                          species[s1]['species_id'],
+                          species[s2]['species_id'],
+                          species[s1]['state_to_index'][
+                              interaction_data['left_state_1']
+                          ],
+                          species[s2]['state_to_index'][
+                              interaction_data['left_state_2']
+                          ],
+                          species[s1]['state_to_index'][
+                              interaction_data['right_state_1']
+                          ],
+                          species[s2]['state_to_index'][
+                              interaction_data['right_state_2']
+                          ],
+                          interaction_data['rate']))
+
+    con.commit()
+
+    # insert metadata
+    cur.execute(insert_metadata_sql,
+                ( len(species),
+                  len(sites),
+                  number_of_interactions,
+                  1.0,
+                  1.0,
+                  4.0))
+
+    con.commit()
+
+
+create_initial_state_table_sql = """
+    CREATE TABLE initial_state (
+        site_id            INTEGER NOT NULL PRIMARY KEY,
+        degree_of_freedom  INTEGER NOT NULL
+    );
+"""
+
+create_trajectories_table_sql = """
+    CREATE TABLE trajectories (
+        seed               INTEGER NOT NULL,
+        step               INTEGER NOT NULL,
+        time               REAL NOT NULL,
+        site_id_1          INTEGER NOT NULL,
+        site_id_2          INTEGER NOT NULL,
+        interaction_id     INTEGER NOT NULL
+);
+"""
+
+setup_nanoparticle_database()
