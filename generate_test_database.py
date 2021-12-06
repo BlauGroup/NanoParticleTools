@@ -164,16 +164,15 @@ two_site_interactions = {
     },
 }
 
-os.system('rm -rf ./scratch; mkdir scratch')
-con = sqlite3.connect('./scratch/test_nanoparticle.sqlite')
-cur = con.cursor()
-
-
 create_species_table_sql = """
     CREATE TABLE species (
         species_id          INTEGER NOT NULL PRIMARY KEY,
         degrees_of_freedom  INTEGER NOT NULL
     );
+"""
+
+insert_species_sql = """
+    INSERT INTO species VALUES (?,?);
 """
 
 create_sites_table_sql = """
@@ -185,3 +184,63 @@ create_sites_table_sql = """
         species_id          INTEGER NOT NULL
     );
 """
+
+insert_site_sql = """
+    INSERT INTO sites VALUES (?,?,?,?,?);
+"""
+
+
+create_one_site_interactions_table_sql = """
+    CREATE TABLE one_site_interactions (
+        species_id          INTEGER NOT NULL PRIMARY KEY,
+        left_state          INTEGER NOT NULL,
+        right_state         INTEGER NOT NULL,
+        rate                REAL NOT NULL
+    );
+"""
+
+insert_one_site_interaction_sql = """
+    INSERT INTO one_site_interactions VALUES (?,?,?,?);
+"""
+
+create_two_site_interactions_table_sql = """
+    CREATE TABLE two_site_interactions (
+        species_id_1        INTEGER NOT NULL PRIMARY KEY,
+        species_id_2        INTEGER NOT NULL,
+        left_state_1        INTEGER NOT NULL,
+        left_state_2        INTEGER NOT NULL,
+        right_state_1       INTEGER NOT NULL,
+        right_state_2       INTEGER NOT NULL,
+        rate                REAL NOT NULL
+    );
+"""
+
+insert_two_site_interaction_sql = """
+    INSERT INTO two_site_interactions VALUES (?,?,?,?,?,?,?);
+"""
+
+create_metadata_table_sql = """
+    CREATE TABLE metadata (
+        number_of_species                INTEGER NOT NULL,
+        number_of_sites                  INTEGER NOT NULL,
+        single_site_interaction_factor   REAL NOT NULL,
+        double_site_interaction_factor   REAL NOT NULL,
+        spatial_decay_radius             REAL NOT NULL
+    );
+"""
+
+insert_metadata_sql = """
+    INSERT INTO metadata VALUES (?,?,?,?,?);
+"""
+
+os.system('rm -rf ./scratch; mkdir scratch')
+con = sqlite3.connect('./scratch/test_nanoparticle.sqlite')
+cur = con.cursor()
+
+# create tables
+cur.execute(create_species_table_sql)
+cur.execute(create_sites_table_sql)
+cur.execute(create_one_site_interactions_table_sql)
+cur.execute(create_two_site_interactions_table_sql)
+cur.execute(create_metadata_table_sql)
+

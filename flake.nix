@@ -13,6 +13,7 @@
         mkShell {
           buildInputs = [
             (python38.withPackages (ps: [ ]))
+            sqlitebrowser
           ];
         };
 
@@ -22,5 +23,4 @@
         x86_64-darwin = genericDevShell "x86_64-darwin";
       };
     };
-
 }
