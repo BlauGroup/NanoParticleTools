@@ -314,3 +314,5 @@ cur.execute(insert_metadata_sql,
               1.0,
               1.0,
               4.0))
+
+con.commit()
