@@ -396,4 +396,46 @@ create_trajectories_table_sql = """
 );
 """
 
+insert_initial_state_sql = """
+    INSERT INTO initial_state VALUES (?,?);
+"""
+
+
+def setup_initial_state_database():
+    con = sqlite3.connect('./scratch/initial_state.sqlite')
+    cur = con.cursor()
+
+
+    cur.execute(create_initial_state_table_sql)
+    cur.execute(create_trajectories_table_sql)
+    con.commit()
+
+
+    for index in sites:
+        site_data = sites[index]
+        site_id = site_data['site_id']
+        x = site_data['x']
+        y = site_data['y']
+        z = site_data['z']
+        s = site_data['species']
+        if s == 'black':
+            if ((x + y + z < 5.0) or (x + y + z >= 25.0)):
+                cur.execute(
+                    insert_initial_state_sql,
+                    (site_id, species[s]['state_to_index']['unexcited']))
+            else:
+                 cur.execute(
+                    insert_initial_state_sql,
+                    (site_id, species[s]['state_to_index']['empty']))
+
+        if s == 'red':
+            cur.execute(
+                insert_initial_state_sql,
+                (site_id, species[s]['state_to_index']['nothing']))
+
+        con.commit()
+
+
+
+setup_initial_state_database()
 setup_nanoparticle_database()
