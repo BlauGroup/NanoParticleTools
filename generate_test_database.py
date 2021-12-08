@@ -280,15 +280,12 @@ create_metadata_table_sql = """
     CREATE TABLE metadata (
         number_of_species                   INTEGER NOT NULL,
         number_of_sites                     INTEGER NOT NULL,
-        number_of_interactions              INTEGER NOT NULL,
-        single_site_interaction_factor      REAL NOT NULL,
-        double_site_interaction_factor      REAL NOT NULL,
-        spatial_decay_radius                REAL NOT NULL
+        number_of_interactions              INTEGER NOT NULL
     );
 """
 
 insert_metadata_sql = """
-    INSERT INTO metadata VALUES (?,?,?,?,?,?);
+    INSERT INTO metadata VALUES (?,?,?);
 """
 
 os.system('rm -rf ./scratch; mkdir scratch')
@@ -370,10 +367,7 @@ def setup_nanoparticle_database():
     cur.execute(insert_metadata_sql,
                 ( len(species),
                   len(sites),
-                  number_of_interactions,
-                  1.0,
-                  1.0,
-                  4.0))
+                  number_of_interactions))
 
     con.commit()
 
@@ -400,6 +394,17 @@ insert_initial_state_sql = """
     INSERT INTO initial_state VALUES (?,?);
 """
 
+create_factors_table_sql = """
+    CREATE TABLE factors (
+        single_site_interaction_factor      REAL NOT NULL,
+        double_site_interaction_factor      REAL NOT NULL,
+        spatial_decay_radius                REAL NOT NULL
+);
+"""
+
+insert_factors_sql = """
+    INSERT INTO factors VALUES (?,?,?);
+"""
 
 def setup_initial_state_database():
     con = sqlite3.connect('./scratch/initial_state.sqlite')
@@ -408,6 +413,8 @@ def setup_initial_state_database():
 
     cur.execute(create_initial_state_table_sql)
     cur.execute(create_trajectories_table_sql)
+    cur.execute(create_factors_table_sql)
+    cur.execute(insert_factors_sql, (1.0,1.0,1.0))
     con.commit()
 
 
