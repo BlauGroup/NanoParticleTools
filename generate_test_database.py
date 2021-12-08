@@ -396,8 +396,8 @@ insert_initial_state_sql = """
 
 create_factors_table_sql = """
     CREATE TABLE factors (
-        single_site_interaction_factor      REAL NOT NULL,
-        double_site_interaction_factor      REAL NOT NULL,
+        one_site_interaction_factor      REAL NOT NULL,
+        two_site_interaction_factor      REAL NOT NULL,
         spatial_decay_radius                REAL NOT NULL
 );
 """
