@@ -44,8 +44,7 @@
 
 # metadata
 # number_of_species|number_of_sites|
-# number_of_interactions|single_site_interaction_factor|
-# double_site_interaction_factor|spatial_decay_radius
+# number_of_interactions|interaction_radius_bound
 
 
 # test model
@@ -398,7 +397,7 @@ create_factors_table_sql = """
     CREATE TABLE factors (
         one_site_interaction_factor      REAL NOT NULL,
         two_site_interaction_factor      REAL NOT NULL,
-        spatial_decay_radius                REAL NOT NULL
+        interaction_radius_bound         REAL NOT NULL
 );
 """
 
