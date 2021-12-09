@@ -414,7 +414,7 @@ def setup_initial_state_database():
     cur.execute(create_initial_state_table_sql)
     cur.execute(create_trajectories_table_sql)
     cur.execute(create_factors_table_sql)
-    cur.execute(insert_factors_sql, (1.0,1.0,1.0))
+    cur.execute(insert_factors_sql, (1.0,1.0,3.0))
     con.commit()
 
 
