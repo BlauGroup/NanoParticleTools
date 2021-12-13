@@ -38,7 +38,8 @@
 # for two site interactions, we include both directions in the database
 # if it is a one site interaction, species_id_2, left_state_2 and right_state_2 are -1.
 # interactions
-# interaction_id|species_id_1|species_id_2|
+# interaction_id|number_of_sites|
+# species_id_1|species_id_2|
 # left_state_1|left_state_2|
 # right_state_1|right_state_2|rate
 
@@ -134,6 +135,7 @@ one_site_interactions = {
     'black' : [
         {
             'interaction_id' : 0,
+            'number_of_sites' : 1,
             'left_state' : 'unexcited',
             'right_state' : 'excited',
             'rate' : 1.0
@@ -147,6 +149,7 @@ two_site_interactions = {
     ('black', 'black') : [
         {
             'interaction_id' : 1,
+            'number_of_sites' : 2,
             'left_state_1'   : 'excited',
             'left_state_2'   : 'empty',
             'right_state_1'  : 'empty',
@@ -156,6 +159,7 @@ two_site_interactions = {
 
         {
             'interaction_id' : 2,
+            'number_of_sites' : 2,
             'left_state_1'   : 'empty',
             'left_state_2'   : 'excited',
             'right_state_1'  : 'unexcited',
@@ -168,6 +172,7 @@ two_site_interactions = {
     ('black', 'red') : [
         {
             'interaction_id' : 3,
+            'number_of_sites' : 2,
             'left_state_1'   : 'unexcited',
             'left_state_2'   : 'occupied',
             'right_state_1'  : 'excited',
@@ -176,6 +181,7 @@ two_site_interactions = {
         },
         {
             'interaction_id' : 4,
+            'number_of_sites' : 2,
             'left_state_1'   : 'excited',
             'left_state_2'   : 'nothing',
             'right_state_1'  : 'unexcited',
@@ -187,6 +193,7 @@ two_site_interactions = {
     ('red', 'black') : [
         {
             'interaction_id' : 5,
+            'number_of_sites' : 2,
             'left_state_1'   : 'occupied',
             'left_state_2'   : 'unexcited',
             'right_state_1'  : 'nothing',
@@ -195,6 +202,7 @@ two_site_interactions = {
         },
         {
             'interaction_id' : 6,
+            'number_of_sites' : 2,
             'left_state_1'   : 'nothing',
             'left_state_2'   : 'excited',
             'right_state_1'  : 'occupied',
@@ -206,6 +214,7 @@ two_site_interactions = {
     ('red', 'red') : [
         {
             'interaction_id' : 7,
+            'number_of_sites' : 2,
             'left_state_1'   : 'occupied',
             'left_state_2'   : 'nothing',
             'right_state_1'  : 'nothing',
@@ -214,6 +223,7 @@ two_site_interactions = {
         },
         {
             'interaction_id' : 8,
+            'number_of_sites' : 2,
             'left_state_1'   : 'nothing',
             'left_state_2'   : 'occupied',
             'right_state_1'  : 'occupied',
@@ -222,6 +232,7 @@ two_site_interactions = {
         },
         {
             'interaction_id' : 9,
+            'number_of_sites' : 2,
             'left_state_1'   : 'occupied',
             'left_state_2'   : 'occupied',
             'right_state_1'  : 'nothing',
@@ -261,6 +272,7 @@ insert_site_sql = """
 create_interactions_table_sql = """
     CREATE TABLE interactions (
         interaction_id      INTEGER NOT NULL PRIMARY KEY,
+        number_of_sites     INTEGER NOT NULL,
         species_id_1        INTEGER NOT NULL,
         species_id_2        INTEGER NOT NULL,
         left_state_1        INTEGER NOT NULL,
@@ -272,7 +284,7 @@ create_interactions_table_sql = """
 """
 
 insert_interaction_sql = """
-    INSERT INTO interactions VALUES (?,?,?,?,?,?,?,?);
+    INSERT INTO interactions VALUES (?,?,?,?,?,?,?,?,?);
 """
 
 create_metadata_table_sql = """
@@ -326,6 +338,7 @@ def setup_nanoparticle_database():
             number_of_interactions += 1
             cur.execute(insert_interaction_sql,
                         ( interaction_data['interaction_id'],
+                          interaction_data['number_of_sites'],
                           species[s]['species_id'],
                           -1,
                           species[s]['state_to_index'][
@@ -344,6 +357,7 @@ def setup_nanoparticle_database():
             number_of_interactions += 1
             cur.execute(insert_interaction_sql,
                         ( interaction_data['interaction_id'],
+                          interaction_data['number_of_sites'],
                           species[s1]['species_id'],
                           species[s2]['species_id'],
                           species[s1]['state_to_index'][
