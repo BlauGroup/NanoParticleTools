@@ -1,5 +1,6 @@
 import csv
 import sqlite3
+import os
 
 # number_of_sites | species_1 | species_2 | left_state_1 | left_state_2 |
 # right_state_1 | right_state_2 | rate
@@ -83,11 +84,71 @@ insert_metadata_sql = """
     INSERT INTO metadata VALUES (?,?,?);
 """
 
+create_initial_state_table_sql = """
+    CREATE TABLE initial_state (
+        site_id            INTEGER NOT NULL PRIMARY KEY,
+        degree_of_freedom  INTEGER NOT NULL
+    );
+"""
+
+create_trajectories_table_sql = """
+    CREATE TABLE trajectories (
+        seed               INTEGER NOT NULL,
+        step               INTEGER NOT NULL,
+        time               REAL NOT NULL,
+        site_id_1          INTEGER NOT NULL,
+        site_id_2          INTEGER NOT NULL,
+        interaction_id     INTEGER NOT NULL
+);
+"""
+
+insert_initial_state_sql = """
+    INSERT INTO initial_state VALUES (?,?);
+"""
+
+create_factors_table_sql = """
+    CREATE TABLE factors (
+        one_site_interaction_factor      REAL NOT NULL,
+        two_site_interaction_factor      REAL NOT NULL,
+        interaction_radius_bound         REAL NOT NULL
+);
+"""
+
+insert_factors_sql = """
+    INSERT INTO factors VALUES (?,?,?);
+"""
 
 
 class NanoParticle:
 
-    def generate_nano_particle_database(database_file):
+    def generate_initial_state_database(self, database_file):
+        con = sqlite3.connect(database_file)
+        cur = con.cursor()
+
+        cur.execute(create_initial_state_table_sql)
+        cur.execute(create_trajectories_table_sql)
+        cur.execute(create_factors_table_sql)
+        con.commit()
+
+        for i in self.sites:
+            site_id = self.sites[i]['site_id']
+            species_id = self.sites[i]['species_id']
+            state_id = self.species_state_name_to_id[species_id]['level_0']
+            cur.execute(insert_initial_state_sql,
+                        ( site_id,
+                          state_id
+                          ))
+
+        con.commit()
+
+
+        cur.execute(insert_factors_sql,
+                    (1.0, 1.0, 1.0))
+
+        con.commit()
+
+
+    def generate_nano_particle_database(self, database_file):
         con = sqlite3.connect(database_file)
         cur = con.cursor()
 
@@ -96,6 +157,46 @@ class NanoParticle:
         cur.execute(create_sites_table_sql)
         cur.execute(create_interactions_table_sql)
         cur.execute(create_metadata_table_sql)
+
+        for i in self.species:
+            row = self.species[i]
+            cur.execute(insert_species_sql,
+                        ( row['species_id'],
+                          row['degrees_of_freedom']))
+
+        con.commit()
+
+
+        for i in self.sites:
+            row = self.sites[i]
+            cur.execute(insert_site_sql,
+                        ( row['site_id'],
+                          row['x'],
+                          row['y'],
+                          row['z'],
+                          row['species_id']))
+        con.commit()
+
+        for i in self.interactions:
+            row = self.interactions[i]
+            cur.execute(insert_interaction_sql,
+                        ( row['interaction_id'],
+                          row['number_of_sites'],
+                          row['species_id_1'],
+                          row['species_id_2'],
+                          row['left_state_1'],
+                          row['left_state_2'],
+                          row['right_state_1'],
+                          row['right_state_2'],
+                          row['rate']))
+
+        cur.execute(insert_metadata_sql,
+                    (len(self.species),
+                     len(self.sites),
+                     len(self.interactions)))
+
+        con.commit()
+
 
 
 
@@ -259,7 +360,11 @@ class NanoParticle:
 
 
 
+os.system('rm -rf ./scratch; mkdir scratch')
 
 nano_particle = NanoParticle(
     './combi_nano_test_system/interactions.csv',
     './combi_nano_test_system/sites.csv')
+
+nano_particle.generate_nano_particle_database('./scratch/np.sqlite')
+nano_particle.generate_initial_state_database('./scratch/initial_state.sqlite')
