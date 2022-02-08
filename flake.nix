@@ -14,6 +14,7 @@
           buildInputs = [
             (python38.withPackages (ps: [ ]))
             sqlite
+            (builtins.getAttr systemString RNMC.defaultPackage)
           ];
         };
 
