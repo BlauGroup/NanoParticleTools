@@ -1,6 +1,7 @@
 import csv
 import sqlite3
 import os
+import pickle
 
 # number_of_sites | species_1 | species_2 | left_state_1 | left_state_2 |
 # right_state_1 | right_state_2 | rate
@@ -110,12 +111,13 @@ create_factors_table_sql = """
     CREATE TABLE factors (
         one_site_interaction_factor      REAL NOT NULL,
         two_site_interaction_factor      REAL NOT NULL,
-        interaction_radius_bound         REAL NOT NULL
+        interaction_radius_bound         REAL NOT NULL,
+        distance_factor_type             TEXT NOT NULL
 );
 """
 
 insert_factors_sql = """
-    INSERT INTO factors VALUES (?,?,?);
+    INSERT INTO factors VALUES (?,?,?,?);
 """
 
 
@@ -143,7 +145,7 @@ class NanoParticle:
 
 
         cur.execute(insert_factors_sql,
-                    (1.0, 1.0, 1.0))
+                    (1.0, 1.0, 3.0, "inverse_cubic"))
 
         con.commit()
 
@@ -368,3 +370,7 @@ nano_particle = NanoParticle(
 
 nano_particle.generate_nano_particle_database('./scratch/np.sqlite')
 nano_particle.generate_initial_state_database('./scratch/initial_state.sqlite')
+
+
+with open('./scratch/nano_particle.pickle', 'wb') as f:
+    pickle.dump(nano_particle,f)
