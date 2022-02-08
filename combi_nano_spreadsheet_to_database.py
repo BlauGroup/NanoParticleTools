@@ -123,7 +123,11 @@ insert_factors_sql = """
 
 class NanoParticle:
 
+    def load_trajectories(self, database_file):
+        pass
+
     def generate_initial_state_database(self, database_file):
+        # TODO: parameterize over initial state
         con = sqlite3.connect(database_file)
         cur = con.cursor()
 
@@ -358,6 +362,19 @@ class NanoParticle:
                 'species_id' : i,
                 'degrees_of_freedom' : len(self.id_to_species_state_name[i])
             }
+
+
+
+
+
+class SimulationReplayer:
+    """
+    reconstruct simulations
+    """
+    def __init__(self, nano_particle):
+        self.nano_particle = nano_particle
+
+
 
 
 
