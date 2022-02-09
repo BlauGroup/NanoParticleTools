@@ -120,11 +120,33 @@ insert_factors_sql = """
     INSERT INTO factors VALUES (?,?,?,?);
 """
 
+sql_get_trajectory = """
+    SELECT * FROM trajectories;
+"""
+
 
 class NanoParticle:
 
     def load_trajectories(self, database_file):
-        pass
+        con = sqlite3.connect(database_file)
+        cur = con.cursor()
+
+        trajectories = {}
+        for row in cur.execute(sql_get_trajectory):
+            seed = row[0]
+            step = row[1]
+            time = row[2]
+            site_id_1 = row[3]
+            site_id_2 = row[4]
+            interaction_id = row[5]
+
+            if seed not in trajectories:
+                trajectories[seed] = {}
+
+            trajectories[seed][step] = (site_id_1, site_id_2, interaction_id, time)
+
+        self.trajectories = trajectories
+
 
     def generate_initial_state_database(self, database_file):
         # TODO: parameterize over initial state
