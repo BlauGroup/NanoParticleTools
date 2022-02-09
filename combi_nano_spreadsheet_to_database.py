@@ -2,6 +2,7 @@ import csv
 import sqlite3
 import os
 import pickle
+import subprocess
 
 # number_of_sites | species_1 | species_2 | left_state_1 | left_state_2 |
 # right_state_1 | right_state_2 | rate
@@ -120,11 +121,33 @@ insert_factors_sql = """
     INSERT INTO factors VALUES (?,?,?,?);
 """
 
+sql_get_trajectory = """
+    SELECT * FROM trajectories;
+"""
+
 
 class NanoParticle:
 
     def load_trajectories(self, database_file):
-        pass
+        con = sqlite3.connect(database_file)
+        cur = con.cursor()
+
+        trajectories = {}
+        for row in cur.execute(sql_get_trajectory):
+            seed = row[0]
+            step = row[1]
+            time = row[2]
+            site_id_1 = row[3]
+            site_id_2 = row[4]
+            interaction_id = row[5]
+
+            if seed not in trajectories:
+                trajectories[seed] = {}
+
+            trajectories[seed][step] = (site_id_1, site_id_2, interaction_id, time)
+
+        self.trajectories = trajectories
+
 
     def generate_initial_state_database(self, database_file):
         # TODO: parameterize over initial state
@@ -365,8 +388,6 @@ class NanoParticle:
 
 
 
-
-
 class SimulationReplayer:
     """
     reconstruct simulations
@@ -375,19 +396,51 @@ class SimulationReplayer:
         self.nano_particle = nano_particle
 
 
+class NPMCRunner:
+    def __init__(self):
+        os.system('rm -rf ./scratch; mkdir scratch')
+
+        nano_particle = NanoParticle(
+            './combi_nano_test_system/interactions.csv',
+            './combi_nano_test_system/sites.csv')
+
+        nano_particle.generate_nano_particle_database('./scratch/np.sqlite')
+        nano_particle.generate_initial_state_database('./scratch/initial_state.sqlite')
 
 
+        with open('./scratch/nano_particle.pickle', 'wb') as f:
+            pickle.dump(nano_particle,f)
 
+    def run(self,
+            np_database:str = './scratch/np.sqlite',
+            initial_state:str = './scratch/initial_state.sqlite',
+            num_sims:int = 10,
+            base_seed:int = 1000,
+            thread_count:int = 8,
+            simulation_length:int = 100000):
+        """
 
-os.system('rm -rf ./scratch; mkdir scratch')
+        :param np_database: a sqlite database containing the reaction network and metadata.
+        :param initial_state: a sqlite database containing initial state. The simulation
+            trajectories are also written into the database
+        :param num_sims: an integer specifying how many simulations to run
+        :param base_seed: seeds used are base_seed, base_seed+1, ..., base_seed+number_of_simulations-1
+        :param thread_count: number of threads to use
+        :param simulation_length:
+        :return:
+        """
+        run_args = ['NPMC',
+                    f'--nano_particle_database={np_database}',
+                    f'--initial_state_database={initial_state}',
+                    f'--number_of_simulations={str(num_sims)}',
+                    f'--base_seed={str(base_seed)}',
+                    f'--thread_count={str(thread_count)}',
+                    f'--step_cutoff={str(simulation_length)}']
+        subprocess.run(' '.join(run_args), shell=True)
 
-nano_particle = NanoParticle(
-    './combi_nano_test_system/interactions.csv',
-    './combi_nano_test_system/sites.csv')
+npmc_runner = NPMCRunner()
+npmc_runner.run()
 
-nano_particle.generate_nano_particle_database('./scratch/np.sqlite')
-nano_particle.generate_initial_state_database('./scratch/initial_state.sqlite')
-
-
-with open('./scratch/nano_particle.pickle', 'wb') as f:
-    pickle.dump(nano_particle,f)
+with open('./scratch/nano_particle.pickle', 'rb') as f:
+    nano_particle = pickle.load(f)
+nano_particle.load_trajectories('./scratch/initial_state.sqlite')
