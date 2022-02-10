@@ -372,8 +372,8 @@ class NanoParticle:
                         'right_state_2' : self.species_state_name_to_id[species_id_2][
                             row['right_state_2']],
 
-                        # 2 site interaction rates come with units cm^3 / s
-                        'rate' : (1.0e21) * float(row['rate'])
+                        # 2 site interaction rates come with units cm^6 / s
+                        'rate' : (1.0e42) * float(row['rate'])
                         }
 
                     interaction_id += 1
@@ -439,7 +439,7 @@ class NPMCRunner:
         subprocess.run(' '.join(run_args), shell=True)
 
 npmc_runner = NPMCRunner()
-npmc_runner.run()
+# npmc_runner.run()
 
 with open('./scratch/nano_particle.pickle', 'rb') as f:
     nano_particle = pickle.load(f)

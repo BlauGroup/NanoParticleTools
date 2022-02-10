@@ -13,7 +13,7 @@
         mkShell {
           buildInputs = [
             (python38.withPackages (ps: [ ]))
-            sqlite
+            (sqlite.override { interactive = true; })
             (builtins.getAttr systemString RNMC.defaultPackage)
           ];
         };
