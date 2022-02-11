@@ -397,19 +397,22 @@ class SimulationReplayer:
 
 
 class NPMCRunner:
-    def __init__(self):
+    def __init__(self, interactions_csv_path: Optional[str] = None, sites_csv_path: Optional[str] = None):
         os.system('rm -rf ./scratch; mkdir scratch')
 
-        nano_particle = NanoParticle(
-            './combi_nano_test_system/interactions.csv',
-            './combi_nano_test_system/sites.csv')
+        if interactions_csv_path is None:
+            interactions_csv_path = './combi_nano_test_system/interactions.csv'
+        if sites_csv_path is None:
+            sites_csv_path = './combi_nano_test_system/sites.csv'
+
+        nano_particle = NanoParticle(interactions_csv_path,
+                                     sites_csv_path)
 
         nano_particle.generate_nano_particle_database('./scratch/np.sqlite')
         nano_particle.generate_initial_state_database('./scratch/initial_state.sqlite')
 
-
         with open('./scratch/nano_particle.pickle', 'wb') as f:
-            pickle.dump(nano_particle,f)
+            pickle.dump(nano_particle, f)
 
     def run(self,
             np_database:str = './scratch/np.sqlite',
