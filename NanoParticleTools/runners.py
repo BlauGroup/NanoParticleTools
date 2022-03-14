@@ -11,12 +11,12 @@ class NPMCRunner:
                  output_dir: Optional[str] = './scratch'):
         os.system('rm -rf ./scratch; mkdir scratch')
 
-        if interactions_csv_path is None:
-            interactions_csv_path = './combi_nano_test_system/interactions.csv'
-        if sites_csv_path is None:
-            sites_csv_path = './combi_nano_test_system/sites.csv'
-        if energies_csv_path is None:
-            energies_csv_path = "./combi_nano_test_system/energy_levels.csv"
+        # if interactions_csv_path is None:
+        #     interactions_csv_path = './combi_nano_test_system/interactions.csv'
+        # if sites_csv_path is None:
+        #     sites_csv_path = './combi_nano_test_system/sites.csv'
+        # if energies_csv_path is None:
+        #     energies_csv_path = "./combi_nano_test_system/energy_levels.csv"
 
         nano_particle = NanoParticle(interactions_csv_path,
                                      sites_csv_path,
@@ -48,7 +48,7 @@ class NPMCRunner:
         :param simulation_length:
         :return:
         """
-        run_args = ['npmc_command',
+        run_args = [npmc_command,
                     f'--nano_particle_database={self.np_database}',
                     f'--initial_state_database={self.initial_state}',
                     f'--number_of_simulations={str(num_sims)}',
