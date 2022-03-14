@@ -365,39 +365,39 @@ class NanoParticle:
                 'species_id': i,
                 'degrees_of_freedom': len(self.id_to_species_state_name[i])
             }
+        if energies_csv_path is not None:
+            # Load Energies from the Energies_csv
+            self.species_state_name_to_energy = {}
+            self.species_state_id_to_energy = {}
+            with open(energies_csv_path) as energies_csv:
+                sites_reader = csv.DictReader(energies_csv, delimiter=',')
+                for row in sites_reader:
+                    species_name = row['species']
+                    state_name = row['name']
+                    species_id = self.species_name_to_id[species_name]
+                    if species_name not in self.species_state_name_to_energy:
+                        self.species_state_name_to_energy[species_name] = {}
+                        self.species_state_id_to_energy[species_id] = {}
 
-        # Load Energies from the Energies_csv
-        self.species_state_name_to_energy = {}
-        self.species_state_id_to_energy = {}
-        with open(energies_csv_path) as energies_csv:
-            sites_reader = csv.DictReader(energies_csv, delimiter=',')
-            for row in sites_reader:
-                species_name = row['species']
-                state_name = row['name']
-                species_id = self.species_name_to_id[species_name]
-                if species_name not in self.species_state_name_to_energy:
-                    self.species_state_name_to_energy[species_name] = {}
-                    self.species_state_id_to_energy[species_id] = {}
+                    if state_name not in self.species_state_name_to_id[species_id]:
+                        warnings.warn('energy state is not present in any interactions, skipping')
+                        continue
+                    state_id = self.species_state_name_to_id[species_id][state_name]
+                    self.species_state_name_to_energy[species_name][state_name] = float(row['energy'])
+                    self.species_state_id_to_energy[species_id][state_id] = float(row['energy'])
 
-                if state_name not in self.species_state_name_to_id[species_id]:
-                    warnings.warn('energy state is not present in any interactions, skipping')
-                    continue
-                state_id = self.species_state_name_to_id[species_id][state_name]
-                self.species_state_name_to_energy[species_name][state_name] = float(row['energy'])
-                self.species_state_id_to_energy[species_id][state_id] = float(row['energy'])
-
-            # print(self.species_state_id_to_energy)
-            # print(self.species_state_name_to_energy)
-            # #Populate energy changes into the interactions
-            # energy_per_interaction = {}
-            # for key, interaction in self.interactions.items():
-            #     particle_id = []
-            #     E1i = self.species_state_id_to_energy[interaction['species_id_1']][interaction['left_state_1']]
-            #     E1f = self.species_state_id_to_energy[interaction['species_id_1']][interaction['right_state_1']]
-            #     energy_per_interaction[key] = (E1f-E1i)
-            #     if interaction['species_id_2'] != -1:
-            #         print(interaction)
-            #         E2i = self.species_state_id_to_energy[interaction['species_id_2']][interaction['left_state_2']]
-            #         E2f = self.species_state_id_to_energy[interaction['species_id_2']][interaction['right_state_2']]
-            #         energy_per_interaction[key] += (E2f-E2i)
-            #     self.interactions[key]['dE'] = energy_per_interaction[key]
+                # print(self.species_state_id_to_energy)
+                # print(self.species_state_name_to_energy)
+                # #Populate energy changes into the interactions
+                # energy_per_interaction = {}
+                # for key, interaction in self.interactions.items():
+                #     particle_id = []
+                #     E1i = self.species_state_id_to_energy[interaction['species_id_1']][interaction['left_state_1']]
+                #     E1f = self.species_state_id_to_energy[interaction['species_id_1']][interaction['right_state_1']]
+                #     energy_per_interaction[key] = (E1f-E1i)
+                #     if interaction['species_id_2'] != -1:
+                #         print(interaction)
+                #         E2i = self.species_state_id_to_energy[interaction['species_id_2']][interaction['left_state_2']]
+                #         E2f = self.species_state_id_to_energy[interaction['species_id_2']][interaction['right_state_2']]
+                #         energy_per_interaction[key] += (E2f-E2i)
+                #     self.interactions[key]['dE'] = energy_per_interaction[key]
