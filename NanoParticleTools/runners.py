@@ -32,6 +32,7 @@ class NPMCRunner:
             pickle.dump(nano_particle, f)
 
     def run(self,
+            npmc_command: str = 'NPMC',
             num_sims: int = 10,
             base_seed: int = 1000,
             thread_count: int = 8,
@@ -47,7 +48,7 @@ class NPMCRunner:
         :param simulation_length:
         :return:
         """
-        run_args = ['NPMC',
+        run_args = ['npmc_command',
                     f'--nano_particle_database={self.np_database}',
                     f'--initial_state_database={self.initial_state}',
                     f'--number_of_simulations={str(num_sims)}',
