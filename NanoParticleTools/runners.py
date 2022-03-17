@@ -9,7 +9,7 @@ class NPMCRunner:
                  sites_csv_path: Optional[str] = None,
                  energies_csv_path: Optional[str] = None,
                  output_dir: Optional[str] = './scratch'):
-        os.system('rm -rf ./scratch; mkdir scratch')
+        os.system(f'rm -rf {output_dir}; mkdir {output_dir}')
 
         # if interactions_csv_path is None:
         #     interactions_csv_path = './combi_nano_test_system/interactions.csv'
