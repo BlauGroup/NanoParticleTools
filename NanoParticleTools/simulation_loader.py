@@ -72,9 +72,9 @@ class SimulationReplayer():
         For clarity, this is not averaged over all trajectories.
         """
         statistics_by_interaction_id = {}
-        for key, traj in self.interactions_by_id_per_traj.items():
-            statistics_by_interaction_id[key] = dict(
-                [[key, len(item)] for key, item in self.interactions_by_id_per_traj[2000].items()])
+        for seed, traj in self.interactions_by_id_per_traj.items():
+            statistics_by_interaction_id[seed] = dict(
+                [[key, len(item)] for key, item in self.interactions_by_id_per_traj[seed].items()])
 
         return statistics_by_interaction_id
 
