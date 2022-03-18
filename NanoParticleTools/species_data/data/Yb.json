@@ -1,5 +1,5 @@
-{'energy_levels': [0, 10250],
- 'energy_level_labels': ["2F7/2", "2F5/2"],
- 'transitions': ["2F7/2->2F5/2", "2F5/2->2F7/2"],
- 'line_strengths': [1.5e-20, 1.5e-20]
+{"energy_levels": [0, 10250],
+ "energy_level_labels": ["2F7/2", "2F5/2"],
+ "transitions": ["2F7/2->2F5/2", "2F5/2->2F7/2"],
+ "line_strengths": [1.5e-20, 1.5e-20]
 }
