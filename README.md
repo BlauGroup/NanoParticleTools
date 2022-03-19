@@ -12,6 +12,7 @@ or
 pip install .
 ```
 
+### NixOS
 A NixOS environment is also provided for an alternative setup method. This environment includes access to a compiled RNMC executable. To access the Nix development shell
 ```
 nix develop
