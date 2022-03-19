@@ -9,7 +9,7 @@ def LatticeCordinatFromPFunitCell(length: float,
                                   width:Optional[float] = None,
                                   height:Optional[float] = None,
                                   host_material:int = 'NaYF4',
-                                  shape:Optional[str] = "Sphere"):
+                                  shape:Optional[str] = "sphere"):
     """
     The main function that generate a lattice according the primitive unit cell chosen material (now 1: WSe2 or 2: NaYF4 3: NaYF4_disorder)
     The crystallattice generated is 2m+2 by 2n+2 by 2l+2 of the primitive unit cells
@@ -47,9 +47,11 @@ def LatticeCordinatFromPFunitCell(length: float,
                      [0.7173, 0.7746, 0.7500], [0.7273, 0.7545, 0.2500], [0.9357, 0.5935, 0.0144],
                      [0.9357, 0.5935, 0.4856]]
         struct = Structure(lattice, species=species, coords=positions)
-    else:
+    elif host_material == "d-NaYF4":
         #TODO: Generate disordered NaYF4
         raise NotImplementedError("disordered NaYF4 not implemented")
+    elif isinstance(host_material, Structure):
+        struct = host_material
 
     # Transform unit cell into desired nanoparticle (size and shape)
     if shape == "sphere":
