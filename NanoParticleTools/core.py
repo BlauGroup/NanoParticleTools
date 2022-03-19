@@ -1,8 +1,6 @@
 import csv
 import sqlite3
-import os
-import pickle
-import subprocess
+import warnings
 
 # number_of_sites | species_1 | species_2 | left_state_1 | left_state_2 |
 # right_state_1 | right_state_2 | rate
@@ -54,8 +52,6 @@ insert_site_sql = """
     INSERT INTO sites VALUES (?,?,?,?,?);
 """
 
-
-
 create_interactions_table_sql = """
     CREATE TABLE interactions (
         interaction_id      INTEGER NOT NULL PRIMARY KEY,
@@ -66,12 +62,13 @@ create_interactions_table_sql = """
         left_state_2        INTEGER NOT NULL,
         right_state_1       INTEGER NOT NULL,
         right_state_2       INTEGER NOT NULL,
-        rate                REAL NOT NULL
+        rate                REAL NOT NULL,
+        interaction_type    TEXT NOT NULL
     );
 """
 
 insert_interaction_sql = """
-    INSERT INTO interactions VALUES (?,?,?,?,?,?,?,?,?);
+    INSERT INTO interactions VALUES (?,?,?,?,?,?,?,?,?,?);
 """
 
 create_metadata_table_sql = """
@@ -127,7 +124,6 @@ sql_get_trajectory = """
 
 
 class NanoParticle:
-
     def load_trajectories(self, database_file):
         con = sqlite3.connect(database_file)
         cur = con.cursor()
@@ -148,7 +144,6 @@ class NanoParticle:
 
         self.trajectories = trajectories
 
-
     def generate_initial_state_database(self, database_file):
         # TODO: parameterize over initial state
         con = sqlite3.connect(database_file)
@@ -164,18 +159,16 @@ class NanoParticle:
             species_id = self.sites[i]['species_id']
             state_id = self.species_state_name_to_id[species_id]['level_0']
             cur.execute(insert_initial_state_sql,
-                        ( site_id,
-                          state_id
-                          ))
+                        (site_id,
+                         state_id
+                         ))
 
         con.commit()
-
 
         cur.execute(insert_factors_sql,
-                    (1.0, 1.0, 3.0, "inverse_cubic"))
+                    (1.0, 1, 3, "inverse_cubic"))
 
         con.commit()
-
 
     def generate_nano_particle_database(self, database_file):
         con = sqlite3.connect(database_file)
@@ -190,34 +183,34 @@ class NanoParticle:
         for i in self.species:
             row = self.species[i]
             cur.execute(insert_species_sql,
-                        ( row['species_id'],
-                          row['degrees_of_freedom']))
+                        (row['species_id'],
+                         row['degrees_of_freedom']))
 
         con.commit()
-
 
         for i in self.sites:
             row = self.sites[i]
             cur.execute(insert_site_sql,
-                        ( row['site_id'],
-                          row['x'],
-                          row['y'],
-                          row['z'],
-                          row['species_id']))
+                        (row['site_id'],
+                         row['x'],
+                         row['y'],
+                         row['z'],
+                         row['species_id']))
         con.commit()
 
         for i in self.interactions:
             row = self.interactions[i]
             cur.execute(insert_interaction_sql,
-                        ( row['interaction_id'],
-                          row['number_of_sites'],
-                          row['species_id_1'],
-                          row['species_id_2'],
-                          row['left_state_1'],
-                          row['left_state_2'],
-                          row['right_state_1'],
-                          row['right_state_2'],
-                          row['rate']))
+                        (row['interaction_id'],
+                         row['number_of_sites'],
+                         row['species_id_1'],
+                         row['species_id_2'],
+                         row['left_state_1'],
+                         row['left_state_2'],
+                         row['right_state_1'],
+                         row['right_state_2'],
+                         row['rate'],
+                         row['interaction_type']))
 
         cur.execute(insert_metadata_sql,
                     (len(self.species),
@@ -226,16 +219,11 @@ class NanoParticle:
 
         con.commit()
 
-
-
-
-    def __init__(self, interactions_csv_path, sites_csv_path):
-
+    def __init__(self, interactions_csv_path, sites_csv_path, energies_csv_path):
 
         self.species_name_to_id = {}
         self.id_to_species_name = {}
         self.sites = {}
-
 
         species_id = 0
         site_id = 0
@@ -248,14 +236,13 @@ class NanoParticle:
                     species_id += 1
 
                 self.sites[site_id] = {
-                    'site_id' : site_id,
-                    'x' : float(row['x']),
-                    'y' : float(row['y']),
-                    'z' : float(row['z']),
-                    'species_id' : self.species_name_to_id[row['species']] }
+                    'site_id': site_id,
+                    'x': float(row['x']),
+                    'y': float(row['y']),
+                    'z': float(row['z']),
+                    'species_id': self.species_name_to_id[row['species']]}
 
                 site_id += 1
-
 
         self.species_state_name_to_id = {}
         self.id_to_species_state_name = {}
@@ -265,15 +252,14 @@ class NanoParticle:
             self.species_state_name_to_id[i] = {}
             self.id_to_species_state_name[i] = {}
 
-
-        species_state_counter = [ 0 for _ in range(len(self.id_to_species_name))]
+        species_state_counter = [0 for _ in range(len(self.id_to_species_name))]
 
         interaction_id = 0
         with open(interactions_csv_path) as interactions_csv:
             interactions_reader = csv.DictReader(interactions_csv, delimiter=',')
             for row in interactions_reader:
-
-                if ( row['number_of_sites'] == '1'):
+                #                 print(row.keys())
+                if (row['number_of_sites'] == '1'):
 
                     species_id = self.species_name_to_id[row['species_1']]
                     if row['left_state_1'] not in self.species_state_name_to_id[species_id]:
@@ -294,26 +280,24 @@ class NanoParticle:
 
                         species_state_counter[species_id] += 1
 
-
-
                     self.interactions[interaction_id] = {
-                        'interaction_id' : interaction_id,
-                        'number_of_sites' : int(row['number_of_sites']),
-                        'species_id_1' : species_id,
-                        'species_id_2' : -1,
-                        'left_state_1' : self.species_state_name_to_id[species_id][
+                        'interaction_id': interaction_id,
+                        'number_of_sites': int(row['number_of_sites']),
+                        'species_id_1': species_id,
+                        'species_id_2': -1,
+                        'left_state_1': self.species_state_name_to_id[species_id][
                             row['left_state_1']],
-                        'left_state_2' : -1,
-                        'right_state_1' : self.species_state_name_to_id[species_id][
+                        'left_state_2': -1,
+                        'right_state_1': self.species_state_name_to_id[species_id][
                             row['right_state_1']],
-                        'right_state_2' : -1,
-                        'rate' : float(row['rate'])
-                        }
+                        'right_state_2': -1,
+                        'rate': float(row['rate']),
+                        'interaction_type': row['transitionType']
+                    }
 
                     interaction_id += 1
 
-
-                if ( row['number_of_sites'] == '2'):
+                if (row['number_of_sites'] == '2'):
 
                     species_id_1 = self.species_name_to_id[row['species_1']]
                     species_id_2 = self.species_name_to_id[row['species_2']]
@@ -336,7 +320,6 @@ class NanoParticle:
 
                         species_state_counter[species_id_1] += 1
 
-
                     if row['left_state_2'] not in self.species_state_name_to_id[species_id_2]:
                         self.species_state_name_to_id[species_id_2][
                             row['left_state_2']] = species_state_counter[species_id_2]
@@ -355,95 +338,66 @@ class NanoParticle:
 
                         species_state_counter[species_id_2] += 1
 
-
-
-
                     self.interactions[interaction_id] = {
-                        'interaction_id' : interaction_id,
-                        'number_of_sites' : int(row['number_of_sites']),
-                        'species_id_1' : species_id_1,
-                        'species_id_2' : species_id_2,
-                        'left_state_1' : self.species_state_name_to_id[species_id_1][
+                        'interaction_id': interaction_id,
+                        'number_of_sites': int(row['number_of_sites']),
+                        'species_id_1': species_id_1,
+                        'species_id_2': species_id_2,
+                        'left_state_1': self.species_state_name_to_id[species_id_1][
                             row['left_state_1']],
-                        'left_state_2' : self.species_state_name_to_id[species_id_2][
+                        'left_state_2': self.species_state_name_to_id[species_id_2][
                             row['left_state_2']],
-                        'right_state_1' : self.species_state_name_to_id[species_id_1][
+                        'right_state_1': self.species_state_name_to_id[species_id_1][
                             row['right_state_1']],
-                        'right_state_2' : self.species_state_name_to_id[species_id_2][
+                        'right_state_2': self.species_state_name_to_id[species_id_2][
                             row['right_state_2']],
 
                         # 2 site interaction rates come with units cm^6 / s
-                        'rate' : (1.0e42) * float(row['rate'])
-                        }
+                        'rate': (1.0e42) * float(row['rate']),
+                        'interaction_type': row['transitionType']
+                    }
 
                     interaction_id += 1
-
 
         self.species = {}
         for i in self.id_to_species_name:
             self.species[i] = {
-                'species_id' : i,
-                'degrees_of_freedom' : len(self.id_to_species_state_name[i])
+                'species_id': i,
+                'degrees_of_freedom': len(self.id_to_species_state_name[i])
             }
+        if energies_csv_path is not None:
+            # Load Energies from the Energies_csv
+            self.species_state_name_to_energy = {}
+            self.species_state_id_to_energy = {}
+            with open(energies_csv_path) as energies_csv:
+                sites_reader = csv.DictReader(energies_csv, delimiter=',')
+                for row in sites_reader:
+                    species_name = row['species']
+                    state_name = row['name']
+                    species_id = self.species_name_to_id[species_name]
+                    if species_name not in self.species_state_name_to_energy:
+                        self.species_state_name_to_energy[species_name] = {}
+                        self.species_state_id_to_energy[species_id] = {}
 
+                    if state_name not in self.species_state_name_to_id[species_id]:
+                        warnings.warn('energy state is not present in any interactions, skipping')
+                        continue
+                    state_id = self.species_state_name_to_id[species_id][state_name]
+                    self.species_state_name_to_energy[species_name][state_name] = float(row['energy'])
+                    self.species_state_id_to_energy[species_id][state_id] = float(row['energy'])
 
-
-class SimulationReplayer:
-    """
-    reconstruct simulations
-    """
-    def __init__(self, nano_particle):
-        self.nano_particle = nano_particle
-
-
-class NPMCRunner:
-    def __init__(self, interactions_csv_path: Optional[str] = None, sites_csv_path: Optional[str] = None):
-        os.system('rm -rf ./scratch; mkdir scratch')
-
-        if interactions_csv_path is None:
-            interactions_csv_path = './combi_nano_test_system/interactions.csv'
-        if sites_csv_path is None:
-            sites_csv_path = './combi_nano_test_system/sites.csv'
-
-        nano_particle = NanoParticle(interactions_csv_path,
-                                     sites_csv_path)
-
-        nano_particle.generate_nano_particle_database('./scratch/np.sqlite')
-        nano_particle.generate_initial_state_database('./scratch/initial_state.sqlite')
-
-        with open('./scratch/nano_particle.pickle', 'wb') as f:
-            pickle.dump(nano_particle, f)
-
-    def run(self,
-            np_database:str = './scratch/np.sqlite',
-            initial_state:str = './scratch/initial_state.sqlite',
-            num_sims:int = 10,
-            base_seed:int = 1000,
-            thread_count:int = 8,
-            simulation_length:int = 100000):
-        """
-
-        :param np_database: a sqlite database containing the reaction network and metadata.
-        :param initial_state: a sqlite database containing initial state. The simulation
-            trajectories are also written into the database
-        :param num_sims: an integer specifying how many simulations to run
-        :param base_seed: seeds used are base_seed, base_seed+1, ..., base_seed+number_of_simulations-1
-        :param thread_count: number of threads to use
-        :param simulation_length:
-        :return:
-        """
-        run_args = ['NPMC',
-                    f'--nano_particle_database={np_database}',
-                    f'--initial_state_database={initial_state}',
-                    f'--number_of_simulations={str(num_sims)}',
-                    f'--base_seed={str(base_seed)}',
-                    f'--thread_count={str(thread_count)}',
-                    f'--step_cutoff={str(simulation_length)}']
-        subprocess.run(' '.join(run_args), shell=True)
-
-npmc_runner = NPMCRunner()
-# npmc_runner.run()
-
-with open('./scratch/nano_particle.pickle', 'rb') as f:
-    nano_particle = pickle.load(f)
-nano_particle.load_trajectories('./scratch/initial_state.sqlite')
+                # print(self.species_state_id_to_energy)
+                # print(self.species_state_name_to_energy)
+                # #Populate energy changes into the interactions
+                # energy_per_interaction = {}
+                # for key, interaction in self.interactions.items():
+                #     particle_id = []
+                #     E1i = self.species_state_id_to_energy[interaction['species_id_1']][interaction['left_state_1']]
+                #     E1f = self.species_state_id_to_energy[interaction['species_id_1']][interaction['right_state_1']]
+                #     energy_per_interaction[key] = (E1f-E1i)
+                #     if interaction['species_id_2'] != -1:
+                #         print(interaction)
+                #         E2i = self.species_state_id_to_energy[interaction['species_id_2']][interaction['left_state_2']]
+                #         E2f = self.species_state_id_to_energy[interaction['species_id_2']][interaction['right_state_2']]
+                #         energy_per_interaction[key] += (E2f-E2i)
+                #     self.interactions[key]['dE'] = energy_per_interaction[key]
