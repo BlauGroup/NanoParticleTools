@@ -22,6 +22,8 @@ def get_absorption_cross_section_from_line_strength(energy_gap: float,
                                                     n_refract: float) -> float:
     """
     Helper function to calculate the absorption_cross_section
+
+    port of PP_lineStrength2absCrossSection
     :param energy_gap:
     :param line_strength:
     :param j_init:
@@ -29,9 +31,9 @@ def get_absorption_cross_section_from_line_strength(energy_gap: float,
     :return:
     """
     refractive_index_correction = (n_refract ** 2 + 2) ** 2 / (9 * n_refract)
-
-    return 8 * np.pi ** 2 * m_e_CGS * c_CGS * energy_gap / (
-        3 * (2 * j_init + 1) * h_CGS) * refractive_index_correction * line_strength
+    return (8*np.pi**3*e_CGS**2*energy_gap*refractive_index_correction*line_strength)/(3*c_CGS*h_CGS*(2*j_init+1))
+    # return 8 * np.pi ** 2 * m_e_CGS * c_CGS * energy_gap / (
+    #     3 * (2 * j_init + 1) * h_CGS) * refractive_index_correction * line_strength
 
 
 def get_transition_rate_from_line_strength(energy_gap: float,
@@ -40,6 +42,8 @@ def get_transition_rate_from_line_strength(energy_gap: float,
                                            n_refract: float) -> float:
     """
     Helper function to calculate transition rate from line strength
+
+    port of PP_lineStrength2transitionRate
     :param energy_gap:
     :param line_strength:
     :param j_init:
@@ -110,6 +114,8 @@ def magnetic_dipole_operation(si: float,
     with S = spin AM, L = orbital AM, J = total AM,
 
     See Weber, Phys.Rev.B 1967 p.263
+
+    port of PP_magDipoleOp
     :param si:
     :param li:
     :param ji:
@@ -133,7 +139,7 @@ def magnetic_dipole_operation(si: float,
         m_value = (((si + li + 1) ** 2 - ji ** 2) * (ji ** 2 - (li - si) ** 2) / (4 * ji)) ** 0.5
     elif dj == 0:
         m_value = ((2 * ji + 1) / (4 * ji * (ji + 1))) ** 0.5 * (si * (si + 1) - li * (li + 1) + 3 * ji * (ji + 1))
-    elif dj == -1:
+    elif dj == 1:
         m_value = (((si + li + 1) ** 2 - (ji + 1) ** 2) * ((ji + 1) ** 2 - (li - si) ** 2) / (4 * (ji + 1))) ** 0.5
     else:
         m_value = 0
