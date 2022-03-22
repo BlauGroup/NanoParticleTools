@@ -1,13 +1,3 @@
-
-# *** parameters for solving differential equations ***
-# don't change these if you don't know what they are
-ODE_SOLVE_METHOD = 3  # use 0 as default, 3 for stiff problems
-
-# host material parameters
-VOLUME_PER_DOPANT_SITE = 7.23946667e-2  # nm^3 for NaYF4, 1.5 is #possible sites for dopant ion
-
-# energy transfer
-
 #TODO: SK_COMBINE_ET_BACK_TRANSFER = 0
 
 c_CGS = 29979245800  # speed of light cm/s
