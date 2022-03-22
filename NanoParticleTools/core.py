@@ -2,6 +2,8 @@ import csv
 import sqlite3
 import warnings
 
+#Add stupid stuff here
+
 # number_of_sites | species_1 | species_2 | left_state_1 | left_state_2 |
 # right_state_1 | right_state_2 | rate
 
