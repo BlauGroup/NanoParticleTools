@@ -1,6 +1,122 @@
-from typing import Optional
-from pymatgen.core import Lattice, Structure
+from typing import Optional, Union
+from pymatgen.core import Lattice, Structure, Composition
 import numpy as np
+
+class Nanoparticle():
+    def __init__(self, host_material: Union[str, Structure], seed:int=0):
+        if isinstance(host_material, Structure):
+            host_formula = host_material.composition.reduced_formula
+            host_structure = host_material
+        elif isinstance(host_material, str):
+            host_formula = host_material
+            host_structure = self.get_structure(host_material)
+        else:
+            raise ValueError(f"Invalid host_material specified: {host_material}")
+
+        self.host_material = host_formula
+        self.host_structure = host_structure
+        self.seed = seed
+
+        self.nanoparticle = None
+        self.dopant_sites = []
+        return
+
+    def get_structure(self, formula):
+        if formula == 'WSe2':
+            lattice = Lattice.hexagonal(a=3.327, c=15.069)
+            species = ['Se', 'Se', 'Se', 'Se', 'W', 'W']
+            positions = [[0.3333, 0.6667, 0.6384], [0.3333, 0.6667, 0.8616], [0.6667, 0.3333, 0.1384],
+                         [0.6667, 0.3333, 0.3616], [0.3333, 0.6667, 0.25], [0.6667, 0.3333, 0.75]]
+            _structure = Structure(lattice, species=species, coords=positions)
+        elif formula == 'NaYF4':
+            lattice = Lattice.hexagonal(a=6.067, c=7.103)
+            species = ['Na', 'Na', 'Na', 'Y', 'Y', 'Y', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F']
+            positions = [[0.3333, 0.6667, 0.5381], [0.3333, 0.6667, 0.9619], [0.6667, 0.3333, 0.75], [0, 0, 0.9969],
+                         [0, 0, 0.5031], [0.6667, 0.3333, 0.25], [0.0272, 0.2727, 0.2500], [0.0572, 0.2827, 0.7500],
+                         [0.2254, 0.9428, 0.7500], [0.2455, 0.9728, 0.2500], [0.4065, 0.3422, 0.0144],
+                         [0.4065, 0.3422, 0.4856], [0.6578, 0.0643, 0.0144], [0.6578, 0.0643, 0.4856],
+                         [0.7173, 0.7746, 0.7500], [0.7273, 0.7545, 0.2500], [0.9357, 0.5935, 0.0144],
+                         [0.9357, 0.5935, 0.4856]]
+
+            _structure = Structure(lattice, species=species, coords=positions)
+        elif formula == "d-NaYF4":
+            # TODO: Generate disordered NaYF4
+            raise NotImplementedError("disordered NaYF4 not implemented")
+        else:
+            raise ValueError(f"Invalid host_material specified: {host_material}")
+
+        return _structure
+
+    def add_dopant(self,
+                   dopant_species:str,
+                   replaced_species:str,
+                   dopant_concentration:float):
+        if self.nanoparticle is None:
+            raise ValueError("Nanoparticle not defined. Please use a function to make a nanoparticle. ex. Nanoparticle.make_spherical(5)")
+
+        n_dopants = np.round(len(self.nanoparticle)*dopant_concentration)
+        # Identify the possible sites for the dopant
+        possible_dopant_sites = [i for i, site in enumerate(self.nanoparticle) if site.specie.symbol==replaced_species]
+
+        rng = np.random.default_rng(self.seed)
+        dopant_sites = rng.choice(possible_dopant_sites, int(n_dopants))
+
+        for i in dopant_sites:
+            self.nanoparticle.sites[i].species = Composition(dopant_species)
+        self.dopant_sites.extend(dopant_sites)
+
+    # def add_material_spherical(self,
+    #                            surface_r = ):
+
+    def make_rectangular_prism(self,
+                          a:Union[float,int],
+                          b:Union[float,int],
+                          c:Union[float,int]):
+
+        # Copy to new structure, since some Structure operations occur in-place
+        _struct = self.host_structure.copy()
+
+        # Make a supercell of the initial lattice.
+        # TODO: From this point onwards
+        # _struct.make_supercell()
+        pass
+
+    def make_cubic(self,
+              a:Union[float,int]):
+
+        return self.rectangular_prism(a, a, a)
+
+    def make_spherical(self,
+                  r:Union[float,int]):
+        # Copy to new structure, since some Structure operations occur in-place
+        _struct = self.host_structure.copy()
+
+        # Make a supercell of the initial lattice. Add a factor of 2.45 to ensure that the cell is large enough to contain a sphere.
+        _struct.make_supercell(np.ceil(np.divide(r * 2.45, _struct.lattice.abc)))
+
+        # Identify the center of the cell
+        center = np.divide(np.sum(_struct.lattice.matrix, axis=0), 2)
+
+        # Translate coords so the nanoparticle is centered on 0
+        cart_coords = _struct.cart_coords
+        translated_coords = np.subtract(cart_coords, center)
+        abs_coords = np.abs(translated_coords)
+
+        # Find sites within r of center
+        distance = np.sqrt(np.sum(np.square(abs_coords), axis=1))
+        i_sites_in_sphere = np.where(distance <= r)[0]
+
+        # Get sites identified above
+        sites = []
+        for i in i_sites_in_sphere:
+            sites.append(_struct.sites[i])
+        self.nanoparticle = Structure.from_sites(sites)
+        pass
+
+    def add_shell(self,
+                  thickness:Union[float, int]):
+        pass
+
 
 #TODO: Refactor names of functions
 def LatticeCordinatFromPFunitCell(length: float,

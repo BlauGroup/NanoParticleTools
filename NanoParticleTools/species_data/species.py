@@ -5,6 +5,7 @@ from pathlib import Path
 import os
 from typing import Optional, List
 import numpy as np
+from functools import lru_cache
 
 energies = {'Dy': {
     'energy_levels': [175, 3626, 5952, 7806, 7853, 9166, 9223, 10273, 11070, 12471, 13267, 13814, 21228, 22222, 23563,
@@ -15,90 +16,150 @@ energies = {'Dy': {
 
 SPECIES_DATA_PATH = os.path.join(str(Path(__file__).absolute().parent), 'data')
 
-class Energy_Level(MSONable):
+class EnergyLevel(MSONable):
     def __init__(self, element, label, energy):
         self.element = element
         self.label = label
         self.energy = energy
-
-    def __repr__(self):
-        return f'{self.element} - {self.label} - {self.energy}'
 
     def __str__(self):
         return f'{self.element} - {self.label} - {self.energy}'
 
 
 class Transition(MSONable):
-    def __init__(self, initial_level: Energy_Level, final_level: Energy_Level, line_strength:float):
+    def __init__(self,
+                 initial_level: EnergyLevel,
+                 final_level: EnergyLevel,
+                 line_strength:float):
         self.initial_level = initial_level
         self.final_level = final_level
         self.line_strength = line_strength
 
-    def __repr__(self):
-        return f'{self.initial_level.label}->{self.final_level.label}'
-
     def __str__(self):
         return f'{self.initial_level.label}->{self.final_level.label}'
 
+class Dopant(Species):
+    def __init__(self,
+                 symbol: str,
+                 concentration: float,
+                 n_levels: int):
+        """
 
-class ExcitedStateSpecies(Species):
-    def __init__(self, symbol: str):
-        super().__init__(symbol, None)
-
-        # Load Data from json file
-        with open(os.path.join(SPECIES_DATA_PATH, f'{symbol}.json'), 'r') as f:
-            species_data = json.load(f)
-
-        # self.energy_levels = species_data['energy_levels']
-        # self.energy_level_labels = species_data['energy_level_labels']
-        # self.transitions = species_data['transitions']
-        # self.line_strengths = species_data['line_strengths']
-
-
-        self.energy_levels = [Energy_Level(symbol, i, j) for i, j in
-                              zip(species_data['energy_level_labels'], species_data['energy_levels'])]
-
-
-        energy_level_map = dict([(_el.label, _el) for _el in self.energy_levels])
-        energy_level_label_map = dict([(_el.label, i) for i, _el in enumerate(self.energy_levels)])
-
-        transitions = [[0 for _ in self.energy_levels] for _ in self.energy_levels]
-        for i in range(len(species_data['transitions'])):
-            transition = species_data['transitions'][i]
-            line_strength = species_data['line_strengths'][i]
-
-            initial_energy_level, final_energy_level = transition.split("->")
-            try:
-                initial_i = energy_level_label_map[initial_energy_level]
-                final_i = energy_level_label_map[final_energy_level]
-
-                transitions[initial_i][final_i] = Transition(energy_level_map[initial_energy_level],
-                                         energy_level_map[final_energy_level],
-                                         line_strength)
-            except:
-                # These transitions are not used
-                continue
-
-        self.transitons = transitions
-
-
-
-class Dopant(ExcitedStateSpecies):
-    def __init__(self, symbol, concentration, n_levels):
+        :param symbol:
+        :param concentration:
+        :param n_levels:
+        """
         self.symbol = symbol
 
-        super().__init__(symbol)
+        super().__init__(symbol, None)
 
         self.molar_concentration = concentration
+
+        self.MPR_rates = None
+
+        # Initialize intrinsic values to None, only initialized when needed. Allows the dopant to be used as a species
+        self._energy_levels = None
+        self._absFWHM = None
+        self._slj = None
+        self._judd_ofelt_parameters = None
+        self._intermediate_coupling_coefficients = None
+        self._eigenvector_sl = None
+        self._transitions = None
+
+        self.initial_populations = None
 
         # If more levels are specified than possible, use all existing energy levels
         self.n_levels = min(n_levels, len(self.energy_levels))
 
-        self.MPR_rates = None
+    def check_intrinsic_data(self):
+        """
+        Checks whether the dopant data is valid
+
+        :return:
+        """
+        if self.eigenvector_sl.shape[0] != self.intermediate_coupling_coefficients.shape[1]:
+            raise ValueError(
+                'Error: The number of eigenvectors does not match the number of intermediate coupling coefficients')
+        elif len(self.energy_levels) > self.intermediate_coupling_coefficients.shape[0]:
+            raise ValueError(
+                'Error: The number of Energy levels does not match the number of intermediate coupling coefficients')
+        elif len(self.energy_levels) > len(self.slj):
+            raise ValueError(
+                'Error: The number of Energy levels does not match the number of SLJ rows')
+
+    @lru_cache(maxsize=None)
+    def species_data(self):
+        # Load Data from json file
+        with open(os.path.join(SPECIES_DATA_PATH, f'{self.symbol}.json'), 'r') as f:
+            species_data = json.load(f)
+
+        return species_data
+
+    @property
+    def energy_levels(self):
+        if self._energy_levels is None:
+            self._energy_levels = [EnergyLevel(self.symbol, i, j) for i, j in
+                                   zip(self.species_data()['EnergyLevelLabels'], self.species_data()['EnergyLevels'])]
+        return self._energy_levels
+
+    @property
+    def absFWHM(self):
+        if self._absFWHM is None:
+            self._absFWHM = self.species_data()['absFWHM']
+        return self._absFWHM
+
+    @property
+    def slj(self):
+        if self._slj is None:
+            self._slj = np.array(self.species_data()['SLJ'])
+        return self._slj
+
+    @property
+    def judd_ofelt_parameters(self):
+        if self._judd_ofelt_parameters is None:
+            self._judd_ofelt_parameters = self.species_data()['JO_params']
+        return self._judd_ofelt_parameters
+
+    @property
+    def intermediate_coupling_coefficients(self):
+        if self._intermediate_coupling_coefficients is None:
+            self._intermediate_coupling_coefficients = np.array(self.species_data()['intermediateCouplingCoeffs'])
+        return self._intermediate_coupling_coefficients
+
+    @property
+    def eigenvector_sl(self):
+        if self._eigenvector_sl is None:
+            self._eigenvector_sl = np.array(self.species_data()['eigenvectorSL'])
+        return self._eigenvector_sl
+
+    @property
+    def transitions(self):
+        if self._transitions is None:
+            energy_level_map = dict([(_el.label, _el) for _el in self.energy_levels])
+            energy_level_label_map = dict([(_el.label, i) for i, _el in enumerate(self.energy_levels)])
+
+            transitions = [[0 for _ in self.energy_levels] for _ in self.energy_levels]
+            for i in range(len(self.species_data()['TransitionLabels'])):
+                transition = self.species_data()['TransitionLabels'][i]
+                line_strength = self.species_data()['lineStrengths'][i]
+
+                initial_energy_level, final_energy_level = transition.split("->")
+                try:
+                    initial_i = energy_level_label_map[initial_energy_level]
+                    final_i = energy_level_label_map[final_energy_level]
+
+                    transitions[initial_i][final_i] = Transition(energy_level_map[initial_energy_level],
+                                             energy_level_map[final_energy_level],
+                                             line_strength)
+                except:
+                    # These transitions are not used
+                    continue
+            self._transitions = transitions
+        return self._transitions
 
     @property
     def volume_concentration(self):
-        from NanoParticleTools.inputs.spectral_kinetics import VOLUME_PER_DOPANT_SITE
+        from NanoParticleTools.inputs.constants import VOLUME_PER_DOPANT_SITE
         return self.molar_concentration/VOLUME_PER_DOPANT_SITE
 
     def set_initial_populations(self, populations:Optional[List[float]] = None):
@@ -107,12 +168,18 @@ class Dopant(ExcitedStateSpecies):
             populations[0] = self.volume_concentration
         self.initial_populations = populations
 
-    def calculate_MPR_rates(self, w_0phonon, alpha, stokes_shift, phonon_energy):
+    def calculate_MPR_rates(self,
+                            w_0phonon: float,
+                            alpha: float,
+                            stokes_shift: float,
+                            phonon_energy: float):
         """
         Calculates MultiPhonon Relaxation Rate for a given set of energy levels using Miyakawa-Dexter MPR theory
 
         :param w_0phonon: zero gap rate (s^-1)
         :param alpha: pre-exponential constant in Miyakawa-Dexter MPR theory.  Changes with matrix (cm)
+        :param stokes_shift:
+        :param phonon_energy:
         :return:
         """
 
@@ -137,3 +204,13 @@ class Dopant(ExcitedStateSpecies):
                 mpa_rates.append(0)
         mpa_rates.append(0) # Highest energy level cannot be further excited, therefore set its rate to 0
         self.mpa_rates = mpa_rates
+
+    def get_line_strength_matrix(self):
+        line_strengths = []
+        for row in self.transitions[:self.n_levels]:
+            for transition in row[:self.n_levels]:
+                if isinstance(transition, Transition):
+                    line_strengths.append(transition.line_strength)
+                else:
+                    line_strengths.append(0)
+        return np.reshape(line_strengths, (self.n_levels, self.n_levels))

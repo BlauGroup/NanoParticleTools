@@ -1,12 +1,17 @@
 To extract data from the SpeciesDB and populate into json files:
 1. Save the waves to your computer. Use the following to produce the commands
 ```python
+# Generate commands to save the data from the SpeciesDB
 for species in ['Dy', 'Er', 'Eu', 'Gd', 'Ho', 'Nd', 'Sm', 'Surface', 'Tb', 'Tm', 'Yb']:
-    for wave in ["EnergyLevelLabels", "EnergyLevels", "SLJ", "absFWHM", "lineStrengths", "TransitionLabels", "JO_params"]:
-        if species == 'Surface' and wave == 'JO_params':
+    for wave in ["EnergyLevelLabels", "EnergyLevels", "SLJ", "absFWHM", "lineStrengths", "TransitionLabels", "JO_params", "eigenvectorSL", "intermediateCouplingCoefs"]:
+        if species == 'Surface' and wave in ['JO_params', "eigenvectors", "eigenvectorSL", "intermediateCouplingCoeffs"]:
             # Surface does not have JO parameters
             continue
+        if species == "Tb" and wave in [ "eigenvectorSL", "intermediateCouplingCoeffs"]:
+            #Tb does not have these values
+            continue
         print(f'Save/J/O/M="\\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:{species}:{wave} as "{species}_{wave}.txt"')
+
 ```
 
 ```
@@ -17,6 +22,8 @@ Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Dy:ab
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Dy:lineStrengths as "Dy_lineStrengths.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Dy:TransitionLabels as "Dy_TransitionLabels.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Dy:JO_params as "Dy_JO_params.txt"
+Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Dy:eigenvectorSL as "Dy_eigenvectorSL.txt"
+Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Dy:intermediateCouplingCoefs as "Dy_intermediateCouplingCoeffs.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Er:EnergyLevelLabels as "Er_EnergyLevelLabels.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Er:EnergyLevels as "Er_EnergyLevels.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Er:SLJ as "Er_SLJ.txt"
@@ -24,6 +31,8 @@ Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Er:ab
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Er:lineStrengths as "Er_lineStrengths.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Er:TransitionLabels as "Er_TransitionLabels.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Er:JO_params as "Er_JO_params.txt"
+Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Er:eigenvectorSL as "Er_eigenvectorSL.txt"
+Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Er:intermediateCouplingCoefs as "Er_intermediateCouplingCoeffs.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Eu:EnergyLevelLabels as "Eu_EnergyLevelLabels.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Eu:EnergyLevels as "Eu_EnergyLevels.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Eu:SLJ as "Eu_SLJ.txt"
@@ -31,6 +40,8 @@ Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Eu:ab
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Eu:lineStrengths as "Eu_lineStrengths.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Eu:TransitionLabels as "Eu_TransitionLabels.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Eu:JO_params as "Eu_JO_params.txt"
+Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Eu:eigenvectorSL as "Eu_eigenvectorSL.txt"
+Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Eu:intermediateCouplingCoefs as "Eu_intermediateCouplingCoeffs.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Gd:EnergyLevelLabels as "Gd_EnergyLevelLabels.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Gd:EnergyLevels as "Gd_EnergyLevels.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Gd:SLJ as "Gd_SLJ.txt"
@@ -38,6 +49,8 @@ Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Gd:ab
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Gd:lineStrengths as "Gd_lineStrengths.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Gd:TransitionLabels as "Gd_TransitionLabels.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Gd:JO_params as "Gd_JO_params.txt"
+Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Gd:eigenvectorSL as "Gd_eigenvectorSL.txt"
+Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Gd:intermediateCouplingCoefs as "Gd_intermediateCouplingCoeffs.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Ho:EnergyLevelLabels as "Ho_EnergyLevelLabels.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Ho:EnergyLevels as "Ho_EnergyLevels.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Ho:SLJ as "Ho_SLJ.txt"
@@ -45,6 +58,8 @@ Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Ho:ab
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Ho:lineStrengths as "Ho_lineStrengths.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Ho:TransitionLabels as "Ho_TransitionLabels.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Ho:JO_params as "Ho_JO_params.txt"
+Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Ho:eigenvectorSL as "Ho_eigenvectorSL.txt"
+Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Ho:intermediateCouplingCoefs as "Ho_intermediateCouplingCoeffs.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Nd:EnergyLevelLabels as "Nd_EnergyLevelLabels.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Nd:EnergyLevels as "Nd_EnergyLevels.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Nd:SLJ as "Nd_SLJ.txt"
@@ -52,6 +67,8 @@ Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Nd:ab
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Nd:lineStrengths as "Nd_lineStrengths.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Nd:TransitionLabels as "Nd_TransitionLabels.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Nd:JO_params as "Nd_JO_params.txt"
+Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Nd:eigenvectorSL as "Nd_eigenvectorSL.txt"
+Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Nd:intermediateCouplingCoefs as "Nd_intermediateCouplingCoeffs.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Sm:EnergyLevelLabels as "Sm_EnergyLevelLabels.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Sm:EnergyLevels as "Sm_EnergyLevels.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Sm:SLJ as "Sm_SLJ.txt"
@@ -59,6 +76,8 @@ Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Sm:ab
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Sm:lineStrengths as "Sm_lineStrengths.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Sm:TransitionLabels as "Sm_TransitionLabels.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Sm:JO_params as "Sm_JO_params.txt"
+Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Sm:eigenvectorSL as "Sm_eigenvectorSL.txt"
+Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Sm:intermediateCouplingCoefs as "Sm_intermediateCouplingCoeffs.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Surface:EnergyLevelLabels as "Surface_EnergyLevelLabels.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Surface:EnergyLevels as "Surface_EnergyLevels.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Surface:SLJ as "Surface_SLJ.txt"
@@ -79,6 +98,8 @@ Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Tm:ab
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Tm:lineStrengths as "Tm_lineStrengths.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Tm:TransitionLabels as "Tm_TransitionLabels.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Tm:JO_params as "Tm_JO_params.txt"
+Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Tm:eigenvectorSL as "Tm_eigenvectorSL.txt"
+Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Tm:intermediateCouplingCoefs as "Tm_intermediateCouplingCoeffs.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Yb:EnergyLevelLabels as "Yb_EnergyLevelLabels.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Yb:EnergyLevels as "Yb_EnergyLevels.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Yb:SLJ as "Yb_SLJ.txt"
@@ -86,6 +107,8 @@ Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Yb:ab
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Yb:lineStrengths as "Yb_lineStrengths.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Yb:TransitionLabels as "Yb_TransitionLabels.txt"
 Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Yb:JO_params as "Yb_JO_params.txt"
+Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Yb:eigenvectorSL as "Yb_eigenvectorSL.txt"
+Save/J/O/M="\n"/DLIM=","/W/P=home :::::Packages:SpectralKinetics:SpeciesDB:Yb:intermediateCouplingCoefs as "Yb_intermediateCouplingCoeffs.txt"
 ```
 
 2. Run the following python code
