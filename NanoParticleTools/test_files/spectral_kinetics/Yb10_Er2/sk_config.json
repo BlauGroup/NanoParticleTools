@@ -1,0 +1,17 @@
+{
+  "excitation_wavelength": 976,
+  "excitation_power": 1e7,
+  "time_step": 1e-4,
+  "num_steps": 100,
+  "max_error": 1e-12,
+  "energy_transfer_rate_threshold": 0.1,
+  "radiative_rate_threshold": 0.0001,
+  "stokes_shift": 150,
+  "initial_population": "ground_state",
+  "phonon_energy": 450,
+  "zero_phonon_rate": 1e7,
+  "mpr_alpha": 3.5e-3,
+  "n_refract": 1.5,
+  "vol_per_dopant_site": 7.23946667e-2,
+  "min_dopant_distance": 3.867267554e-8
+}
