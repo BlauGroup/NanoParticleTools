@@ -4,6 +4,7 @@ from NanoParticleTools.species_data.species import Dopant
 from NanoParticleTools.inputs.photo_physics import *
 from NanoParticleTools.inputs.constants import *
 import numpy as np
+import math
 
 class SpectralKinetics():
 
@@ -540,8 +541,62 @@ class SpectralKinetics():
             wave to receive dA/dt, dB/dt etc. (output)
         :return:
         """
-        #TODO
-        pass
+        numspecies = len(N_pop)
+        dNdt = 0
+        ETrate = 0
+        M_RadRate = self.radiative_rate_matrix
+        M_MDradRate = self.magnetic_dipole_rate_matrix
+        M_NRrate =  self._non_radiative_rate_matrix
+        W_ETrates = self.energy_transfer_rate_matrix
+        # -- define M_RadRate, M_MDradRate, M_NRrate, M_ETIndices, W_ETrates via calling Erics func if necessary
+        # W_ETrates = self._energy_transfer_rate_matrix sth like this..
+
+        #NRate
+        for i in range (0,numspecies):
+            for j in range (0,numspecies):
+                dNdt[i] -= N_pop[i]*M_NRrate[i][j] #depletion
+                dNdt[j] += N_pop[i]*M_NRrate[i][j] # accumulation
+
+        #Electric Dipole Radiative Emission
+        for i in range (0,numspecies):
+            for j in range (0,numspecies):
+                dNdt[i] -= N_pop[i]*M_RadRate[i][j] #depletion
+                dNdt[j] += N_pop[i]*M_RadRate[i][j] # accumulation
+
+
+        #Magnetic Dipole Radiative Emission
+
+        for i in range (0,numspecies):
+            for j in range (0,numspecies):
+                dNdt[i] -= N_pop[i]*M_MDradRate[i][j] # depletion
+                dNdt[j] += N_pop[i]*M_MDradRate[i][j] # accumulation
+
+
+        # Energy Transfer
+
+        numETtransitions = self.minimum_dopant_distance
+
+        for i in range (0,numETtransitions):
+
+            di = M_ETIndices[i][0]
+            dj = M_ETIndices[i][1]
+            ai = M_ETIndices[i][2]
+            aj = M_ETIndices[i][3]
+
+        #FIXME not correct
+            ETrate =4*math.pi/3*(W_ETrates[i]*1e42)*N_pop[ai]^1*N_pop[di]^1*(minimumDopantDistance^(-3)*1e-21 - (4*math.pi/3)*N_pop[ai]) 
+            # last term doesn't really change things that much.
+            # 1e42 = W_ETrates needs to be converted from cm^6/s to nm^6/s since N_pop is in nm^-3 and W_ET is in cm^6/s
+            # Minimum dopant distance multiplied by 1e-21 to convert from (cm^-3 -> nm^-3
+            if (ETrate >0):
+                ETrate = ETrate
+            dNdt[ai] -= ETrate
+            dNdt[di] -= ETrate
+            #accumulation
+            dNdt[aj] += ETrate
+            dNdt[dj] += ETrate
+
+
 
     def SK_Analysis(self):
         pass
