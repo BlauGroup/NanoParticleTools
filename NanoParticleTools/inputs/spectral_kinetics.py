@@ -92,6 +92,7 @@ class SpectralKinetics():
             Variable /G V_totNumLevels //total number of energy levels to simulate (sum of simulated levels for all ions)
         """
         #TODO: check inputs are valid
+        self.initial_populations = initial_populations
 
         if isinstance(self.initial_populations, list):
             print('Using user input initial population')
@@ -436,7 +437,7 @@ class SpectralKinetics():
                                          radiative_rate_threshold:Optional[float]=0.0001,
                                          stokes_shift:Optional[float]=150,
                                          # energy_transfer_mode=0,
-                                         initial_population:Optional[str]="ground_state",
+                                         initial_populations:Optional[str]="ground_state",
                                          ode_solver:Optional[OdeSolver]=BDF,
                                          **kwargs):
         """
@@ -448,7 +449,7 @@ class SpectralKinetics():
         :param radiative_rate_threshold: lower limit for actually accounting for radiative rate (s^-1)
         :param stokes_shift: wavenumbers
         :param energy_transfer_mode:
-        :param initial_population:
+        :param initial_populations:
         :param ode_solver:
         :param kwargs:
         :return:
@@ -460,7 +461,7 @@ class SpectralKinetics():
         self.energy_transfer_rate_threshold = energy_transfer_rate_threshold
         self.radiative_rate_threshold = radiative_rate_threshold
         self.stokes_shift = stokes_shift   #FIXME : PP_CalculateMPRratesMD relies on constant
-        self.initial_populations = initial_population
+        self.initial_populations = initial_populations
         self.ode_solver = ode_solver
 
         # TODO: 0=no migration, 1 = fast diffusion, 2 = fast hopping
