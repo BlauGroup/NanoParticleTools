@@ -16,10 +16,33 @@ class Nanoparticle():
         self.host_material = host_formula
         self.host_structure = host_structure
         self.seed = seed
+        self.rng = np.random.default_rng(self.seed)
 
         self.nanoparticle = None
-        self.dopant_sites = []
+        self.dopants = []
+        self._dopant_indices = []
         return
+
+    def __getitem__(self, item):
+        return self.nanoparticle[item]
+
+    def __len__(self):
+        return len(self.nanoparticle)
+
+    @property
+    def dopant_sites(self):
+        sites = []
+        for indices in self._dopant_indices:
+            sites.extend([self.nanoparticle[i] for i in indices])
+
+        return sites
+
+    @property
+    def dopant_concentration(self):
+        _d = {}
+        for el, sites in zip(self.dopants, self._dopant_indices):
+            _d[el] = len(sites) / len(self)
+        return _d
 
     def get_structure(self, formula):
         if formula == 'WSe2':
@@ -58,12 +81,13 @@ class Nanoparticle():
         # Identify the possible sites for the dopant
         possible_dopant_sites = [i for i, site in enumerate(self.nanoparticle) if site.specie.symbol==replaced_species]
 
-        rng = np.random.default_rng(self.seed)
-        dopant_sites = rng.choice(possible_dopant_sites, int(n_dopants))
+        dopant_sites = self.rng.choice(possible_dopant_sites, int(n_dopants), replace=False)
 
         for i in dopant_sites:
             self.nanoparticle.sites[i].species = Composition(dopant_species)
-        self.dopant_sites.extend(dopant_sites)
+
+        self.dopants.append(dopant_species)
+        self._dopant_indices.append(dopant_sites)
 
     # def add_material_spherical(self,
     #                            surface_r = ):
