@@ -1,4 +1,4 @@
-from NanoParticleTools.core import NanoParticle
+from NanoParticleTools.core import NPMCInput
 from typing import Optional
 import pickle
 import subprocess
@@ -18,9 +18,9 @@ class NPMCRunner:
         # if energies_csv_path is None:
         #     energies_csv_path = "./combi_nano_test_system/energy_levels.csv"
 
-        nano_particle = NanoParticle(interactions_csv_path,
-                                     sites_csv_path,
-                                     energies_csv_path)
+        nano_particle = NPMCInput(interactions_csv_path,
+                                  sites_csv_path,
+                                  energies_csv_path)
 
         self.np_database = os.path.join(output_dir, 'np.sqlite')
         self.initial_state = os.path.join(output_dir, 'initial_state.sqlite')
