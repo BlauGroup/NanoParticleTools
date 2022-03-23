@@ -1,7 +1,7 @@
 from typing import Optional, Sequence
 
 import numpy as np
-from pymatgen.core import Composition, Structure, Site, Lattice
+from pymatgen.core import Composition, Structure, Site, Lattice, Molecule
 
 
 class DopedNanoparticle():
@@ -14,10 +14,6 @@ class DopedNanoparticle():
         self.seed = seed
         self.rng = np.random.default_rng(self.seed)
         self.dopant_indices = [[] for _ in self.constraints]
-
-    @property
-    def sites(self):
-        return [_site for sites in self._sites for _site in sites]
 
     def add_dopant(self,
                    constraint_index: int,
@@ -40,6 +36,18 @@ class DopedNanoparticle():
 
         # Keep track of sites with dopants
         self.dopant_indices[constraint_index].extend(dopant_sites)
+
+    def to_file(self, fmt="xyz", name= "nanoparticle.xyz"):
+        _np = Molecule.from_sites(self.sites)
+        xyz = _np.to(fmt, name)
+
+    def dopants_to_file(self, fmt, name):
+        _np = Molecule.from_sites(self.dopant_sites)
+        xyz = _np.to(fmt, name)
+
+    @property
+    def sites(self):
+        return [_site for sites in self._sites for _site in sites]
 
     @property
     def dopant_sites(self):
