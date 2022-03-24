@@ -28,7 +28,7 @@ class SpectralKinetics():
         """
 
         self.MPR_W_0phonon = None
-        self.phononEnergy = None
+        self.phonon_energy = None
         self.mpr_alpha = None
         self.mpr_gamma = None
         self.mpr_beta = None
@@ -45,7 +45,7 @@ class SpectralKinetics():
         self.radiative_rate_threshold = None
         self.stokes_shift = None
         self.energy_transfer_mode = None
-        self.initial_population = None
+        self.initial_populations = None
         self.set_simulation_config_parameters(**kwargs)
 
         self.incident_power = None
@@ -93,16 +93,17 @@ class SpectralKinetics():
             Variable /G V_totNumLevels //total number of energy levels to simulate (sum of simulated levels for all ions)
         """
         #TODO: check inputs are valid
+        self.initial_populations = initial_populations
 
         if isinstance(self.initial_populations, list):
             print('Using user input initial population')
             for dopant, initial_population in zip(self.dopants, self.initial_populations):
-                dopant.set_initial_populations(self.initial_population)
+                dopant.set_initial_populations(self.initial_populations)
             # raise NotImplementedError("User defined populations not implemented")
-        elif self.initial_population == 'ground_state':
+        elif self.initial_populations == 'ground_state':
             for dopant in self.dopants:
                 dopant.set_initial_populations()
-        elif self.initial_population == 'last_run':
+        elif self.initial_populations == 'last_run':
             #TODO: Implement from last run. Although this may not be necessary, since one could just pass in the previous population
             raise NotImplementedError("Using populations from previous run not implemented")
         else:
@@ -134,7 +135,7 @@ class SpectralKinetics():
         :return:
         """
         for dopant in self.dopants:
-            dopant.calculate_MPR_rates(self.MPR_W_0phonon, self.mpr_alpha, self.stokes_shift, self.phononEnergy)
+            dopant.calculate_MPR_rates(self.MPR_W_0phonon, self.mpr_alpha, self.stokes_shift, self.phonon_energy)
 
         #TODO: Confirm if this is the correct matrix
 
@@ -201,7 +202,6 @@ class SpectralKinetics():
         """
         rad_rates = np.zeros((self.total_n_levels, self.total_n_levels))
         energy_gaps = np.zeros((self.total_n_levels, self.total_n_levels))
-        line_strengths = self.make_combined_line_strength_matrix()
         for dopant_index, dopant in enumerate(self.dopants):
             for i in range(dopant.n_levels):
                 combined_i = sum([dopant.n_levels for dopant in self.dopants[:dopant_index]]) + i
@@ -211,15 +211,15 @@ class SpectralKinetics():
                     energy_gaps[combined_i, combined_j] = energy_gap
 
                     if energy_gap < 0:
-                        rad_rates[combined_i][combined_j] = get_transition_rate_from_line_strength(energy_gap, line_strengths[combined_i][combined_j], dopant.slj[i][2], self.n_refract)
-                    else:
+                        rad_rates[combined_i][combined_j] = get_transition_rate_from_line_strength(energy_gap, self.line_strength_matrix[combined_i][combined_j], dopant.slj[i][2], self.n_refract)
+                    elif energy_gap > 0:
                         # Going up in energy, therefore calculate the photon absorption based on abs. cross section and incident flux
                         absfwhm = dopant.absFWHM[j]
                         abs_sigma = absfwhm/(2*np.sqrt(2*np.log(2))) #convert fwhm to width in gaussian equation
 
-                        absorption_cross_section = get_absorption_cross_section_from_line_strength(energy_gap, line_strengths[combined_i][combined_j], dopant.slj[i][2], self.n_refract)
+                        absorption_cross_section = get_absorption_cross_section_from_line_strength(energy_gap, self.line_strength_matrix[combined_i][combined_j], dopant.slj[i][2], self.n_refract)
 
-                        critical_energy_gap = get_critical_energy_gap(self.mpr_beta, absfwhm)
+                        critical_energy_gap = get_critical_energy_gap(self.mpr_alpha, absfwhm)
                         if abs(energy_gap - self.incident_wavenumber) > critical_energy_gap:
                             individual_absorption_cross_section = absorption_cross_section * gaussian(energy_gap, energy_gap, abs_sigma)
                             mpr_assisted_absorption_correction_factor = np.exp(-self.mpr_alpha * np.abs(energy_gap - self.incident_wavenumber))
@@ -228,6 +228,7 @@ class SpectralKinetics():
                             mpr_assisted_absorption_correction_factor = 1
 
                         radiative_rate = self.incident_photon_flux * individual_absorption_cross_section * mpr_assisted_absorption_correction_factor
+
                         # exponential term accounts for differences between incident energy and energy level gap
                         if radiative_rate > self.radiative_rate_threshold:
                             rad_rates[combined_i][combined_j] = radiative_rate
@@ -292,10 +293,10 @@ class SpectralKinetics():
                             mpr_assisted_absorption_correction_factor = 1
 
                         #TODO: Resolve comment: "FIXME -- this should probably be enabled since there is no MD absorption without it, but need to double check if it is correct"
-                        absorption_rate = individual_absorption_cross_section*self.incident_photon_flux * mpr_assisted_absorption_correction_factor
+                        # absorption_rate = individual_absorption_cross_section*self.incident_photon_flux * mpr_assisted_absorption_correction_factor
+                        absorption_rate = 0
                         if absorption_rate > self.radiative_rate_threshold:
                             magnetic_dipole_radiative_rates[combined_i][combined_j] = absorption_rate
-
         return magnetic_dipole_radiative_rates
 
     @property
@@ -369,11 +370,12 @@ class SpectralKinetics():
                         acceptor_line_strength = self.line_strength_matrix[combined_ai, combined_aj]
 
                         energy_gap = acceptor_energy_change + donor_energy_change
+
                         if energy_gap > 2 * critical_energy_gap:
                             # So that energy transfer cannot be too uphill
                             continue
 
-                        if energy_gap > 8 * self.phononEnergy:
+                        if np.abs(energy_gap) > 8 * self.phonon_energy:
                             continue
 
                         effective_energy_gap = energy_gap + self.stokes_shift
@@ -402,7 +404,7 @@ class SpectralKinetics():
                               zero_phonon_rate:float=1e7,
                               mpr_alpha:float=3.5e-3,
                               n_refract:float=1.5,
-                              vol_per_dopant_site:float=VOLUME_PER_DOPANT_SITE,
+                              vol_per_dopant_site:float=7.23946667e-2,
                               min_dopant_distance:float=3.867267554e-8,
                               **kwargs):
         """
@@ -417,11 +419,11 @@ class SpectralKinetics():
         :return:
         """
         self.MPR_W_0phonon = zero_phonon_rate
-        self.phononEnergy = phonon_energy #FIXME : PP_CalculateMPRratesMD relies on constant PHONON_ENERGY
+        self.phonon_energy = phonon_energy #FIXME : PP_CalculateMPRratesMD relies on constant PHONON_ENERGY
         #FIXME : PP_CalculateMPRratesMD relies on phononEnergy constant
 
         self.mpr_alpha = mpr_alpha # in cm
-        self.mpr_gamma = np.log(2) / self.phononEnergy # in cm
+        self.mpr_gamma = np.log(2) / self.phonon_energy # in cm
         self.mpr_beta = self.mpr_alpha - self.mpr_gamma # in cm
 
         self.n_refract = n_refract
@@ -436,7 +438,7 @@ class SpectralKinetics():
                                          radiative_rate_threshold:Optional[float]=0.0001,
                                          stokes_shift:Optional[float]=150,
                                          # energy_transfer_mode=0,
-                                         initial_population:Optional[str]="ground_state",
+                                         initial_populations:Optional[str]="ground_state",
                                          ode_solver:Optional[OdeSolver]=BDF,
                                          **kwargs):
         """
@@ -448,7 +450,7 @@ class SpectralKinetics():
         :param radiative_rate_threshold: lower limit for actually accounting for radiative rate (s^-1)
         :param stokes_shift: wavenumbers
         :param energy_transfer_mode:
-        :param initial_population:
+        :param initial_populations:
         :param ode_solver:
         :param kwargs:
         :return:
@@ -460,7 +462,7 @@ class SpectralKinetics():
         self.energy_transfer_rate_threshold = energy_transfer_rate_threshold
         self.radiative_rate_threshold = radiative_rate_threshold
         self.stokes_shift = stokes_shift   #FIXME : PP_CalculateMPRratesMD relies on constant
-        self.initial_population = initial_population
+        self.initial_populations = initial_populations
         self.ode_solver = ode_solver
 
         # TODO: 0=no migration, 1 = fast diffusion, 2 = fast hopping
@@ -474,21 +476,21 @@ class SpectralKinetics():
         # endif
 
     def set_excitation_parameters(self,
-                                  exWavelength:Optional[float]=976,
-                                  exPower:Optional[float]=1e7,
+                                  excitation_wavelength:Optional[float]=976,
+                                  excitation_power:Optional[float]=1e7,
                                   **kwargs):
         """
 
-        :param exWavelength: the wavelength of the incident radiation in in nm
-        :param exPower: the incident power density in ergs/cm^2 (1e7 erg/s/cm^2 = 1 W/cm^2)
+        :param excitation_wavelength: the wavelength of the incident radiation in in nm
+        :param excitation_power: the incident power density in ergs/cm^2 (1e7 erg/s/cm^2 = 1 W/cm^2)
         :param kwargs:
         :return:
         """
-        self.incident_power = exPower
-        self.incident_wavelength = exWavelength
+        self.incident_power = excitation_power
+        self.incident_wavelength = excitation_wavelength
 
-        self.incident_wavenumber = 1e7 / exWavelength # in cm^-1
-        self.incident_photon_flux = exPower / (h_CGS * c_CGS * self.incident_wavenumber) # in photons/s/cm^2
+        self.incident_wavenumber = 1e7 / excitation_wavelength # in cm^-1
+        self.incident_photon_flux = excitation_power / (h_CGS * c_CGS * self.incident_wavenumber) # in photons/s/cm^2
 
 
     def run_kinetics(self, dopants:List[dict]):

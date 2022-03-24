@@ -158,9 +158,8 @@ class Dopant(Species):
         return self._transitions
 
     @property
-    def volume_concentration(self):
-        from NanoParticleTools.inputs.constants import VOLUME_PER_DOPANT_SITE
-        return self.molar_concentration/VOLUME_PER_DOPANT_SITE
+    def volume_concentration(self, volume_per_dopant_site:Optional[float] = 7.23946667e-2) -> float:
+        return self.molar_concentration/volume_per_dopant_site
 
     def set_initial_populations(self, populations:Optional[List[float]] = None):
         if populations is None:
