@@ -64,6 +64,7 @@ class SpectralKinetics():
         self._magnetic_dipole_rate_matrix = None
         self._energy_transfer_rate_matrix = None
         self.set_kinetic_parameters()
+        self.KK = None
 
 
     def SK_SetUpAndDoKinetics(self):
@@ -521,9 +522,31 @@ class SpectralKinetics():
         # ywaveSpec is W_pop_time. Specifies a wave or waves to receive calculated results
         # IntegrateODE/M=(ODEsolveMethod)/U=1 /E=(ODEmaxError) /Q=0 SK_diffKinetics, KK, W_pop_time
 
+        SK_SetSimParams()
         self.ode_solver(self.SK_diffKinetics, atol=self.ode_max_error)
         pass
 
+    def SK_SetSimParams(self):
+        ODEsolveMethod = self.ode_solver
+        timeStep = self.time_step
+        numSteps = self.num_steps
+        ODEmaxError = self.ode_max_error
+        V_totNumLevels = self.total_n_levels
+        W_pop_time = np.zeros((numSteps,V_totNumLevels))
+
+        # need to check if W_pop is defeine somewhere and load the corret values
+        W_pop = np.zeros((V_totNumLevels))
+        #WAVE /T CombinedEnergyLevelLabels
+        '''
+        SetScale is for Igor graph unit, not relvelent here
+        Make/D/O/N=(numSteps,V_totNumLevels) W_pop_time
+        SetScale/P x 0, timeStep,W_pop_time	// calculate concentrations every 10 us
+        '''
+        for i in range (0,V_totNumLevels):
+            #SetDimLabel 1,i,$(CombinedEnergyLevelLabels[i]),W_pop_time	# set dimension labels to substance names, add if necessary
+            W_pop_time[0][i] = W_pop[i]  #initial conc
+
+        self.KK=[]
     def SK_diffKinetics(self, params, tt, N_pop, dNdt):
         """
         #This function is intended to be called by igor's IntegrateODE function
@@ -542,15 +565,14 @@ class SpectralKinetics():
         :return:
         """
         numspecies = len(N_pop)
-        dNdt = 0
+        minimumDopantDistance = self.minimum_dopant_distance
+        dNdt = np.zeros((self.total_n_levels)+2)
         ETrate = 0
         M_RadRate = self.radiative_rate_matrix
         M_MDradRate = self.magnetic_dipole_rate_matrix
-        M_NRrate =  self._non_radiative_rate_matrix
+        M_NRrate =  self.non_radiative_rate_matrix
         W_ETrates = self.energy_transfer_rate_matrix
-        # -- define M_RadRate, M_MDradRate, M_NRrate, M_ETIndices, W_ETrates via calling Erics func if necessary
-        # W_ETrates = self._energy_transfer_rate_matrix sth like this..
-
+    
         #NRate
         for i in range (0,numspecies):
             for j in range (0,numspecies):
@@ -565,7 +587,6 @@ class SpectralKinetics():
 
 
         #Magnetic Dipole Radiative Emission
-
         for i in range (0,numspecies):
             for j in range (0,numspecies):
                 dNdt[i] -= N_pop[i]*M_MDradRate[i][j] # depletion
@@ -573,18 +594,18 @@ class SpectralKinetics():
 
 
         # Energy Transfer
-
-        numETtransitions = self.minimum_dopant_distance
+        numETtransitions = len(W_ETrates)
 
         for i in range (0,numETtransitions):
 
-            di = M_ETIndices[i][0]
-            dj = M_ETIndices[i][1]
-            ai = M_ETIndices[i][2]
-            aj = M_ETIndices[i][3]
+            di = int(W_ETrates[i][0])
+            dj = int(W_ETrates[i][1])
+            ai = int(W_ETrates[i][2])
+            aj = int(W_ETrates[i][3])
 
-        #FIXME not correct
-            ETrate =4*math.pi/3*(W_ETrates[i]*1e42)*N_pop[ai]^1*N_pop[di]^1*(minimumDopantDistance^(-3)*1e-21 - (4*math.pi/3)*N_pop[ai]) 
+        #FIXME not correct (Original Igor comment
+        #changed W_ETrates[i] to W_ETrates[i][4], confirm with Emory
+            ETrate =4*math.pi/3*(W_ETrates[i][4]*1e42)*N_pop[ai]**1*N_pop[di]**1*(minimumDopantDistance**(-3)*1e-21 - (4*math.pi/3)*N_pop[ai]) 
             # last term doesn't really change things that much.
             # 1e42 = W_ETrates needs to be converted from cm^6/s to nm^6/s since N_pop is in nm^-3 and W_ET is in cm^6/s
             # Minimum dopant distance multiplied by 1e-21 to convert from (cm^-3 -> nm^-3
@@ -595,6 +616,7 @@ class SpectralKinetics():
             #accumulation
             dNdt[aj] += ETrate
             dNdt[dj] += ETrate
+        
 
 
 
