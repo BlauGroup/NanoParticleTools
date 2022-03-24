@@ -572,7 +572,7 @@ class SpectralKinetics():
         M_MDradRate = self.magnetic_dipole_rate_matrix
         M_NRrate =  self.non_radiative_rate_matrix
         W_ETrates = self.energy_transfer_rate_matrix
-    
+        
         #NRate
         for i in range (0,numspecies):
             for j in range (0,numspecies):
@@ -606,6 +606,7 @@ class SpectralKinetics():
         #FIXME not correct (Original Igor comment
         #changed W_ETrates[i] to W_ETrates[i][4], confirm with Emory
             ETrate =4*math.pi/3*(W_ETrates[i][4]*1e42)*N_pop[ai]**1*N_pop[di]**1*(minimumDopantDistance**(-3)*1e-21 - (4*math.pi/3)*N_pop[ai]) 
+
             # last term doesn't really change things that much.
             # 1e42 = W_ETrates needs to be converted from cm^6/s to nm^6/s since N_pop is in nm^-3 and W_ET is in cm^6/s
             # Minimum dopant distance multiplied by 1e-21 to convert from (cm^-3 -> nm^-3
@@ -616,8 +617,6 @@ class SpectralKinetics():
             #accumulation
             dNdt[aj] += ETrate
             dNdt[dj] += ETrate
-        
-
 
 
     def SK_Analysis(self):
