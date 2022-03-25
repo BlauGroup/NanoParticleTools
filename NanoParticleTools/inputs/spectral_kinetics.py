@@ -93,35 +93,22 @@ class SpectralKinetics():
             Variable /G V_numSpecies //number of lanthanide species (elements/ion types) in simulation
             Variable /G V_totNumLevels //total number of energy levels to simulate (sum of simulated levels for all ions)
         """
-        #TODO: check inputs are valid
-        self.initial_populations = initial_populations
+        # TODO: check inputs are valid
 
-        if isinstance(self.initial_populations, list):
+        if isinstance(initial_populations, list):
             print('Using user input initial population')
-            for dopant, initial_population in zip(self.dopants, self.initial_populations):
-                dopant.set_initial_populations(self.initial_populations)
-            # raise NotImplementedError("User defined populations not implemented")
-        elif self.initial_populations == 'ground_state':
+            for dopant, initial_population in zip(self.dopants, initial_populations):
+                dopant.set_initial_populations(initial_populations)
+                # raise NotImplementedError("User defined populations not implemented")
+        elif initial_populations == 'ground_state':
             for dopant in self.dopants:
                 dopant.set_initial_populations()
-        elif self.initial_populations == 'last_run':
-            #TODO: Implement from last run. Although this may not be necessary, since one could just pass in the previous population
+        elif initial_populations == 'last_run':
+            # TODO: Implement from last run. Although this may not be necessary, since one could just pass in the previous population
             raise NotImplementedError("Using populations from previous run not implemented")
         else:
             raise ValueError("Invalid argument supplied for: initial_populations")
-
-        #
-        # // Make matrices of rate constants
-        #
-        ## SK_CombineSpeciesInfo() #TODO: Determine if this is necessary (I don't think it is)
-        ## SK_MakeNRrateMatrix() #Done, was mostly put into the species
-        ## SK_MakeLineStrengthMatrix() #TODO: Determine if this is necessary (I don't think it is)
-        ## SK_MakeRadiationRateMatrix()
-        ## SK_MakeMDRateMatrix()
-        ## SK_MakeETRateMatrix()
-        #
-        # return STATUS_SUCCESS
-        pass
+        self.initial_populations = np.vstack([dopant.initial_populations for dopant in self.dopants])
 
     @property
     def non_radiative_rate_matrix(self):
@@ -522,31 +509,32 @@ class SpectralKinetics():
         # ywaveSpec is W_pop_time. Specifies a wave or waves to receive calculated results
         # IntegrateODE/M=(ODEsolveMethod)/U=1 /E=(ODEmaxError) /Q=0 SK_diffKinetics, KK, W_pop_time
 
-        SK_SetSimParams()
-        self.ode_solver(self.SK_diffKinetics, atol=self.ode_max_error)
-        pass
+        self.set_kinetic_parameters()
+        population_time = np.zeros((self.num_steps, self.total_n_levels))
 
-    def SK_SetSimParams(self):
-        ODEsolveMethod = self.ode_solver
-        timeStep = self.time_step
-        numSteps = self.num_steps
-        ODEmaxError = self.ode_max_error
-        V_totNumLevels = self.total_n_levels
-        W_pop_time = np.zeros((numSteps,V_totNumLevels))
+        self.ode_solver(fun=self.SK_diffKinetics, t0=t0, y0=self.initial_populations,
+                        t_bound=t_bound, atol=self.ode_max_error, max_step=self.num_steps)
 
-        # need to check if W_pop is defeine somewhere and load the corret values
-        W_pop = np.zeros((V_totNumLevels))
-        #WAVE /T CombinedEnergyLevelLabels
-        '''
-        SetScale is for Igor graph unit, not relvelent here
-        Make/D/O/N=(numSteps,V_totNumLevels) W_pop_time
-        SetScale/P x 0, timeStep,W_pop_time	// calculate concentrations every 10 us
-        '''
-        for i in range (0,V_totNumLevels):
-            #SetDimLabel 1,i,$(CombinedEnergyLevelLabels[i]),W_pop_time	# set dimension labels to substance names, add if necessary
-            W_pop_time[0][i] = W_pop[i]  #initial conc
 
-        self.KK=[]
+    # def SK_SetSimParams(self):
+    #     numSteps = self.num_steps
+    #     V_totNumLevels = self.total_n_levels
+    #     W_pop_time = np.zeros((numSteps, V_totNumLevels))
+    #
+    #     # need to check if W_pop is defeine somewhere and load the corret values
+    #     W_pop = np.zeros((V_totNumLevels))
+    #     # WAVE /T CombinedEnergyLevelLabels
+    #     '''
+    #     SetScale is for Igor graph unit, not relvelent here
+    #     Make/D/O/N=(numSteps,V_totNumLevels) W_pop_time
+    #     SetScale/P x 0, timeStep,W_pop_time	// calculate concentrations every 10 us
+    #     '''
+    #     for i in range(0, V_totNumLevels):
+    #         # SetDimLabel 1,i,$(CombinedEnergyLevelLabels[i]),W_pop_time	# set dimension labels to substance names, add if necessary
+    #         W_pop_time[0][i] = W_pop[i]  # initial conc
+    #
+    #     self.KK = []
+
     def SK_diffKinetics(self, params, tt, N_pop, dNdt):
         """
         #This function is intended to be called by igor's IntegrateODE function
@@ -565,59 +553,51 @@ class SpectralKinetics():
         :return:
         """
         numspecies = len(N_pop)
-        minimumDopantDistance = self.minimum_dopant_distance
-        dNdt = np.zeros((self.total_n_levels)+2)
-        ETrate = 0
-        M_RadRate = self.radiative_rate_matrix
-        M_MDradRate = self.magnetic_dipole_rate_matrix
-        M_NRrate =  self.non_radiative_rate_matrix
-        W_ETrates = self.energy_transfer_rate_matrix
-        
-        #NRate
-        for i in range (0,numspecies):
-            for j in range (0,numspecies):
-                dNdt[i] -= N_pop[i]*M_NRrate[i][j] #depletion
-                dNdt[j] += N_pop[i]*M_NRrate[i][j] # accumulation
+        dNdt = np.zeros(self.total_n_levels + 2)
 
-        #Electric Dipole Radiative Emission
-        for i in range (0,numspecies):
-            for j in range (0,numspecies):
-                dNdt[i] -= N_pop[i]*M_RadRate[i][j] #depletion
-                dNdt[j] += N_pop[i]*M_RadRate[i][j] # accumulation
+        # NRate
+        for i in range(0, numspecies):
+            for j in range(0, numspecies):
+                dNdt[i] -= N_pop[i] * self.non_radiative_rate_matrix[i][j]  # depletion
+                dNdt[j] += N_pop[i] * self.non_radiative_rate_matrix[i][j]  # accumulation
 
+        # Electric Dipole Radiative Emission
+        for i in range(0, numspecies):
+            for j in range(0, numspecies):
+                dNdt[i] -= N_pop[i] * self.radiative_rate_matrix[i][j]  # depletion
+                dNdt[j] += N_pop[i] * self.radiative_rate_matrix[i][j]  # accumulation
 
-        #Magnetic Dipole Radiative Emission
-        for i in range (0,numspecies):
-            for j in range (0,numspecies):
-                dNdt[i] -= N_pop[i]*M_MDradRate[i][j] # depletion
-                dNdt[j] += N_pop[i]*M_MDradRate[i][j] # accumulation
-
+        # Magnetic Dipole Radiative Emission
+        for i in range(0, numspecies):
+            for j in range(0, numspecies):
+                dNdt[i] -= N_pop[i] * self.magnetic_dipole_rate_matrix[i][j]  # depletion
+                dNdt[j] += N_pop[i] * self.magnetic_dipole_rate_matrix[i][j]  # accumulation
 
         # Energy Transfer
-        numETtransitions = len(W_ETrates)
+        num_energy_transfer_transitions = len(self.energy_transfer_rate_matrix)
 
-        for i in range (0,numETtransitions):
+        for i in range(0, num_energy_transfer_transitions):
 
-            di = int(W_ETrates[i][0])
-            dj = int(W_ETrates[i][1])
-            ai = int(W_ETrates[i][2])
-            aj = int(W_ETrates[i][3])
+            di = int(self.energy_transfer_rate_matrix[i][0])
+            dj = int(self.energy_transfer_rate_matrix[i][1])
+            ai = int(self.energy_transfer_rate_matrix[i][2])
+            aj = int(self.energy_transfer_rate_matrix[i][3])
 
-        #FIXME not correct (Original Igor comment
-        #changed W_ETrates[i] to W_ETrates[i][4], confirm with Emory
-            ETrate =4*math.pi/3*(W_ETrates[i][4]*1e42)*N_pop[ai]**1*N_pop[di]**1*(minimumDopantDistance**(-3)*1e-21 - (4*math.pi/3)*N_pop[ai]) 
+            # FIXME not correct (Original Igor comment
+            # changed W_ETrates[i] to W_ETrates[i][4], confirm with Emory
+            et_rate = 4 * math.pi / 3 * (self.energy_transfer_rate_matrix[i][4] * 1e42) * N_pop[ai] ** 1 * N_pop[di] ** 1 * (
+                      self.minimum_dopant_distance ** (-3) * 1e-21 - (4 * math.pi / 3) * N_pop[ai])
 
             # last term doesn't really change things that much.
             # 1e42 = W_ETrates needs to be converted from cm^6/s to nm^6/s since N_pop is in nm^-3 and W_ET is in cm^6/s
             # Minimum dopant distance multiplied by 1e-21 to convert from (cm^-3 -> nm^-3
-            if (ETrate >0):
-                ETrate = ETrate
-            dNdt[ai] -= ETrate
-            dNdt[di] -= ETrate
-            #accumulation
-            dNdt[aj] += ETrate
-            dNdt[dj] += ETrate
-
+            if (et_rate > 0):
+                et_rate = et_rate
+            dNdt[ai] -= et_rate
+            dNdt[di] -= et_rate
+            # accumulation
+            dNdt[aj] += et_rate
+            dNdt[dj] += et_rate
 
     def SK_Analysis(self):
         pass
