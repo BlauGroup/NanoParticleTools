@@ -1,8 +1,10 @@
-from pathlib import Path
-import os
 import json
+import os
+from pathlib import Path
+
 import numpy as np
 from NanoParticleTools.inputs.spectral_kinetics import SpectralKinetics
+
 from NanoParticleTools.species_data.species import Dopant
 
 MODULE_DIR = Path(__file__).absolute().parent

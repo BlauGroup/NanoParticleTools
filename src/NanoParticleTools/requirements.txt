@@ -2,3 +2,4 @@ numpy
 scipy
 pymatgen
 fireworks
+jobflow

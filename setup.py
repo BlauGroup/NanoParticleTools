@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(name='NanoParticleTools',
       version='0.1',
@@ -6,5 +6,16 @@ setup(name='NanoParticleTools',
       url='https://github.com/BlauGroup/NanoParticleTools',
       author='Daniel Barter',
       author_email='danielbarter@gmail.com',
-      packages=['NanoParticleTools']
-)
+      packages=find_packages("src"),
+      package_dir={"": "src"},
+      install_requires=[
+          "setuptools",
+          "pymatgen",
+          "fireworks",
+          "monty",
+          "jobflow",
+          "atomate2",
+          "maggma"
+      ],
+      tests_require=["pytest"]
+      )

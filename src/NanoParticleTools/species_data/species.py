@@ -42,7 +42,7 @@ class Dopant(Species):
     def __init__(self,
                  symbol: str,
                  concentration: float,
-                 n_levels: int):
+                 n_levels: Optional[int]=None):
         """
 
         :param symbol:
@@ -69,7 +69,10 @@ class Dopant(Species):
         self.initial_populations = None
 
         # If more levels are specified than possible, use all existing energy levels
-        self.n_levels = min(n_levels, len(self.energy_levels))
+        if n_levels is None:
+            self.n_levels = len(self.energy_levels)
+        else:
+            self.n_levels = min(n_levels, len(self.energy_levels))
 
     def check_intrinsic_data(self):
         """
@@ -165,6 +168,7 @@ class Dopant(Species):
         if populations is None:
             populations = [0 for i in range(self.n_levels)]
             populations[0] = self.volume_concentration
+
         self.initial_populations = populations
 
     def calculate_MPR_rates(self,
