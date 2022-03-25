@@ -2,14 +2,15 @@ from typing import Optional, Sequence, Union
 
 import numpy as np
 from pymatgen.core import Composition, Structure, Site, Lattice, Molecule
+from monty.json import MSONable
 
-
-class NanoParticleConstraint():
+class NanoParticleConstraint(MSONable):
     """
     Template for a Nanoparticle constraint. This defines the shape of a volume containing atoms
 
     A constraint must implement the bounding_box and sites_in_bounds functions.
     """
+
     def __init__(self, host_structure: Optional[Structure] = None):
         if host_structure is None:
             self.host_structure = get_nayf4_structure()
@@ -38,6 +39,7 @@ class SphericalConstraint(NanoParticleConstraint):
     """
     Defines a spherical constraint that would be used to construct a spherical core/nanoparticle or a spherical shell
     """
+
     def __init__(self, radius, host_structure: Optional[Structure] = None):
         self.radius = radius
         super().__init__(host_structure)
@@ -74,14 +76,15 @@ class CubeConstraint(PrismConstraint):
     """
     Defines a cubic constraint that would be used to construct a cubic core/nanoparticle or a cubic shell
     """
+
     def __init__(self, a, host_structure: Optional[Structure] = None):
         super().__init__(a, a, a, host_structure)
 
 
-class DopedNanoparticle():
+class DopedNanoparticle(MSONable):
     def __init__(self,
-                 sites:Sequence[Site],
-                 constraints:Sequence[NanoParticleConstraint],
+                 sites: Sequence[Site],
+                 constraints: Sequence[NanoParticleConstraint],
                  seed: Optional[int] = 0):
         self._sites = sites
         self.constraints = constraints
@@ -94,7 +97,7 @@ class DopedNanoparticle():
                    constraint_index: int,
                    dopant_concentration: float,
                    dopant_species: str,
-                   replaced_species: Optional[str]='Y'):
+                   replaced_species: Optional[str] = 'Y'):
         sites_in_constraint = self._sites[constraint_index]
 
         # Identify the possible sites for the dopant
@@ -117,12 +120,11 @@ class DopedNanoparticle():
         # Keep track of sites with dopants
         self.dopant_indices[constraint_index].extend(dopant_sites)
 
-
-    def to_file(self, fmt="xyz", name= "nanoparticle.xyz"):
+    def to_file(self, fmt="xyz", name="nanoparticle.xyz"):
         _np = Molecule.from_sites(self.sites)
         xyz = _np.to(fmt, name)
 
-    def dopants_to_file(self, fmt="xyz", name= "dopant_nanoparticle.xyz"):
+    def dopants_to_file(self, fmt="xyz", name="dopant_nanoparticle.xyz"):
         _np = Molecule.from_sites(self.dopant_sites)
         xyz = _np.to(fmt, name)
 
@@ -140,8 +142,8 @@ class DopedNanoparticle():
 
     @property
     def dopant_concentrations(self,
-                             constraint_index: Optional[Union[int, None]] = None,
-                             replaced_species: Optional[str]='Y'):
+                              constraint_index: Optional[Union[int, None]] = None,
+                              replaced_species: Optional[str] = 'Y'):
         if constraint_index is None:
             num_replaced_sites = len([i for i, site in enumerate(self.sites) if site.specie.symbol == replaced_species])
             total_num_sites = len(self.dopant_sites) + num_replaced_sites
@@ -149,15 +151,16 @@ class DopedNanoparticle():
             dopant_amount = {}
             for dopant in self.dopant_sites:
                 try:
-                    dopant_amount[str(dopant.specie)] +=1
+                    dopant_amount[str(dopant.specie)] += 1
                 except:
                     dopant_amount[str(dopant.specie)] = 1
 
-            return dict([(key, item/total_num_sites) for key, item in dopant_amount.items()])
-
+            return dict([(key, item / total_num_sites) for key, item in dopant_amount.items()])
 
     @classmethod
-    def from_constraints(cls, constraints: Sequence[NanoParticleConstraint]):
+    def from_constraints(cls,
+                         constraints: Sequence[NanoParticleConstraint],
+                         seed: Optional[int] = 0):
         """
         Construct a nanoparticle from a sequence of constraints.
 
@@ -217,7 +220,7 @@ class DopedNanoparticle():
 
             nanoparticle_sites.append(_sites)
 
-        return cls(nanoparticle_sites, constraints)
+        return cls(nanoparticle_sites, constraints, seed=seed)
 
 
 def get_nayf4_structure():
@@ -240,4 +243,3 @@ def get_wse2_structure():
                  [0.6667, 0.3333, 0.3616], [0.3333, 0.6667, 0.25], [0.6667, 0.3333, 0.75]]
 
     return Structure(lattice, species=species, coords=positions)
-

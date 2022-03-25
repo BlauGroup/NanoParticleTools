@@ -2,6 +2,7 @@ import csv
 import sqlite3
 import warnings
 from typing import Optional, Sequence
+import subprocess
 
 # number_of_sites | species_1 | species_2 | left_state_1 | left_state_2 |
 # right_state_1 | right_state_2 | rate
@@ -421,3 +422,36 @@ class NPMCInput:
                 #     self.interactions[key]['dE'] = energy_per_interaction[key]
 
         return cls(interactions, sites, species)
+
+class NPMCRunner:
+    def __init__(self,
+                 np_db_path,
+                 initial_state_db_path):
+        self.np_database = np_db_path
+        self.initial_state = initial_state_db_path
+
+    def run(self,
+            npmc_command: str = 'NPMC',
+            num_sims: int = 10,
+            base_seed: int = 1000,
+            thread_count: int = 8,
+            simulation_length: int = 100000):
+        """
+
+        :param np_database: a sqlite database containing the reaction network and metadata.
+        :param initial_state: a sqlite database containing initial state. The simulation
+            trajectories are also written into the database
+        :param num_sims: an integer specifying how many simulations to run
+        :param base_seed: seeds used are base_seed, base_seed+1, ..., base_seed+number_of_simulations-1
+        :param thread_count: number of threads to use
+        :param simulation_length:
+        :return:
+        """
+        run_args = [npmc_command,
+                    f'--nano_particle_database={self.np_database}',
+                    f'--initial_state_database={self.initial_state}',
+                    f'--number_of_simulations={str(num_sims)}',
+                    f'--base_seed={str(base_seed)}',
+                    f'--thread_count={str(thread_count)}',
+                    f'--step_cutoff={str(simulation_length)}']
+        subprocess.run(' '.join(run_args), shell=True)

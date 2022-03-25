@@ -1,6 +1,8 @@
-import numpy as np
 from typing import Optional
+
+import numpy as np
 import pandas as pd
+
 
 class SimulationReplayer():
     """
@@ -88,7 +90,8 @@ class SimulationReplayer():
         for interaction_id, count in interactions_dict.items():
             interaction = self.nano_particle.interactions[interaction_id]
             nsites = sum(
-                [1 for key, item in self.nano_particle.sites.items() if item['species_id'] == interaction['species_id_1']])
+                [1 for key, item in self.nano_particle.sites.items() if
+                 item['species_id'] == interaction['species_id_1']])
 
             normalized_interactions_dict[interaction_id] /= nsites
 
