@@ -45,7 +45,6 @@ class SpectralKinetics():
         self.radiative_rate_threshold = None
         self.stokes_shift = None
         self.energy_transfer_mode = None
-        self.initial_populations = None
         self.set_simulation_config_parameters(**kwargs)
 
         self.incident_power = None
@@ -82,33 +81,6 @@ class SpectralKinetics():
 
         self.SK_Analysis()
         return
-
-    def set_kinetic_parameters(self,
-                               initial_populations:Optional[Union[Sequence[Sequence[float]], str]]= 'ground_state'):
-        """
-
-        :param dopants: {species_name, concentration, numLevels} ex. [{'Yb', 0.1, 2}, {'Er', 0.02, 34}]
-        :return:
-            Creates 2 global variables in $KINETIC_PARAMS_FOLDER
-            Variable /G V_numSpecies //number of lanthanide species (elements/ion types) in simulation
-            Variable /G V_totNumLevels //total number of energy levels to simulate (sum of simulated levels for all ions)
-        """
-        # TODO: check inputs are valid
-
-        if isinstance(initial_populations, list):
-            print('Using user input initial population')
-            for dopant, initial_population in zip(self.dopants, initial_populations):
-                dopant.set_initial_populations(initial_populations)
-                # raise NotImplementedError("User defined populations not implemented")
-        elif initial_populations == 'ground_state':
-            for dopant in self.dopants:
-                dopant.set_initial_populations()
-        elif initial_populations == 'last_run':
-            # TODO: Implement from last run. Although this may not be necessary, since one could just pass in the previous population
-            raise NotImplementedError("Using populations from previous run not implemented")
-        else:
-            raise ValueError("Invalid argument supplied for: initial_populations")
-        self.initial_populations = np.vstack([dopant.initial_populations for dopant in self.dopants])
 
     @property
     def non_radiative_rate_matrix(self):
@@ -426,7 +398,6 @@ class SpectralKinetics():
                                          radiative_rate_threshold:Optional[float]=0.0001,
                                          stokes_shift:Optional[float]=150,
                                          # energy_transfer_mode=0,
-                                         initial_populations:Optional[str]="ground_state",
                                          ode_solver:Optional[OdeSolver]=BDF,
                                          **kwargs):
         """
@@ -450,7 +421,6 @@ class SpectralKinetics():
         self.energy_transfer_rate_threshold = energy_transfer_rate_threshold
         self.radiative_rate_threshold = radiative_rate_threshold
         self.stokes_shift = stokes_shift   #FIXME : PP_CalculateMPRratesMD relies on constant
-        self.initial_populations = initial_populations
         self.ode_solver = ode_solver
 
         # TODO: 0=no migration, 1 = fast diffusion, 2 = fast hopping
@@ -480,15 +450,17 @@ class SpectralKinetics():
         self.incident_wavenumber = 1e7 / excitation_wavelength # in cm^-1
         self.incident_photon_flux = excitation_power / (h_CGS * c_CGS * self.incident_wavenumber) # in photons/s/cm^2
 
-
-    def run_kinetics(self, dopants:List[dict]):
+    def run_kinetics(self,
+                     initial_populations: Optional[
+                         Union[Sequence[Sequence[float]], str]] = 'ground_state',
+                     t0: Optional[int] = 0,
+                     t_bound: Optional[int] = 1):
         """
         SOLVES the differential equations without doing any of the setup or analysis of SK_SetUpAndDoKinetics
         ASSUMES that all of the proper values have already been stored in the global variables
 
         :return:
         """
-
 
         """
         SK_SetSimParams()
@@ -500,42 +472,30 @@ class SpectralKinetics():
 
         Wave /D W_pop_time
         """
+        if isinstance(initial_populations, list):
+            # check if supplied populations is the proper length
+            if len(initial_populations) == self.total_n_levels:
+                print('Using user input initial population')
+            else:
+                raise ValueError(
+                    "Supplied Population is invalid. Expected length of {self.total_n_levels, received length of {len(initial_population)}")
+        elif initial_populations == 'ground_state':
+            for dopant in self.dopants:
+                dopant.set_initial_populations()
+            initial_populations = np.vstack([dopant.initial_populations for dopant in self.dopants])
+        else:
+            raise ValueError("Invalid argument supplied for: initial_populations")
 
-        # Default ODE solve method is Backwards Differentiation Formula (/M =3)
-        # The error in the differentiation formula. Default is 1e-12 (/E=1e-12)
-        # /Q =0 turns off quiet mode
-        # derivFunc is "SK_diffKinetics". The name of a user function that calculates derivatives
-        # cwaveName is KK. This is the name of the wave containing constant coefficients to be passed to derivFunc
-        # ywaveSpec is W_pop_time. Specifies a wave or waves to receive calculated results
-        # IntegrateODE/M=(ODEsolveMethod)/U=1 /E=(ODEmaxError) /Q=0 SK_diffKinetics, KK, W_pop_time
-
-        self.set_kinetic_parameters()
         population_time = np.zeros((self.num_steps, self.total_n_levels))
 
-        self.ode_solver(fun=self.SK_diffKinetics, t0=t0, y0=self.initial_populations,
-                        t_bound=t_bound, atol=self.ode_max_error, max_step=self.num_steps)
+        # TODO: check how ode_solver works and how to retrieve values at each step
+        solver = self.ode_solver(fun=self.SK_diffKinetics, t0=t0, y0=initial_populations,
+                                 t_bound=t_bound, atol=self.ode_max_error, max_step=self.num_steps)
+
+        return population_time
 
 
-    # def SK_SetSimParams(self):
-    #     numSteps = self.num_steps
-    #     V_totNumLevels = self.total_n_levels
-    #     W_pop_time = np.zeros((numSteps, V_totNumLevels))
-    #
-    #     # need to check if W_pop is defeine somewhere and load the corret values
-    #     W_pop = np.zeros((V_totNumLevels))
-    #     # WAVE /T CombinedEnergyLevelLabels
-    #     '''
-    #     SetScale is for Igor graph unit, not relvelent here
-    #     Make/D/O/N=(numSteps,V_totNumLevels) W_pop_time
-    #     SetScale/P x 0, timeStep,W_pop_time	// calculate concentrations every 10 us
-    #     '''
-    #     for i in range(0, V_totNumLevels):
-    #         # SetDimLabel 1,i,$(CombinedEnergyLevelLabels[i]),W_pop_time	# set dimension labels to substance names, add if necessary
-    #         W_pop_time[0][i] = W_pop[i]  # initial conc
-    #
-    #     self.KK = []
-
-    def SK_diffKinetics(self, params, tt, N_pop, dNdt):
+    def SK_diffKinetics(self, N_pop):
         """
         #This function is intended to be called by igor's IntegrateODE function
 
@@ -598,6 +558,7 @@ class SpectralKinetics():
             # accumulation
             dNdt[aj] += et_rate
             dNdt[dj] += et_rate
+        return dNdt
 
     def SK_Analysis(self):
         pass
