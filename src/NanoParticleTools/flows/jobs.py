@@ -16,7 +16,8 @@ from NanoParticleTools.simulation_loader import SimulationReplayer
 def write_inputs(constraints: Sequence[NanoParticleConstraint],
                  dopant_specifications: Sequence[Tuple[int, float, str, str]],
                  seed: int,
-                 output_dir: Optional[str] = '.') -> dict:
+                 output_dir: Optional[str] = '.',
+                 **kwargs) -> dict:
     # Generate Nanoparticle
     nanoparticle = DopedNanoparticle.from_constraints(constraints, seed)
     for dopant_specification in dopant_specifications:
@@ -24,8 +25,7 @@ def write_inputs(constraints: Sequence[NanoParticleConstraint],
 
     # Initialize Spectral Kinetics class to calculate transition rates
     dopants = [Dopant(key, concentration) for key, concentration in nanoparticle.dopant_concentrations.items()]
-    sk = SpectralKinetics(dopants)
-    sk.set_kinetic_parameters()
+    sk = SpectralKinetics(dopants, **kwargs)
 
     # Gather and format data for NPMCInput
     interactions = get_all_interactions(sk)
