@@ -59,7 +59,6 @@ def get_non_radiative_interactions(sk: SpectralKinetics):
               'left_state_1': combined_energy_level_to_specie_energy_level(sk, row),
               'left_state_2': -1,
               'right_state_1': combined_energy_level_to_specie_energy_level(sk, col),
-              'right_state_1': col,
               'right_state_2': -1,
               'rate': rate,
               'interaction_type': 'NR'}
@@ -116,7 +115,7 @@ def get_energy_transfer_interactions(sk: SpectralKinetics):
               'left_state_2': combined_energy_level_to_specie_energy_level(sk, ai),
               'right_state_1': combined_energy_level_to_specie_energy_level(sk, dj),
               'right_state_2': combined_energy_level_to_specie_energy_level(sk, dj),
-              'rate': rate,
+              'rate': (1.0e42) * rate,
               'interaction_type': 'ET'}
         _interactions.append(_d)
     return _interactions
@@ -141,9 +140,9 @@ def get_sites(nanoparticle, sk):
     sites = {}
     for i, site in enumerate(nanoparticle.dopant_sites):
         sites[i] = {'site_id': i,
-                    'x': site.x,
-                    'y': site.y,
-                    'z': site.z,
+                    'x': site.x/10,
+                    'y': site.y/10,
+                    'z': site.z/10,
                     'species_id': [dopant.symbol for dopant in sk.dopants].index(site.specie.symbol)}
     return sites
 
