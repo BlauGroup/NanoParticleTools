@@ -83,7 +83,6 @@ class SpectralKinetics(MSONable):
 
         self.dopants = dopants
 
-
     @property
     def mpr_gamma(self):
         return np.log(2) / self.phonon_energy  # in cm

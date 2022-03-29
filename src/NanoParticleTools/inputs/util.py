@@ -5,7 +5,7 @@ import numpy as np
 from NanoParticleTools.inputs.spectral_kinetics import SpectralKinetics
 from NanoParticleTools.species_data.species import Dopant
 
-@lru_cache()
+
 def specie_energy_level_to_combined_energy_level(species, energy_level, dopants):
     if isinstance(species, str):
         for i, dopant in enumerate(dopants):
