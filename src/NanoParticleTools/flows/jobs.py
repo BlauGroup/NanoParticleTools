@@ -1,38 +1,61 @@
-import os
 import json
-from monty.json import MontyEncoder, MontyDecoder
-from typing import Sequence, Tuple, Optional, Union
+import os
+from typing import Sequence, Tuple, Optional, Union, List
 
+from jobflow import job
+from monty.json import MontyEncoder
+
+from NanoParticleTools.analysis import SimulationReplayer
 from NanoParticleTools.core import NPMCInput, NPMCRunner
 from NanoParticleTools.inputs.nanoparticle import DopedNanoparticle, NanoParticleConstraint
 from NanoParticleTools.inputs.spectral_kinetics import SpectralKinetics
-from NanoParticleTools.inputs.util import get_all_interactions, get_sites, get_species
 from NanoParticleTools.species_data.species import Dopant
-from jobflow import job
-
-from NanoParticleTools.analysis import SimulationReplayer
 
 
-@job
-def write_inputs(constraints: Sequence[NanoParticleConstraint],
-                 dopant_specifications: Sequence[Tuple[int, float, str, str]],
-                 seed: int,
-                 output_dir: Optional[str] = '.',
-                 initial_states: Optional[Union[Sequence[int], None]] = None,
-                 **kwargs) -> dict:
+# Save 'trajectory_doc' to the trajectories store (as specified in the JobStore)
+@job(trajectories='trajectory_doc')
+def npmc_job(constraints: Sequence[NanoParticleConstraint],
+             dopant_specifications: Sequence[Tuple[int, float, str, str]],
+             doping_seed: int,
+             output_dir: Optional[str] = '.',
+             initial_states: Optional[Union[Sequence[int], None]] = None,
+             spectral_kinetics_args: Optional[dict] = {},
+             npmc_args: Optional[dict] = {}) -> List[dict]:
+    """
+
+    :param constraints: Constraints from which to build the Nanoparticle.
+        Ex. constraints = [SphericalConstraint(20), SphericalConstraint(30)]
+    :param dopant_specifications:
+        List of tuples specifying (constraint_index, mole fraction desired, dopant species, replaced species)
+        Ex. dopant_specification = [(0, 0.1, 'Yb', 'Y'), (0, 0.02, 'Er', 'Y'), (1, 0.1, 'Gd', 'Y')]
+    :param doping_seed: Random generator seed for placing dopants to ensure deterministic nanoparticle generation
+    :param output_dir: Subdirectory to save output.
+        Note: In most cases, jobflow/Fireworks will automatically run in a new directory,
+              so this should not be necessary
+    :param initial_states: Initial states for the Monte Carlo simulation.
+        Typically only supplied for a lifetime experiment
+    :param spectral_kinetics_args: a dictionary specifying the parameters for the SpectralKinetics object
+        to be constructed. For more information, check the documentation for
+        NanoParticleTools.inputs.spectral_kinetics.SpectralKinetics.__init__()
+        Ex. spectral_kinetics_args = {'excitation_power': 1e12, 'excitation_wavelength':980}
+    :param npmc_args: a dictionary specifying the parameters to run NPMC with. For more information,
+        check the documentation for NanoParticleTools.core.NPMCRunner.run()
+    :return: List of trajectory documents
+    """
+
     # Generate Nanoparticle
-    nanoparticle = DopedNanoparticle(constraints, dopant_specifications, seed)
+    nanoparticle = DopedNanoparticle(constraints, dopant_specifications, doping_seed)
     nanoparticle.generate()
 
     # Initialize Spectral Kinetics class to calculate transition rates
     dopants = [Dopant(key, concentration) for key, concentration in nanoparticle.dopant_concentrations.items()]
-    sk = SpectralKinetics(dopants, **kwargs)
+    spectral_kinetics = SpectralKinetics(dopants, **spectral_kinetics_args)
 
     # Create an NPMCInput class
-    npmc_input = NPMCInput(sk, nanoparticle, initial_states)
+    npmc_input = NPMCInput(spectral_kinetics, nanoparticle, initial_states)
 
     # Directories of written files
-    if os.path.exists(output_dir) == False:
+    if not os.path.exists(output_dir):
         os.mkdir(output_dir)
     files = {'output_dir': output_dir,
              'initial_state_db_path': os.path.join(output_dir, 'initial_state.sqlite'),
@@ -45,34 +68,20 @@ def write_inputs(constraints: Sequence[NanoParticleConstraint],
     with open(files['npmc_input'], 'w') as f:
         json.dump(npmc_input, f, cls=MontyEncoder)
 
-    return files
-
-
-@job
-def run_npmc(files,
-             **kwargs):
     # Initialize the wrapper class to run NPMC
     npmc_runner = NPMCRunner(np_db_path=files['np_db_path'],
                              initial_state_db_path=files['initial_state_db_path'])
 
     # Actually run NPMC
-    npmc_runner.run(**kwargs)
+    npmc_runner.run(**npmc_args)
 
-    return files
-
-
-@job(trajectories='trajectory_doc')
-def run_analysis(files):
     # Initialize a simulation replayer
     simulation_replayer = SimulationReplayer.from_run_directory(files['output_dir'])
 
-    # Re-generate nanoparticle
-    nanoparticle = simulation_replayer.npmc_input.nanoparticle
-    nanoparticle.generate()
+    # TODO: figure out why the nanoparticle sites gets cleared.
+    nanoparticle.generate() # generate nanoparticle, since it's state is cleared
 
-    # shortened reference to spectral kinetics
-    spectral_kinetics = simulation_replayer.npmc_input.spectral_kinetics
-
+    # Analysis of trajectories and generate documents
     results = []
     for seed, trajectory in simulation_replayer.trajectories.items():
         _d = {'simulation_seed': trajectory.seed,
@@ -93,6 +102,7 @@ def run_analysis(files):
                 dopant_amount[str(dopant.specie)] = 1
         _d['dopant_composition'] = dopant_amount
 
+        # Add the input parameters to the trajectory document
         _input_d = {'constraints': nanoparticle.constraints,
                     'dopant_seed': nanoparticle.seed,
                     'dopant_specifications': nanoparticle.dopant_specification,
@@ -101,11 +111,14 @@ def run_analysis(files):
                     'n_levels': [dopant.n_levels for dopant in spectral_kinetics.dopants],
                     }
         _d['input'] = _input_d
+
+        # Add output to the trajectory document
         _output_d = {'simulation_time': trajectory.simulation_time,
                      'summary': trajectory.get_summary()
                      }
         _output_d['x_populations'], _output_d['y_populations'] = trajectory.get_population_evolution()
         _d['output'] = _output_d
 
+        # Use the "trajectory_doc" key to ensure that each gets saved as a separate trajectory
         results.append({'trajectory_doc': _d})
     return results
