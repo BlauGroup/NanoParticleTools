@@ -10,12 +10,13 @@ setup(name='NanoParticleTools',
       package_dir={"": "src"},
       install_requires=[
           "setuptools",
+          "numpy",
           "pymatgen",
           "fireworks",
           "monty",
           "jobflow",
           "atomate2",
-          "maggma"
-      ],
-      tests_require=["pytest"]
+          "maggma",
+          "pytest"
+      ]
       )

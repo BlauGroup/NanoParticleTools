@@ -20,7 +20,9 @@ class NanoParticleConstraint(MSONable):
 
     def bounding_box(self):
         """
-        Returns the dimensions of the box that would encapsulate the constrained volume
+        Returns the dimensions of the box that would encapsulate the constrained volume.
+
+        Useful in determining the size of supercell required.
         :return:
         """
         pass
@@ -42,10 +44,19 @@ class SphericalConstraint(NanoParticleConstraint):
     """
 
     def __init__(self, radius, host_structure: Optional[Structure] = None):
+        """
+
+        :param radius: Radius of this constraint volume
+        :param host_structure: structure of the host
+        """
         self.radius = radius
         super().__init__(host_structure)
 
     def bounding_box(self):
+        """
+        Returns the bounding box that encloses this volume.
+        :return:
+        """
         return [self.radius, self.radius, self.radius]
 
     def sites_in_bounds(self, site_coords, center=[0, 0, 0]):
