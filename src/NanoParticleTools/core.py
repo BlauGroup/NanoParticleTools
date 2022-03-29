@@ -3,6 +3,9 @@ import sqlite3
 import warnings
 from typing import Optional, Sequence
 import subprocess
+from NanoParticleTools.inputs.nanoparticle import DopedNanoparticle
+from NanoParticleTools.inputs.spectral_kinetics import SpectralKinetics
+from NanoParticleTools.inputs.util import get_all_interactions, get_sites, get_species
 
 # number_of_sites | species_1 | species_2 | left_state_1 | left_state_2 |
 # right_state_1 | right_state_2 | rate
@@ -123,9 +126,10 @@ insert_factors_sql = """
 sql_get_trajectory = """
     SELECT * FROM trajectories;
 """
+from monty.json import MSONable
+from functools import lru_cache
 
-
-class NPMCInput:
+class NPMCInput(MSONable):
     def load_trajectories(self, database_file):
         con = sqlite3.connect(database_file)
         cur = con.cursor()
@@ -133,18 +137,46 @@ class NPMCInput:
         trajectories = {}
         for row in cur.execute(sql_get_trajectory):
             seed = row[0]
-            step = row[1]
+            # step = row[1] # This is not used, save some time/memory by keeping it commented
             time = row[2]
             site_id_1 = row[3]
             site_id_2 = row[4]
             interaction_id = row[5]
 
             if seed not in trajectories:
-                trajectories[seed] = {}
+                trajectories[seed] = []
 
-            trajectories[seed][step] = (site_id_1, site_id_2, interaction_id, time)
+            trajectories[seed].append([site_id_1, site_id_2, interaction_id, time])
 
         self.trajectories = trajectories
+
+    def __init__(self, spectral_kinetics: SpectralKinetics,
+                 nanoparticle: DopedNanoparticle,
+                 initial_states: Optional[Sequence[int]]=None):
+
+        self.spectral_kinetics = spectral_kinetics
+        self.nanoparticle = nanoparticle
+        if initial_states is None:
+            self.initial_states = [0 for _ in self.sites]
+        else:
+            self.initial_states = initial_states
+
+    @property
+    @lru_cache
+    def interactions(self):
+        return get_all_interactions(self.spectral_kinetics)
+
+    @property
+    @lru_cache
+    def sites(self):
+        if self.nanoparticle.has_structure == False:
+            self.nanoparticle.generate()
+        return get_sites(self.nanoparticle, self.spectral_kinetics)
+
+    @property
+    @lru_cache
+    def species(self):
+        return get_species(self.spectral_kinetics)
 
     def generate_initial_state_database(self, database_file):
         # TODO: parameterize over initial state
@@ -220,208 +252,6 @@ class NPMCInput:
 
         con.commit()
 
-    def __init__(self, interactions, sites, species,
-                 # species_name_to_id, id_to_species_name, species_state_name_to_id, id_to_species_state_name,
-                 initial_states: Optional[Sequence[int]]=None):
-
-        self.interactions = interactions
-        self.sites = sites
-        self.species = species
-        if initial_states is None:
-            self.initial_states = [0 for _ in self.sites]
-        else:
-            self.initial_states = initial_states
-
-        # self.species_name_to_id = species_name_to_id
-        # self.id_to_species_name = id_to_species_name
-        # self.species_state_name_to_id = species_state_name_to_id
-        # self.id_to_species_state_name = id_to_species_state_name
-
-    @classmethod
-    def from_csv(cls, interactions_csv_path, sites_csv_path, energies_csv_path):
-
-        species_name_to_id = {}
-        id_to_species_name = {}
-        sites = {}
-
-        species_id = 0
-        site_id = 0
-        with open(sites_csv_path) as sites_csv:
-            sites_reader = csv.DictReader(sites_csv, delimiter=',')
-            for row in sites_reader:
-                if row['species'] not in species_name_to_id:
-                    species_name_to_id[row['species']] = species_id
-                    id_to_species_name[species_id] = row['species']
-                    species_id += 1
-
-                sites[site_id] = {
-                    'site_id': site_id,
-                    'x': float(row['x']),
-                    'y': float(row['y']),
-                    'z': float(row['z']),
-                    'species_id': species_name_to_id[row['species']]}
-
-                site_id += 1
-
-        species_state_name_to_id = {}
-        id_to_species_state_name = {}
-        interactions = {}
-
-        for i in id_to_species_name.keys():
-            species_state_name_to_id[i] = {}
-            id_to_species_state_name[i] = {}
-
-        species_state_counter = [0 for _ in range(len(id_to_species_name))]
-
-        interaction_id = 0
-        with open(interactions_csv_path) as interactions_csv:
-            interactions_reader = csv.DictReader(interactions_csv, delimiter=',')
-            for row in interactions_reader:
-                #                 print(row.keys())
-                if (row['number_of_sites'] == '1'):
-
-                    species_id = species_name_to_id[row['species_1']]
-                    if row['left_state_1'] not in species_state_name_to_id[species_id]:
-                        species_state_name_to_id[species_id][
-                            row['left_state_1']] = species_state_counter[species_id]
-
-                        id_to_species_state_name[species_id][
-                            species_state_counter[species_id]] = row['left_state_1']
-
-                        species_state_counter[species_id] += 1
-
-                    if row['right_state_1'] not in species_state_name_to_id[species_id]:
-                        species_state_name_to_id[species_id][
-                            row['right_state_1']] = species_state_counter[species_id]
-
-                        id_to_species_state_name[species_id][
-                            species_state_counter[species_id]] = row['right_state_1']
-
-                        species_state_counter[species_id] += 1
-
-                    interactions[interaction_id] = {
-                        'interaction_id': interaction_id,
-                        'number_of_sites': int(row['number_of_sites']),
-                        'species_id_1': species_id,
-                        'species_id_2': -1,
-                        'left_state_1': species_state_name_to_id[species_id][
-                            row['left_state_1']],
-                        'left_state_2': -1,
-                        'right_state_1': species_state_name_to_id[species_id][
-                            row['right_state_1']],
-                        'right_state_2': -1,
-                        'rate': float(row['rate']),
-                        'interaction_type': row['transitionType']
-                    }
-
-                    interaction_id += 1
-
-                if (row['number_of_sites'] == '2'):
-
-                    species_id_1 = species_name_to_id[row['species_1']]
-                    species_id_2 = species_name_to_id[row['species_2']]
-
-                    if row['left_state_1'] not in species_state_name_to_id[species_id_1]:
-                        species_state_name_to_id[species_id_1][
-                            row['left_state_1']] = species_state_counter[species_id_1]
-
-                        id_to_species_state_name[species_id_1][
-                            species_state_counter[species_id_1]] = row['left_state_1']
-
-                        species_state_counter[species_id_1] += 1
-
-                    if row['right_state_1'] not in species_state_name_to_id[species_id_1]:
-                        species_state_name_to_id[species_id_1][
-                            row['right_state_1']] = species_state_counter[species_id_1]
-
-                        id_to_species_state_name[species_id_1][
-                            species_state_counter[species_id_1]] = row['right_state_1']
-
-                        species_state_counter[species_id_1] += 1
-
-                    if row['left_state_2'] not in species_state_name_to_id[species_id_2]:
-                        species_state_name_to_id[species_id_2][
-                            row['left_state_2']] = species_state_counter[species_id_2]
-
-                        id_to_species_state_name[species_id_2][
-                            species_state_counter[species_id_2]] = row['left_state_2']
-
-                        species_state_counter[species_id_2] += 1
-
-                    if row['right_state_2'] not in species_state_name_to_id[species_id_2]:
-                        species_state_name_to_id[species_id_2][
-                            row['right_state_2']] = species_state_counter[species_id_2]
-
-                        id_to_species_state_name[species_id_2][
-                            species_state_counter[species_id_2]] = row['right_state_2']
-
-                        species_state_counter[species_id_2] += 1
-
-                    interactions[interaction_id] = {
-                        'interaction_id': interaction_id,
-                        'number_of_sites': int(row['number_of_sites']),
-                        'species_id_1': species_id_1,
-                        'species_id_2': species_id_2,
-                        'left_state_1': species_state_name_to_id[species_id_1][
-                            row['left_state_1']],
-                        'left_state_2': species_state_name_to_id[species_id_2][
-                            row['left_state_2']],
-                        'right_state_1': species_state_name_to_id[species_id_1][
-                            row['right_state_1']],
-                        'right_state_2': species_state_name_to_id[species_id_2][
-                            row['right_state_2']],
-
-                        # 2 site interaction rates come with units cm^6 / s
-                        'rate': (1.0e42) * float(row['rate']),
-                        'interaction_type': row['transitionType']
-                    }
-
-                    interaction_id += 1
-
-        species = {}
-        for i in id_to_species_name:
-            species[i] = {
-                'species_id': i,
-                'degrees_of_freedom': len(id_to_species_state_name[i])
-            }
-        if energies_csv_path is not None:
-            # Load Energies from the Energies_csv
-            species_state_name_to_energy = {}
-            species_state_id_to_energy = {}
-            with open(energies_csv_path) as energies_csv:
-                sites_reader = csv.DictReader(energies_csv, delimiter=',')
-                for row in sites_reader:
-                    species_name = row['species']
-                    state_name = row['name']
-                    species_id = species_name_to_id[species_name]
-                    if species_name not in species_state_name_to_energy:
-                        species_state_name_to_energy[species_name] = {}
-                        species_state_id_to_energy[species_id] = {}
-
-                    if state_name not in species_state_name_to_id[species_id]:
-                        warnings.warn('energy state is not present in any interactions, skipping')
-                        continue
-                    state_id = species_state_name_to_id[species_id][state_name]
-                    species_state_name_to_energy[species_name][state_name] = float(row['energy'])
-                    species_state_id_to_energy[species_id][state_id] = float(row['energy'])
-
-                # print(self.species_state_id_to_energy)
-                # print(self.species_state_name_to_energy)
-                # #Populate energy changes into the interactions
-                # energy_per_interaction = {}
-                # for key, interaction in self.interactions.items():
-                #     particle_id = []
-                #     E1i = self.species_state_id_to_energy[interaction['species_id_1']][interaction['left_state_1']]
-                #     E1f = self.species_state_id_to_energy[interaction['species_id_1']][interaction['right_state_1']]
-                #     energy_per_interaction[key] = (E1f-E1i)
-                #     if interaction['species_id_2'] != -1:
-                #         print(interaction)
-                #         E2i = self.species_state_id_to_energy[interaction['species_id_2']][interaction['left_state_2']]
-                #         E2f = self.species_state_id_to_energy[interaction['species_id_2']][interaction['right_state_2']]
-                #         energy_per_interaction[key] += (E2f-E2i)
-                #     self.interactions[key]['dE'] = energy_per_interaction[key]
-
-        return cls(interactions, sites, species)
 
 class NPMCRunner:
     def __init__(self,
