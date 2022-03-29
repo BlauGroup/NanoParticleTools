@@ -5,9 +5,10 @@ import numpy as np
 from NanoParticleTools.inputs.constants import *
 from NanoParticleTools.inputs.photo_physics import *
 from scipy.integrate import BDF, OdeSolver
+from functools import lru_cache
+from monty.json import MSONable
 
-
-class SpectralKinetics():
+class SpectralKinetics(MSONable):
     """
     REFERENCING THIS WORK & BIBLIOGRAPHY:
          There are 2 different citations that can be used to reference this work. These articles describe the underlying equations behind this work.
@@ -26,11 +27,11 @@ class SpectralKinetics():
                  zero_phonon_rate: float = 1e7,
                  mpr_alpha: float = 3.5e-3,
                  n_refract: float = 1.5,
-                 vol_per_dopant_site: float = 7.23946667e-2,
+                 volume_per_dopant_site: float = 7.23946667e-2,
                  min_dopant_distance: float = 3.867267554e-8,
                  time_step: Optional[float] = 1e-4,
                  num_steps: Optional[float] = 100,
-                 max_error: Optional[float] = 1e-12,
+                 ode_max_error: Optional[float] = 1e-12,
                  energy_transfer_rate_threshold: Optional[float] = 0.1,
                  radiative_rate_threshold: Optional[float] = 0.0001,
                  stokes_shift: Optional[float] = 150,
@@ -61,32 +62,27 @@ class SpectralKinetics():
         #TODO: energy_transfer_mode
         """
 
-        self.MPR_W_0phonon = zero_phonon_rate
+        self.zero_phonon_rate = zero_phonon_rate
         self.phonon_energy = phonon_energy
 
         self.mpr_alpha = mpr_alpha
         self.n_refract = n_refract
-        self.volume_per_dopant_site = vol_per_dopant_site
-        self.minimum_dopant_distance = min_dopant_distance
+        self.volume_per_dopant_site = volume_per_dopant_site
+        self.min_dopant_distance = min_dopant_distance
 
         self.time_step = time_step
         self.num_steps = num_steps
-        self.ode_max_error = max_error
+        self.ode_max_error = ode_max_error
         self.energy_transfer_rate_threshold = energy_transfer_rate_threshold
         self.radiative_rate_threshold = radiative_rate_threshold
         self.stokes_shift = stokes_shift
         self.ode_solver = ode_solver
 
-        self.incident_power = excitation_power
-        self.incident_wavelength = excitation_wavelength
+        self.excitation_power = excitation_power
+        self.excitation_wavelength = excitation_wavelength
 
         self.dopants = dopants
 
-        self._line_strength_matrix = None
-        self._non_radiative_rate_matrix = None
-        self._radiative_rate_matrix = None
-        self._magnetic_dipole_rate_matrix = None
-        self._energy_transfer_rate_matrix = None
 
     @property
     def mpr_gamma(self):
@@ -98,11 +94,11 @@ class SpectralKinetics():
 
     @property
     def incident_wavenumber(self):
-        return 1e7 / self.incident_wavelength  # in cm^-1
+        return 1e7 / self.excitation_wavelength  # in cm^-1
 
     @property
     def incident_photon_flux(self):
-        return self.incident_power / (h_CGS * c_CGS * self.incident_wavenumber)  # in photons/s/cm^2
+        return self.excitation_power / (h_CGS * c_CGS * self.incident_wavenumber)  # in photons/s/cm^2
 
     @property
     def total_n_levels(self):
@@ -112,31 +108,64 @@ class SpectralKinetics():
     def species_concentrations(self):
         return [dopant.molar_concentration / self.volume_per_dopant_site for dopant in self.dopants]
 
-    @property
-    def non_radiative_rate_matrix(self):
-        if self._non_radiative_rate_matrix is None:
-            self._non_radiative_rate_matrix = self.make_combined_non_radiative_rate_matrix()
-        return self._non_radiative_rate_matrix
+    def calculate_multi_phonon_rates(self,
+                           dopant):
+        """
+        Calculates MultiPhonon Relaxation Rate for a given set of energy levels using Miyakawa-Dexter MPR theory
 
-    def make_combined_non_radiative_rate_matrix(self) -> np.ndarray:
+        :param w_0phonon: zero gap rate (s^-1)
+        :param alpha: pre-exponential constant in Miyakawa-Dexter MPR theory.  Changes with matrix (cm)
+        :param stokes_shift:
+        :param phonon_energy:
+        :return:
+        """
+
+        # multiphonon relaxation rate from level i to level i-1
+        mpr_rates = [0] # level 0 cannot relax, thus it's rate is 0
+        for i in range(1, dopant.n_levels):
+            energy_gap = max(abs(dopant.energy_levels[i].energy - dopant.energy_levels[i-1].energy) - self.stokes_shift, 0) - 2 * self.phonon_energy
+
+            rate = self.zero_phonon_rate * np.exp(-self.mpr_alpha * energy_gap)
+            mpr_rates.append(rate)
+
+        mpa_rates = []
+        for i in range(1, dopant.n_levels):
+            energy_gap = dopant.energy_levels[i].energy - dopant.energy_levels[i - 1].energy
+            if energy_gap < 3 * self.phonon_energy:
+                rate = mpr_rates[i] * np.exp(-self.mpr_alpha * energy_gap)
+                mpa_rates.append(rate)
+            else:
+                mpa_rates.append(0)
+        mpa_rates.append(0)  # Highest energy level cannot be further excited, therefore set its rate to 0
+
+        return mpr_rates, mpa_rates
+
+    @property
+    @lru_cache
+    def non_radiative_rate_matrix(self) -> np.ndarray:
         """
         Makes the n x n M_NRrate matrix.  M_NRrate[i][j] gives the rate of non-radiative decay from level i->j,
         which are combined energy level indices
         :return:
         """
+
+        mpr_rates = []
+        mpa_rates = []
         for dopant in self.dopants:
-            dopant.calculate_MPR_rates(self.MPR_W_0phonon, self.mpr_alpha, self.stokes_shift, self.phonon_energy)
+            _mpr_rates, _mpa_rates = self.calculate_multi_phonon_rates(dopant)
+            mpr_rates.append(_mpr_rates)
+            mpa_rates.append(_mpa_rates)
 
         # TODO: Confirm if this is the correct matrix
 
         non_radiative_rates = np.zeros((self.total_n_levels + 2, self.total_n_levels + 2))
         first_index = 0
-        for dopant in self.dopants:
-            rates = np.identity(len(dopant.mpr_rates)) * dopant.mpr_rates
+        for i, dopant in enumerate(self.dopants):
+            rates = np.identity(len(mpr_rates[i])) * mpr_rates[i]
             non_radiative_rates[first_index + 1:first_index + 1 + dopant.n_levels,
             first_index:first_index + dopant.n_levels] += rates
 
-            rates = np.identity(len(dopant.mpa_rates)) * dopant.mpa_rates
+            rates = np.identity(len(mpa_rates[i])) * mpa_rates[i]
             non_radiative_rates[first_index + 1:first_index + 1 + dopant.n_levels,
             first_index + 1 + 1:first_index + 1 + 1 + dopant.n_levels] += rates
             first_index += dopant.n_levels
@@ -144,12 +173,8 @@ class SpectralKinetics():
         return non_radiative_rates[1:self.total_n_levels + 1, 1:self.total_n_levels + 1]
 
     @property
-    def line_strength_matrix(self):
-        if self._line_strength_matrix is None:
-            self._line_strength_matrix = self.make_combined_line_strength_matrix()
-        return self._line_strength_matrix
-
-    def make_combined_line_strength_matrix(self) -> np.ndarray:
+    @lru_cache
+    def line_strength_matrix(self) -> np.ndarray:
         """
         makes the n x n lineStrengthMatrix from a wave of lineStrengths labeled with the transitions "i->j" in transitionLabels wave
         :return:
@@ -167,12 +192,8 @@ class SpectralKinetics():
         return combined_line_strength_matrix
 
     @property
-    def radiative_rate_matrix(self):
-        if self._radiative_rate_matrix is None:
-            self._radiative_rate_matrix = self.make_radiative_rate_matrix()
-        return self._radiative_rate_matrix
-
-    def make_radiative_rate_matrix(self) -> np.ndarray:
+    @lru_cache
+    def radiative_rate_matrix(self) -> np.ndarray:
         """
 
         :return:
@@ -228,12 +249,8 @@ class SpectralKinetics():
         return rad_rates
 
     @property
-    def magnetic_dipole_rate_matrix(self):
-        if self._magnetic_dipole_rate_matrix is None:
-            self._magnetic_dipole_rate_matrix = self.make_magnetic_dipole_rate_matrix()
-        return self._magnetic_dipole_rate_matrix
-
-    def make_magnetic_dipole_rate_matrix(self) -> np.ndarray:
+    @lru_cache
+    def magnetic_dipole_rate_matrix(self) -> np.ndarray:
         """
         creates the MDradRate matrix containing the MD line strength in cm^2 from intermediate coupling coefficient vectors
         :return:
@@ -300,12 +317,8 @@ class SpectralKinetics():
         return magnetic_dipole_radiative_rates
 
     @property
-    def energy_transfer_rate_matrix(self):
-        if self._energy_transfer_rate_matrix is None:
-            self._energy_transfer_rate_matrix = self.make_phonon_assisted_energy_transfer_rate_matrix()
-        return self._energy_transfer_rate_matrix
-
-    def make_phonon_assisted_energy_transfer_rate_matrix(self) -> List[List[float]]:
+    @lru_cache
+    def energy_transfer_rate_matrix(self) -> List[List[float]]:
         """
         makes the phonon assisted (not migration assisted)  energy transfer rate constant waves (W_ETrates, W_ETIndices)
 

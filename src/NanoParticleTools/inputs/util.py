@@ -3,7 +3,26 @@ from functools import lru_cache
 import numpy as np
 
 from NanoParticleTools.inputs.spectral_kinetics import SpectralKinetics
+from NanoParticleTools.species_data.species import Dopant
 
+@lru_cache()
+def specie_energy_level_to_combined_energy_level(species, energy_level, dopants):
+    if isinstance(species, str):
+        for i, dopant in enumerate(dopants):
+            if dopant.symbol == species:
+                break
+        dopant_index = i
+    elif isinstance(species, int):
+        dopant_index = species
+    elif isinstance(species, Dopant):
+        for i, dopant in enumerate(dopants):
+            if dopant.symbol == species.symbol:
+                break
+        dopant_index = i
+    else:
+        raise ValueError("Invalid species specified")
+
+    return sum([dopant.n_levels for dopant in dopants[:dopant_index]]) + energy_level
 
 def energy_level_to_species_id(sk):
     energy_level_to_species_id = {}
@@ -114,7 +133,7 @@ def get_energy_transfer_interactions(sk: SpectralKinetics):
               'left_state_1': combined_energy_level_to_specie_energy_level(sk, di),
               'left_state_2': combined_energy_level_to_specie_energy_level(sk, ai),
               'right_state_1': combined_energy_level_to_specie_energy_level(sk, dj),
-              'right_state_2': combined_energy_level_to_specie_energy_level(sk, dj),
+              'right_state_2': combined_energy_level_to_specie_energy_level(sk, aj),
               'rate': (1.0e42) * rate,
               'interaction_type': 'ET'}
         _interactions.append(_d)

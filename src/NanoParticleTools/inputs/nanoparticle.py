@@ -1,8 +1,9 @@
-from typing import Optional, Sequence, Union
+from typing import Optional, Sequence, Union, Tuple
 
 import numpy as np
 from pymatgen.core import Composition, Structure, Site, Lattice, Molecule
 from monty.json import MSONable
+from NanoParticleTools.species_data.species import Dopant
 
 class NanoParticleConstraint(MSONable):
     """
@@ -80,100 +81,38 @@ class CubeConstraint(PrismConstraint):
     def __init__(self, a, host_structure: Optional[Structure] = None):
         super().__init__(a, a, a, host_structure)
 
-
 class DopedNanoparticle(MSONable):
     def __init__(self,
-                 sites: Sequence[Site],
                  constraints: Sequence[NanoParticleConstraint],
+                 dopant_specification: Sequence[Tuple],
                  seed: Optional[int] = 0):
-        self._sites = sites
         self.constraints = constraints
         self.seed = seed
-        self.rng = np.random.default_rng(self.seed)
+        self.dopant_specification = dopant_specification
+
+        self._sites = None
+        # Move to dopant area
         self.dopant_indices = [[] for _ in self.constraints]
         self._dopant_concentration = [{} for _ in self.constraints]
 
-    def add_dopant(self,
-                   constraint_index: int,
-                   dopant_concentration: float,
-                   dopant_species: str,
-                   replaced_species: Optional[str] = 'Y'):
-        sites_in_constraint = self._sites[constraint_index]
-
-        # Identify the possible sites for the dopant
-        possible_dopant_sites = [i for i, site in enumerate(sites_in_constraint) if
-                                 site.specie.symbol == replaced_species]
-
-        # Number of sites corresponding to the species being replaced or that have previously been replaced
-        # TODO: This probably only works if only one species is being substituted.
-        n_host_sites = len(possible_dopant_sites) + len(self.dopant_indices[constraint_index])
-        n_dopants = np.round(n_host_sites * dopant_concentration)
-
-        # Randomly pick sites to place dopants
-        dopant_sites = self.rng.choice(possible_dopant_sites, int(n_dopants), replace=False)
-        for i in dopant_sites:
-            self._sites[constraint_index][i].species = Composition(dopant_species)
-
-        # Keep track of concentrations in each shell
-        self._dopant_concentration[constraint_index][dopant_species] = len(dopant_sites) / n_host_sites
-
-        # Keep track of sites with dopants
-        self.dopant_indices[constraint_index].extend(dopant_sites)
-
-    def to_file(self, fmt="xyz", name="nanoparticle.xyz"):
-        _np = Molecule.from_sites(self.sites)
-        xyz = _np.to(fmt, name)
-
-    def dopants_to_file(self, fmt="xyz", name="dopant_nanoparticle.xyz"):
-        _np = Molecule.from_sites(self.dopant_sites)
-        xyz = _np.to(fmt, name)
-
     @property
-    def sites(self):
-        return [_site for sites in self._sites for _site in sites]
+    def has_structure(self):
+        if hasattr(self, '_sites'):
+            return self._sites is not None
+        else:
+            return False
 
-    @property
-    def dopant_sites(self) -> Sequence[Site]:
-        _sites = []
-        for dopant_indices, sites in zip(self.dopant_indices, self._sites):
-            for i in dopant_indices:
-                _sites.append(sites[i])
-        return _sites
+    def as_dict(self):
+        if self.has_structure:
+            # Delete generated data if it exists
+            del self._sites, self.dopant_indices, self._dopant_concentration
+        return super().as_dict()
 
-    @property
-    def dopant_concentrations(self,
-                              constraint_index: Optional[Union[int, None]] = None,
-                              replaced_species: Optional[str] = 'Y'):
-        if constraint_index is None:
-            num_replaced_sites = len([i for i, site in enumerate(self.sites) if site.specie.symbol == replaced_species])
-            total_num_sites = len(self.dopant_sites) + num_replaced_sites
+    def generate(self):
 
-            dopant_amount = {}
-            for dopant in self.dopant_sites:
-                try:
-                    dopant_amount[str(dopant.specie)] += 1
-                except:
-                    dopant_amount[str(dopant.specie)] = 1
-
-            return dict([(key, item / total_num_sites) for key, item in dopant_amount.items()])
-
-    @classmethod
-    def from_constraints(cls,
-                         constraints: Sequence[NanoParticleConstraint],
-                         seed: Optional[int] = 0):
-        """
-        Construct a nanoparticle from a sequence of constraints.
-
-        Constraints should be sorted by size.
-
-        example: constraints = [SphericalConstraint(20), SphericalConstraint(30)]
-            defines a spherical nanoparticle with a radius of 30angstroms. The nanoparticle is composed of a core (20nm radius) and a shell (10nm thick)
-
-        :param constraints:
-        :return:
-        """
+        # Construct nanoparticle
         nanoparticle_sites = []
-        for i, constraint in enumerate(constraints):
+        for i, constraint in enumerate(self.constraints):
             _struct = constraint.host_structure.copy()
 
             # Identify the minimum scaling matrix required to fit the bounding box
@@ -205,7 +144,7 @@ class DopedNanoparticle(MSONable):
 
             # Check if each site falls into the bounds of a smaller (previous) constraint
             in_another_constraint = np.full(sites_in_bounds.shape, False)
-            for other_constraint in constraints[:i]:
+            for other_constraint in self.constraints[:i]:
                 in_another_constraint = in_another_constraint | other_constraint.sites_in_bounds(translated_coords)
 
             # Merge two boolean lists and identify sites within only the current constraint
@@ -219,8 +158,229 @@ class DopedNanoparticle(MSONable):
                 _sites.append(Site(_site.specie, translated_coords[site_index]))
 
             nanoparticle_sites.append(_sites)
+        self._sites = nanoparticle_sites
+        self._apply_dopants()
 
-        return cls(nanoparticle_sites, constraints, seed=seed)
+    def _apply_dopants(self):
+        rng = np.random.default_rng(self.seed)
+        for spec in self.dopant_specification:
+            self._apply_dopant( *spec, rng=rng)
+
+    def _apply_dopant(self,
+                   constraint_index: int,
+                   dopant_concentration: float,
+                   dopant_species: str,
+                   replaced_species: str,
+                   rng: np.random.default_rng):
+        sites_in_constraint = self._sites[constraint_index]
+
+        # Identify the possible sites for the dopant
+        possible_dopant_sites = [i for i, site in enumerate(sites_in_constraint) if
+                                 site.specie.symbol == replaced_species]
+
+        # Number of sites corresponding to the species being replaced or that have previously been replaced
+        # TODO: This probably only works if only one species is being substituted.
+        n_host_sites = len(possible_dopant_sites) + len(self.dopant_indices[constraint_index])
+        n_dopants = np.round(n_host_sites * dopant_concentration)
+
+        # Randomly pick sites to place dopants
+        dopant_sites = rng.choice(possible_dopant_sites, int(n_dopants), replace=False)
+        for i in dopant_sites:
+            self._sites[constraint_index][i].species = Composition(dopant_species)
+
+        # Keep track of concentrations in each shell
+        self._dopant_concentration[constraint_index][dopant_species] = len(dopant_sites) / n_host_sites
+
+        # Keep track of sites with dopants
+        self.dopant_indices[constraint_index].extend(dopant_sites)
+
+    def to_file(self, fmt="xyz", name="nanoparticle.xyz"):
+        if self.has_structure == False:
+            raise RuntimeError('Nanoparticle not generated. Please use the generate() function')
+        _np = Molecule.from_sites(self.sites)
+        xyz = _np.to(fmt, name)
+
+    def dopants_to_file(self, fmt="xyz", name="dopant_nanoparticle.xyz"):
+        if self.has_structure == False:
+            raise RuntimeError('Nanoparticle not generated. Please use the generate() function')
+        _np = Molecule.from_sites(self.dopant_sites)
+        xyz = _np.to(fmt, name)
+
+    @property
+    def sites(self):
+        if self.has_structure == False:
+            raise RuntimeError('Nanoparticle not generated. Please use the generate() function')
+        return [_site for sites in self._sites for _site in sites]
+
+    @property
+    def dopant_sites(self) -> Sequence[Site]:
+        if self.has_structure == False:
+            raise RuntimeError('Nanoparticle not generated. Please use the generate() function')
+        _sites = []
+        for dopant_indices, sites in zip(self.dopant_indices, self._sites):
+            for i in dopant_indices:
+                _sites.append(sites[i])
+        return _sites
+
+    @property
+    def dopant_concentrations(self,
+                              constraint_index: Optional[Union[int, None]] = None,
+                              replaced_species: Optional[str] = 'Y'):
+        if self.has_structure == False:
+            raise RuntimeError('Nanoparticle not generated. Please use the generate() function')
+        if constraint_index is None:
+            num_replaced_sites = len([i for i, site in enumerate(self.sites) if site.specie.symbol == replaced_species])
+            total_num_sites = len(self.dopant_sites) + num_replaced_sites
+
+            dopant_amount = {}
+            for dopant in self.dopant_sites:
+                try:
+                    dopant_amount[str(dopant.specie)] += 1
+                except:
+                    dopant_amount[str(dopant.specie)] = 1
+
+            return dict([(key, item / total_num_sites) for key, item in dopant_amount.items()])
+
+# class DopedNanoparticle(MSONable):
+#     def __init__(self,
+#                  sites: Sequence[Site],
+#                  constraints: Sequence[NanoParticleConstraint],
+#                  seed: Optional[int] = 0):
+#         self._sites = sites
+#         self.constraints = constraints
+#         self.seed = seed
+#         self.rng = np.random.default_rng(self.seed)
+#         self.dopant_indices = [[] for _ in self.constraints]
+#         self._dopant_concentration = [{} for _ in self.constraints]
+#
+#     def add_dopant(self,
+#                    constraint_index: int,
+#                    dopant_concentration: float,
+#                    dopant_species: str,
+#                    replaced_species: Optional[str] = 'Y'):
+#         sites_in_constraint = self._sites[constraint_index]
+#
+#         # Identify the possible sites for the dopant
+#         possible_dopant_sites = [i for i, site in enumerate(sites_in_constraint) if
+#                                  site.specie.symbol == replaced_species]
+#
+#         # Number of sites corresponding to the species being replaced or that have previously been replaced
+#         # TODO: This probably only works if only one species is being substituted.
+#         n_host_sites = len(possible_dopant_sites) + len(self.dopant_indices[constraint_index])
+#         n_dopants = np.round(n_host_sites * dopant_concentration)
+#
+#         # Randomly pick sites to place dopants
+#         dopant_sites = self.rng.choice(possible_dopant_sites, int(n_dopants), replace=False)
+#         for i in dopant_sites:
+#             self._sites[constraint_index][i].species = Composition(dopant_species)
+#
+#         # Keep track of concentrations in each shell
+#         self._dopant_concentration[constraint_index][dopant_species] = len(dopant_sites) / n_host_sites
+#
+#         # Keep track of sites with dopants
+#         self.dopant_indices[constraint_index].extend(dopant_sites)
+#
+#     def to_file(self, fmt="xyz", name="nanoparticle.xyz"):
+#         _np = Molecule.from_sites(self.sites)
+#         xyz = _np.to(fmt, name)
+#
+#     def dopants_to_file(self, fmt="xyz", name="dopant_nanoparticle.xyz"):
+#         _np = Molecule.from_sites(self.dopant_sites)
+#         xyz = _np.to(fmt, name)
+#
+#     @property
+#     def sites(self):
+#         return [_site for sites in self._sites for _site in sites]
+#
+#     @property
+#     def dopant_sites(self) -> Sequence[Site]:
+#         _sites = []
+#         for dopant_indices, sites in zip(self.dopant_indices, self._sites):
+#             for i in dopant_indices:
+#                 _sites.append(sites[i])
+#         return _sites
+#
+#     @property
+#     def dopant_concentrations(self,
+#                               constraint_index: Optional[Union[int, None]] = None,
+#                               replaced_species: Optional[str] = 'Y'):
+#         if constraint_index is None:
+#             num_replaced_sites = len([i for i, site in enumerate(self.sites) if site.specie.symbol == replaced_species])
+#             total_num_sites = len(self.dopant_sites) + num_replaced_sites
+#
+#             dopant_amount = {}
+#             for dopant in self.dopant_sites:
+#                 try:
+#                     dopant_amount[str(dopant.specie)] += 1
+#                 except:
+#                     dopant_amount[str(dopant.specie)] = 1
+#
+#             return dict([(key, item / total_num_sites) for key, item in dopant_amount.items()])
+#
+#     @classmethod
+#     def from_constraints(cls,
+#                          constraints: Sequence[NanoParticleConstraint],
+#                          seed: Optional[int] = 0):
+#         """
+#         Construct a nanoparticle from a sequence of constraints.
+#
+#         Constraints should be sorted by size.
+#
+#         example: constraints = [SphericalConstraint(20), SphericalConstraint(30)]
+#             defines a spherical nanoparticle with a radius of 30angstroms. The nanoparticle is composed of a core (20nm radius) and a shell (10nm thick)
+#
+#         :param constraints:
+#         :return:
+#         """
+#         nanoparticle_sites = []
+#         for i, constraint in enumerate(constraints):
+#             _struct = constraint.host_structure.copy()
+#
+#             # Identify the minimum scaling matrix required to fit the bounding box
+#             # TODO: verify that this works on all lattice types
+#             perp_vec = np.cross(_struct.lattice.matrix[1], _struct.lattice.matrix[2])
+#             perp_vec = perp_vec / np.linalg.norm(perp_vec)
+#             a_distance = np.dot(_struct.lattice.matrix[0], perp_vec)
+#
+#             perp_vec = np.cross(_struct.lattice.matrix[0], _struct.lattice.matrix[2])
+#             perp_vec = perp_vec / np.linalg.norm(perp_vec)
+#             b_distance = np.dot(_struct.lattice.matrix[1], perp_vec)
+#
+#             perp_vec = np.cross(_struct.lattice.matrix[0], _struct.lattice.matrix[1])
+#             perp_vec = perp_vec / np.linalg.norm(perp_vec)
+#             c_distance = np.dot(_struct.lattice.matrix[2], perp_vec)
+#
+#             scaling_matrix = 2 * np.ceil(
+#                 np.abs(np.divide(constraint.bounding_box(), [a_distance, b_distance, c_distance])))
+#
+#             # Make the supercell
+#             _struct.make_supercell(scaling_matrix)
+#
+#             # Translate sites so that the center is coincident with the origin
+#             center = np.divide(np.sum(_struct.lattice.matrix, axis=0), 2)
+#             translated_coords = np.subtract(_struct.cart_coords, center)
+#
+#             # np.array(bool) indicating whether each site is within the Outer bounds of the constraint
+#             sites_in_bounds = constraint.sites_in_bounds(translated_coords)
+#
+#             # Check if each site falls into the bounds of a smaller (previous) constraint
+#             in_another_constraint = np.full(sites_in_bounds.shape, False)
+#             for other_constraint in constraints[:i]:
+#                 in_another_constraint = in_another_constraint | other_constraint.sites_in_bounds(translated_coords)
+#
+#             # Merge two boolean lists and identify sites within only the current constraint
+#             sites_in_constraint = sites_in_bounds & np.invert(in_another_constraint)
+#             sites_index_in_bounds = np.where(sites_in_constraint)[0]
+#
+#             # Make Site object for each site that lies in bounds. Note: this is not a PeriodicSite
+#             _sites = []
+#             for site_index in sites_index_in_bounds:
+#                 _site = _struct[site_index]
+#                 _sites.append(Site(_site.specie, translated_coords[site_index]))
+#
+#             nanoparticle_sites.append(_sites)
+#
+#         return cls(nanoparticle_sites, constraints, seed=seed)
 
 
 def get_nayf4_structure():

@@ -38,10 +38,10 @@ class Transition(MSONable):
     def __str__(self):
         return f'{self.initial_level.label}->{self.final_level.label}'
 
-class Dopant(Species):
+class Dopant(MSONable):
     def __init__(self,
                  symbol: str,
-                 concentration: float,
+                 molar_concentration: float,
                  n_levels: Optional[int]=None):
         """
 
@@ -50,23 +50,9 @@ class Dopant(Species):
         :param n_levels:
         """
         self.symbol = symbol
+        self.molar_concentration = molar_concentration
+        # super().__init__(symbol, None)
 
-        super().__init__(symbol, None)
-
-        self.molar_concentration = concentration
-
-        self.MPR_rates = None
-
-        # Initialize intrinsic values to None, only initialized when needed. Allows the dopant to be used as a species
-        self._energy_levels = None
-        self._absFWHM = None
-        self._slj = None
-        self._judd_ofelt_parameters = None
-        self._intermediate_coupling_coefficients = None
-        self._eigenvector_sl = None
-        self._transitions = None
-
-        self.initial_populations = None
 
         # If more levels are specified than possible, use all existing energy levels
         if n_levels is None:
@@ -90,7 +76,7 @@ class Dopant(Species):
             raise ValueError(
                 'Error: The number of Energy levels does not match the number of SLJ rows')
 
-    @lru_cache(maxsize=None)
+    @lru_cache
     def species_data(self):
         # Load Data from json file
         with open(os.path.join(SPECIES_DATA_PATH, f'{self.symbol}.json'), 'r') as f:
@@ -99,114 +85,71 @@ class Dopant(Species):
         return species_data
 
     @property
+    @lru_cache
     def energy_levels(self):
-        if self._energy_levels is None:
-            self._energy_levels = [EnergyLevel(self.symbol, i, j) for i, j in
+        return [EnergyLevel(self.symbol, i, j) for i, j in
                                    zip(self.species_data()['EnergyLevelLabels'], self.species_data()['EnergyLevels'])]
-        return self._energy_levels
 
     @property
+    @lru_cache
     def absFWHM(self):
-        if self._absFWHM is None:
-            self._absFWHM = self.species_data()['absFWHM']
-        return self._absFWHM
+        return self.species_data()['absFWHM']
+
 
     @property
+    @lru_cache
     def slj(self):
-        if self._slj is None:
-            self._slj = np.array(self.species_data()['SLJ'])
-        return self._slj
+        return np.array(self.species_data()['SLJ'])
 
     @property
+    @lru_cache
     def judd_ofelt_parameters(self):
-        if self._judd_ofelt_parameters is None:
-            self._judd_ofelt_parameters = self.species_data()['JO_params']
-        return self._judd_ofelt_parameters
+        return self.species_data()['JO_params']
 
     @property
-    def intermediate_coupling_coefficients(self):
-        if self._intermediate_coupling_coefficients is None:
-            self._intermediate_coupling_coefficients = np.array(self.species_data()['intermediateCouplingCoeffs'])
-        return self._intermediate_coupling_coefficients
+    @lru_cache
+    def intermediate_coupling_coefficients(self):\
+        return np.array(self.species_data()['intermediateCouplingCoeffs'])
 
     @property
+    @lru_cache
     def eigenvector_sl(self):
-        if self._eigenvector_sl is None:
-            self._eigenvector_sl = np.array(self.species_data()['eigenvectorSL'])
-        return self._eigenvector_sl
+        return np.array(self.species_data()['eigenvectorSL'])
 
     @property
+    @lru_cache
     def transitions(self):
-        if self._transitions is None:
-            energy_level_map = dict([(_el.label, _el) for _el in self.energy_levels])
-            energy_level_label_map = dict([(_el.label, i) for i, _el in enumerate(self.energy_levels)])
+        energy_level_map = dict([(_el.label, _el) for _el in self.energy_levels])
+        energy_level_label_map = dict([(_el.label, i) for i, _el in enumerate(self.energy_levels)])
 
-            transitions = [[0 for _ in self.energy_levels] for _ in self.energy_levels]
-            for i in range(len(self.species_data()['TransitionLabels'])):
-                transition = self.species_data()['TransitionLabels'][i]
-                line_strength = self.species_data()['lineStrengths'][i]
+        transitions = [[0 for _ in self.energy_levels] for _ in self.energy_levels]
+        for i in range(len(self.species_data()['TransitionLabels'])):
+            transition = self.species_data()['TransitionLabels'][i]
+            line_strength = self.species_data()['lineStrengths'][i]
 
-                initial_energy_level, final_energy_level = transition.split("->")
-                try:
-                    initial_i = energy_level_label_map[initial_energy_level]
-                    final_i = energy_level_label_map[final_energy_level]
+            initial_energy_level, final_energy_level = transition.split("->")
+            try:
+                initial_i = energy_level_label_map[initial_energy_level]
+                final_i = energy_level_label_map[final_energy_level]
 
-                    transitions[initial_i][final_i] = Transition(energy_level_map[initial_energy_level],
-                                             energy_level_map[final_energy_level],
-                                             line_strength)
-                except:
-                    # These transitions are not used
-                    continue
-            self._transitions = transitions
-        return self._transitions
+                transitions[initial_i][final_i] = Transition(energy_level_map[initial_energy_level],
+                                         energy_level_map[final_energy_level],
+                                         line_strength)
+            except:
+                # These transitions are not used
+                continue
+        return transitions
 
     @property
     def volume_concentration(self, volume_per_dopant_site:Optional[float] = 7.23946667e-2) -> float:
         return self.molar_concentration/volume_per_dopant_site
 
-    def set_initial_populations(self, populations:Optional[List[float]] = None):
-        if populations is None:
-            populations = [0 for i in range(self.n_levels)]
-            populations[0] = self.volume_concentration
-
-        self.initial_populations = populations
-
-    def calculate_MPR_rates(self,
-                            w_0phonon: float,
-                            alpha: float,
-                            stokes_shift: float,
-                            phonon_energy: float):
-        """
-        Calculates MultiPhonon Relaxation Rate for a given set of energy levels using Miyakawa-Dexter MPR theory
-
-        :param w_0phonon: zero gap rate (s^-1)
-        :param alpha: pre-exponential constant in Miyakawa-Dexter MPR theory.  Changes with matrix (cm)
-        :param stokes_shift:
-        :param phonon_energy:
-        :return:
-        """
-
-        # multiphonon relaxation rate from level i to level i-1
-        mpr_rates = [0] # level 0 cannot relax, thus it's rate is 0
-        for i in range(1, self.n_levels):
-            energy_gap = max(abs(self.energy_levels[i].energy - self.energy_levels[i-1].energy) - stokes_shift, 0) - 2 * phonon_energy
-
-            rate = w_0phonon * np.exp(-alpha * energy_gap)
-            mpr_rates.append(rate)
-
-        self.mpr_rates = mpr_rates
-
-        # multi phonon absorption rate from level i to level i+1
-        mpa_rates = []
-        for i in range(1, self.n_levels):
-            energy_gap = self.energy_levels[i].energy - self.energy_levels[i-1].energy
-            if energy_gap < 3*phonon_energy:
-                rate = mpr_rates[i] * np.exp(-alpha * energy_gap)
-                mpa_rates.append(rate)
-            else:
-                mpa_rates.append(0)
-        mpa_rates.append(0) # Highest energy level cannot be further excited, therefore set its rate to 0
-        self.mpa_rates = mpa_rates
+    # def set_initial_populations(self, populations:Optional[List[float]] = None):
+    #     if populations is None:
+    #         populations = [0 for i in range(self.n_levels)]
+    #         populations[0] = self.volume_concentration
+    #
+    #     self.initial_populations = populations
 
     def get_line_strength_matrix(self):
         line_strengths = []
