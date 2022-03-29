@@ -159,6 +159,8 @@ class DopedNanoparticle(MSONable):
 
             nanoparticle_sites.append(_sites)
         self._sites = nanoparticle_sites
+        self.dopant_indices = [[] for _ in self.constraints]
+        self._dopant_concentration = [{} for _ in self.constraints]
         self._apply_dopants()
 
     def _apply_dopants(self):

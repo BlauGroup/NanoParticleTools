@@ -43,7 +43,7 @@ class SimulationReplayer():
             _d['summary'] = self.get_single_trajectory_summary(seed)
             _d['simulation_time'] = self.trajectories[seed].simulation_time
             _d['x_populations'], _d['y_populations'] = self.trajectories[seed].get_population_evolution()
-            _d['x_states'], _d['y_states'] = self.trajectories[seed].get_state_evolution_by_site()
+            # _d['x_states'], _d['y_states'] = self.trajectories[seed].get_state_evolution_by_site()
             dndts[seed] = _d
 
         return dndts
@@ -149,7 +149,7 @@ class Trajectory():
         # Factors to normalize levels array by (# of atoms of each type)
         normalization_factors = []
 
-        dopants = self.sr.npmc_input.spectral_kinetics.dopants
+        dopants = self.npmc_input.spectral_kinetics.dopants
         for i, dopant in enumerate(dopants):
             # Set the initial levels population
             levels[specie_energy_level_to_combined_energy_level(dopant, 0, dopants)] = self.species_counter[i]

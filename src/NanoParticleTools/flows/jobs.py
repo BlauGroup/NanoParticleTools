@@ -61,10 +61,51 @@ def run_npmc(files,
     return files
 
 
-@job
+@job(trajectories='trajectory_doc')
 def run_analysis(files):
     # Initialize a simulation replayer
     simulation_replayer = SimulationReplayer.from_run_directory(files['output_dir'])
 
-    _d = {'summary': simulation_replayer.get_summaries()}
-    return
+    # Re-generate nanoparticle
+    nanoparticle = simulation_replayer.npmc_input.nanoparticle
+    nanoparticle.generate()
+
+    # shortened reference to spectral kinetics
+    spectral_kinetics = simulation_replayer.npmc_input.spectral_kinetics
+
+    results = []
+    for seed, trajectory in simulation_replayer.trajectories.items():
+        _d = {'simulation_seed': trajectory.seed,
+              'simulation_length': len(trajectory.trajectory),
+              'n_dopant_sites': len(nanoparticle.dopant_sites),
+              'n_dopants': len(spectral_kinetics.dopants),
+              'total_n_levels': spectral_kinetics.total_n_levels,
+              'dopant_concentration': nanoparticle._dopant_concentration,
+              'overall_dopant_concentration': nanoparticle.dopant_concentrations,
+              'dopants': [str(dopant.symbol) for dopant in spectral_kinetics.dopants],
+              }
+
+        dopant_amount = {}
+        for dopant in nanoparticle.dopant_sites:
+            try:
+                dopant_amount[str(dopant.specie)] += 1
+            except:
+                dopant_amount[str(dopant.specie)] = 1
+        _d['dopant_composition'] = dopant_amount
+
+        _input_d = {'constraints': nanoparticle.constraints,
+                    'dopant_seed': nanoparticle.seed,
+                    'dopant_specifications': nanoparticle.dopant_specification,
+                    'excitation_power': spectral_kinetics.excitation_power,
+                    'excitation_wavelength': spectral_kinetics.excitation_wavelength,
+                    'n_levels': [dopant.n_levels for dopant in spectral_kinetics.dopants],
+                    }
+        _d['input'] = _input_d
+        _output_d = {'simulation_time': trajectory.simulation_time,
+                     'summary': trajectory.get_summary()
+                     }
+        _output_d['x_populations'], _output_d['y_populations'] = trajectory.get_population_evolution()
+        _d['output'] = _output_d
+
+        results.append({'trajectory_doc': _d})
+    return results
