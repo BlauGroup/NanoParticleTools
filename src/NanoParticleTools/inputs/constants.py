@@ -1,5 +1,3 @@
-#TODO: SK_COMBINE_ET_BACK_TRANSFER = 0
-
 c_CGS = 29979245800  # speed of light cm/s
 h_CGS = 6.62606885E-27  # planck's constant, in erg s
 kb_CGS = 1.3806505E-16 # boltzmann constant, in erg/K
