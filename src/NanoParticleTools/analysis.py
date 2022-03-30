@@ -118,83 +118,34 @@ class Trajectory():
 
         return interactions_by_sites
 
-    def get_state_evolution_by_site(self, step_size=1e-6):
-        states = self.initial_states.copy()
+    def get_state_evolution(self, step_size=1e-6):
+        states = np.zeros((len(self.initial_states), self.npmc_input.spectral_kinetics.total_n_levels))
+        for i, state in enumerate(self.initial_states):
+            states[i, state] = 1
 
-        population_evolution = []
+        x = np.arange(0, self.simulation_time, step_size)
+        site_evolution = np.zeros((len(x), states.shape[0]))
+        population_evolution = np.zeros((len(x), states.shape[1]))
         current_time = 0
         event_i = 0
-        x = np.arange(0, self.simulation_time, step_size)
-        for time_interval in x:
+        for i, time_interval in enumerate(x):
             while current_time < time_interval:
                 # Propagate steps
                 donor_i, acceptor_i, _interaction_id, _time = self.trajectory[event_i]
                 _interaction = self.npmc_input.interactions[_interaction_id]
 
-                states[donor_i] = _interaction['right_state_1']
+                states[donor_i][_interaction['left_state_1']] = 0
+                states[donor_i][_interaction['right_state_1']] = 1
                 if _interaction['number_of_sites'] == 2:
-                    states[acceptor_i] = _interaction['right_state_2']
+                    states[acceptor_i][_interaction['left_state_2']] = 0
+                    states[acceptor_i][_interaction['right_state_2']] = 1
                 event_i += 1
                 current_time = _time
 
             # Save states
-            population_evolution.append(states.copy())
-
-        return x, population_evolution
-
-    def get_population_evolution(self, step_size=1e-6):
-        # Initialize the Initial levels
-        levels = [0 for _ in range(self.npmc_input.spectral_kinetics.total_n_levels)]
-
-        # Factors to normalize levels array by (# of atoms of each type)
-        normalization_factors = []
-
-        dopants = self.npmc_input.spectral_kinetics.dopants
-        for i, dopant in enumerate(dopants):
-            # Set the initial levels population
-            levels[specie_energy_level_to_combined_energy_level(dopant, 0, dopants)] = self.species_counter[i]
-
-            # Add the # of atoms to the normalization factors n_levels times
-            normalization_factors.extend([self.species_counter[i] for _ in range(dopant.n_levels)])
-
-        # Descretize time into regions of step_size width
-        x = np.arange(0, self.simulation_time, step_size)
-        population_evolution = np.zeros((len(x), self.npmc_input.spectral_kinetics.total_n_levels))
-
-        current_time = 0
-        event_i = 0
-        for row, time_interval in enumerate(x):
-
-            while current_time < time_interval:
-                # Propagate steps
-                donor_i, acceptor_i, _interaction_id, _time = self.trajectory[event_i]
-                _interaction = self.npmc_input.interactions[_interaction_id]
-
-                # Update the energy levels of the donor species
-                left_state_1 = specie_energy_level_to_combined_energy_level(_interaction['species_id_1'],
-                                                                            _interaction['left_state_1'], dopants)
-                levels[left_state_1] -= 1
-                right_state_1 = specie_energy_level_to_combined_energy_level(_interaction['species_id_1'],
-                                                                             _interaction['right_state_1'], dopants)
-                levels[right_state_1] += 1
-
-                # Update the energy levels corresponding to the acceptor species
-                if _interaction['number_of_sites'] == 2:
-                    left_state_2 = specie_energy_level_to_combined_energy_level(_interaction['species_id_2'],
-                                                                                _interaction['left_state_2'], dopants)
-                    levels[left_state_2] -= 1
-                    right_state_2 = specie_energy_level_to_combined_energy_level(_interaction['species_id_2'],
-                                                                                 _interaction['right_state_2'], dopants)
-                    levels[right_state_2] += 1
-
-                event_i += 1
-                current_time = _time
-
-            # Save states
-            population_evolution[row] = levels
-
-        normalized_population_evolution = np.divide(population_evolution, normalization_factors)
-        return x, normalized_population_evolution
+            population_evolution[i, :] = np.sum(states, axis=0)
+            site_evolution[i, :] = np.where(states > 0)[1]
+        return x, population_evolution, site_evolution
 
 # class SimulationReplayer():
 #     """
