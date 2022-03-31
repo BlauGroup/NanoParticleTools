@@ -42,7 +42,7 @@ def run_single_npmc(data):
 
 
 
-def run_multiple_npmc(constraints, dopant_specifications, spectral_kinetics_args, npmc_command, max_threads):
+def run_multiple_npmc(constraints, dopant_specifications, spectral_kinetics_args, npmc_command, max_threads, num_workers=20):
     params = []
     for num_sims in [1, 4, 16, 64, 256]:
         for simulation_length in [1000, 10000, 50000, 100000]:
@@ -54,7 +54,10 @@ def run_multiple_npmc(constraints, dopant_specifications, spectral_kinetics_args
                          }
             params.append((constraints, dopant_specifications, npmc_args, spectral_kinetics_args))
 
-    p = Pool(20)
+    if num_workers == 'slurm':
+        import os
+        num_workers = int(os.environ['SLURM_JOB_NUM_NODES'])
+    p = Pool(num_workers)
     results = p.map(run_single_npmc, params)
 
     p.close()
