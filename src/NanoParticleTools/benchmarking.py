@@ -44,10 +44,8 @@ def run_single_npmc(data):
 
 def run_multiple_npmc(constraints, dopant_specifications, spectral_kinetics_args, npmc_command, max_threads):
     params = []
-    # for num_sims in [1, 4, 16, 64, 256]:
-    #     for simulation_length in [1000, 10000, 50000, 100000]:
-    for num_sims in [1, 2]:
-        for simulation_length in [1, 2]:
+    for num_sims in [1, 4, 16, 64, 256]:
+        for simulation_length in [1000, 10000, 50000, 100000]:
             npmc_args = {'npmc_command': npmc_command,
                          'num_sims': num_sims,
                          'base_seed': 1000,
