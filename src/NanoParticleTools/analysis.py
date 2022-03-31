@@ -118,10 +118,29 @@ class Trajectory():
 
         return interactions_by_sites
 
+    def get_state_map(self):
+        "Maps element specific states to the overall state"
+        state_map_species_id = {}
+        state_map_species_name = {}
+        combined_id = 0
+
+        for i, dopant in enumerate(self.npmc_input.spectral_kinetics.dopants):
+            if i not in state_map_species_id:
+                state_map_species_id[i] = {}
+                state_map_species_name[dopant.symbol] = {}
+            for l in range(dopant.n_levels):
+                state_map_species_id[i][l] = combined_id
+                state_map_species_name[dopant.symbol][l] = combined_id
+                combined_id += 1
+        return state_map_species_id, state_map_species_name
+
     def get_state_evolution(self, step_size=1e-6):
+        state_map_species_id, state_map_species_name = self.get_state_map()
         states = np.zeros((len(self.initial_states), self.npmc_input.spectral_kinetics.total_n_levels))
-        for i, state in enumerate(self.initial_states):
-            states[i, state] = 1
+        for i, (state, site) in enumerate(zip(self.initial_states, self.npmc_input.nanoparticle.dopant_sites)):
+            _state = state_map_species_name[str(site.specie)][state]
+            states[i, _state] = 1
+
 
         x = np.arange(0, self.simulation_time, step_size)
         site_evolution = np.zeros((len(x), states.shape[0]))
@@ -134,15 +153,25 @@ class Trajectory():
                 donor_i, acceptor_i, _interaction_id, _time = self.trajectory[event_i]
                 _interaction = self.npmc_input.interactions[_interaction_id]
 
-                states[donor_i][_interaction['left_state_1']] = 0
-                states[donor_i][_interaction['right_state_1']] = 1
+                states[donor_i][state_map_species_id[_interaction['species_id_1']][_interaction['left_state_1']]] = 0
+                states[donor_i][state_map_species_id[_interaction['species_id_1']][_interaction['right_state_1']]] = 1
                 if _interaction['number_of_sites'] == 2:
-                    states[acceptor_i][_interaction['left_state_2']] = 0
-                    states[acceptor_i][_interaction['right_state_2']] = 1
+                    states[acceptor_i][
+                        state_map_species_id[_interaction['species_id_2']][_interaction['left_state_2']]] = 0
+                    states[acceptor_i][
+                        state_map_species_id[_interaction['species_id_2']][_interaction['right_state_2']]] = 1
                 event_i += 1
                 current_time = _time
 
             # Save states
             population_evolution[i, :] = np.sum(states, axis=0)
+            # print(i, states.shape)
+            # print(np.where(states > 0)[1].shape)
             site_evolution[i, :] = np.where(states > 0)[1]
+
+        # Factors to normalize levels array by (# of atoms of each type)
+        normalization_factors = np.hstack([[self.species_counter[i]] * dopant.n_levels for i, dopant in
+                                           enumerate(self.npmc_input.spectral_kinetics.dopants)])
+
+        population_evolution = np.divide(population_evolution, normalization_factors)
         return x, population_evolution, site_evolution
