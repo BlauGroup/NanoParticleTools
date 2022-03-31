@@ -116,7 +116,11 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
         _output_d = {'simulation_time': trajectory.simulation_time,
                      'summary': trajectory.get_summary()
                      }
-        _output_d['x_populations'], _output_d['y_populations'] = trajectory.get_population_evolution()
+        x, population_evolution, state_evolution = trajectory.get_state_evolution()
+        _output_d['x_populations'] = x
+        _output_d['y_populations'] = population_evolution
+        _output_d['final_states'] = state_evolution[-1, :]
+
         _d['output'] = _output_d
 
         # Use the "trajectory_doc" key to ensure that each gets saved as a separate trajectory
