@@ -10,6 +10,7 @@ from NanoParticleTools.core import NPMCInput, NPMCRunner
 from NanoParticleTools.inputs.nanoparticle import DopedNanoparticle, NanoParticleConstraint
 from NanoParticleTools.inputs.spectral_kinetics import SpectralKinetics
 from NanoParticleTools.species_data.species import Dopant
+from pymatgen.core import Composition
 
 
 # Save 'trajectory_doc' to the trajectories store (as specified in the JobStore)
@@ -100,22 +101,33 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
                 dopant_amount[str(dopant.specie)] += 1
             except:
                 dopant_amount[str(dopant.specie)] = 1
+        c = Composition(dopant_amount)
+        _d['formula'] = c.formula.replace(" ", "")
+        _d['nanostructure'] = '-'.join(["core" if i == 0 else "shell" for i, _ in enumerate(nanoparticle.constraints)])
+        _d['nanostructure_size'] = '-'.join(
+            [f"{int(max(c.bounding_box()))}A_core" if i == 0 else f"{int(max(c.bounding_box()))}A_shell" for i, c in
+             enumerate(nanoparticle.constraints)])
+        _d['excitation_power'] = spectral_kinetics.excitation_power
+        _d['excitation_wavelength'] = spectral_kinetics.excitation_wavelength
         _d['dopant_composition'] = dopant_amount
 
         # Add the input parameters to the trajectory document
         _input_d = {'constraints': nanoparticle.constraints,
                     'dopant_seed': nanoparticle.seed,
                     'dopant_specifications': nanoparticle.dopant_specification,
-                    'excitation_power': spectral_kinetics.excitation_power,
-                    'excitation_wavelength': spectral_kinetics.excitation_wavelength,
-                    'n_levels': [dopant.n_levels for dopant in spectral_kinetics.dopants],
+                    'n_levels': [dopant.n_levels for dopant in spectral_kinetics.dopants]
                     }
         _d['input'] = _input_d
 
         # Add output to the trajectory document
-        _output_d = {'simulation_time': trajectory.simulation_time,
-                     'summary': trajectory.get_summary()
-                     }
+        _output_d = {'simulation_time': trajectory.simulation_time}
+        summary = trajectory.get_summary()
+        keys = ['interaction_id', 'number_of_sites', 'species_id_1', 'species_id_2', 'left_state_1', 'left_state_2',
+                'right_state_1', 'right_state_2', 'interaction_type', 'rate_coefficient', 'dNdT', 'dNdT per atom',
+                'occurences', 'occurences per atom']
+        _output_d['summary_keys'] = keys
+        _output_d['summary'] = [[interaction[key] for key in keys] for interaction in summary]
+
         x, population_evolution, state_evolution = trajectory.get_state_evolution()
         _output_d['x_populations'] = x
         _output_d['y_populations'] = population_evolution
