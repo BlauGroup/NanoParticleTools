@@ -21,6 +21,7 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
              output_dir: Optional[str] = '.',
              initial_states: Optional[Union[Sequence[int], None]] = None,
              spectral_kinetics_args: Optional[dict] = {},
+             initial_state_db_args: Optional[dict] = {},
              npmc_args: Optional[dict] = {}) -> List[dict]:
     """
 
@@ -39,6 +40,8 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
         to be constructed. For more information, check the documentation for
         NanoParticleTools.inputs.spectral_kinetics.SpectralKinetics.__init__()
         Ex. spectral_kinetics_args = {'excitation_power': 1e12, 'excitation_wavelength':980}
+    :param initial_state_db_args: a dictionary specifying the parameters to populate the initial_state_database with.
+        Ex. initial_state_db_args = {'interaction_radius_bound': 3}
     :param npmc_args: a dictionary specifying the parameters to run NPMC with. For more information,
         check the documentation for NanoParticleTools.core.NPMCRunner.run()
     :return: List of trajectory documents
@@ -64,7 +67,7 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
              'npmc_input': os.path.join(output_dir, 'npmc_input.json')}
 
     # Write files
-    npmc_input.generate_initial_state_database(files['initial_state_db_path'])
+    npmc_input.generate_initial_state_database(files['initial_state_db_path'], **initial_state_db_args)
     npmc_input.generate_nano_particle_database(files['np_db_path'])
     with open(files['npmc_input'], 'w') as f:
         json.dump(npmc_input, f, cls=MontyEncoder)
@@ -115,7 +118,8 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
         _input_d = {'constraints': nanoparticle.constraints,
                     'dopant_seed': nanoparticle.seed,
                     'dopant_specifications': nanoparticle.dopant_specification,
-                    'n_levels': [dopant.n_levels for dopant in spectral_kinetics.dopants]
+                    'n_levels': [dopant.n_levels for dopant in spectral_kinetics.dopants],
+                    'initial_state_db_args': initial_state_db_args
                     }
         _d['input'] = _input_d
 
