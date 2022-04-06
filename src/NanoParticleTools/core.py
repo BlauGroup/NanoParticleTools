@@ -1,36 +1,11 @@
 import csv
 import sqlite3
 import warnings
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Union
 import subprocess
 from NanoParticleTools.inputs.nanoparticle import DopedNanoparticle
 from NanoParticleTools.inputs.spectral_kinetics import SpectralKinetics
 from NanoParticleTools.inputs.util import get_all_interactions, get_sites, get_species
-
-# number_of_sites | species_1 | species_2 | left_state_1 | left_state_2 |
-# right_state_1 | right_state_2 | rate
-
-# number_of_sites is the number of sites involved in the
-# interaction. Either 1 or 2
-
-# species_1 and species_2 are things like
-# "Yb", "Er" or "N/A".
-
-# left_state_1 left_state_2 right_state_1 and right_state_2 are things
-# like "level_0", "level_3" or N/A.
-# level_0 corresponds to the ground state of the ion, level_1
-# corresponds to the first excited state and so on.
-
-# rate is a number with units 1/s or cm^6/s for one and two site
-# interactions respectively
-
-# sites spreadsheet columns:
-
-# x | y | z | species
-
-# x, y and z are numbers with units nm
-
-# species are things like "Yb" or "Er"
 
 create_species_table_sql = """
     CREATE TABLE species (
