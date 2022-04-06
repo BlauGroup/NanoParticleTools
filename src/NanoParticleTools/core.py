@@ -90,12 +90,13 @@ create_factors_table_sql = """
         one_site_interaction_factor      REAL NOT NULL,
         two_site_interaction_factor      REAL NOT NULL,
         interaction_radius_bound         REAL NOT NULL,
+        interaction_rate_threshold       REAL NOT NULL,
         distance_factor_type             TEXT NOT NULL
 );
 """
 
 insert_factors_sql = """
-    INSERT INTO factors VALUES (?,?,?,?);
+    INSERT INTO factors VALUES (?,?,?,?, ?);
 """
 
 sql_get_trajectory = """
@@ -159,6 +160,7 @@ class NPMCInput(MSONable):
                                         one_site_interaction_factor: Optional[Union[float, int]] = 1,
                                         two_site_interaction_factor: Optional[Union[float, int]] = 1,
                                         interaction_radius_bound: Optional[Union[float, int]] = 3,
+                                        interaction_rate_threshold: Optional[Union[float, int]] = 1e20,
                                         distance_factor_type: Optional[str] = 'inverse_cubic'):
         """
 
@@ -166,6 +168,8 @@ class NPMCInput(MSONable):
         :param one_site_interaction_factor: Weighting for one site interactions. Can be used to boost their occurrence.
         :param two_site_interaction_factor: Weighting for two site interactions. Can be used to boost their occurrence.
         :param interaction_radius_bound: Maximum distance allowed for an ET interaction.
+        :param interaction_rate_threshold: Threshold rate to consider an ET interaction.
+            Only applies if sites are outside of the interaction_radius_bound.
         :param distance_factor_type: Accepted values are 'linear' and 'inverse_cubic'
         :return:
         """
@@ -189,7 +193,7 @@ class NPMCInput(MSONable):
         con.commit()
 
         cur.execute(insert_factors_sql,
-                    (one_site_interaction_factor, two_site_interaction_factor, interaction_radius_bound, distance_factor_type))
+                    (one_site_interaction_factor, two_site_interaction_factor, interaction_radius_bound, interaction_rate_threshold, distance_factor_type))
 
         con.commit()
 
