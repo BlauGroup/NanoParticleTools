@@ -12,6 +12,7 @@ def get_npmc_flow(constraints: Sequence[NanoParticleConstraint],
                   output_dir: Optional[str] = '.',
                   initial_states: Optional[Union[Sequence[int], None]] = None,
                   spectral_kinetics_args={},
+                  initial_state_db_args={},
                   npmc_args={}) -> Flow:
     """
     Convenience Constructor to construct a npmc job
@@ -23,6 +24,7 @@ def get_npmc_flow(constraints: Sequence[NanoParticleConstraint],
                    output_dir=output_dir,
                    initial_states=initial_states,
                    spectral_kinetics_args=spectral_kinetics_args,
+                   initial_state_db_args={},
                    npmc_args=npmc_args)
 
     # Add job to a flow

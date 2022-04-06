@@ -1,36 +1,11 @@
 import csv
 import sqlite3
 import warnings
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Union
 import subprocess
 from NanoParticleTools.inputs.nanoparticle import DopedNanoparticle
 from NanoParticleTools.inputs.spectral_kinetics import SpectralKinetics
 from NanoParticleTools.inputs.util import get_all_interactions, get_sites, get_species
-
-# number_of_sites | species_1 | species_2 | left_state_1 | left_state_2 |
-# right_state_1 | right_state_2 | rate
-
-# number_of_sites is the number of sites involved in the
-# interaction. Either 1 or 2
-
-# species_1 and species_2 are things like
-# "Yb", "Er" or "N/A".
-
-# left_state_1 left_state_2 right_state_1 and right_state_2 are things
-# like "level_0", "level_3" or N/A.
-# level_0 corresponds to the ground state of the ion, level_1
-# corresponds to the first excited state and so on.
-
-# rate is a number with units 1/s or cm^6/s for one and two site
-# interactions respectively
-
-# sites spreadsheet columns:
-
-# x | y | z | species
-
-# x, y and z are numbers with units nm
-
-# species are things like "Yb" or "Er"
 
 create_species_table_sql = """
     CREATE TABLE species (
@@ -115,12 +90,13 @@ create_factors_table_sql = """
         one_site_interaction_factor      REAL NOT NULL,
         two_site_interaction_factor      REAL NOT NULL,
         interaction_radius_bound         REAL NOT NULL,
+        interaction_rate_threshold       REAL NOT NULL,
         distance_factor_type             TEXT NOT NULL
 );
 """
 
 insert_factors_sql = """
-    INSERT INTO factors VALUES (?,?,?,?);
+    INSERT INTO factors VALUES (?,?,?,?, ?);
 """
 
 sql_get_trajectory = """
@@ -130,7 +106,8 @@ from monty.json import MSONable
 from functools import lru_cache
 
 class NPMCInput(MSONable):
-    def load_trajectories(self, database_file):
+    def load_trajectories(self,
+                          database_file:str):
         con = sqlite3.connect(database_file)
         cur = con.cursor()
 
@@ -178,7 +155,24 @@ class NPMCInput(MSONable):
     def species(self):
         return get_species(self.spectral_kinetics)
 
-    def generate_initial_state_database(self, database_file):
+    def generate_initial_state_database(self,
+                                        database_file: str,
+                                        one_site_interaction_factor: Optional[Union[float, int]] = 1,
+                                        two_site_interaction_factor: Optional[Union[float, int]] = 1,
+                                        interaction_radius_bound: Optional[Union[float, int]] = 3,
+                                        interaction_rate_threshold: Optional[Union[float, int]] = 1e20,
+                                        distance_factor_type: Optional[str] = 'inverse_cubic'):
+        """
+
+        :param database_file: name of file to write database to
+        :param one_site_interaction_factor: Weighting for one site interactions. Can be used to boost their occurrence.
+        :param two_site_interaction_factor: Weighting for two site interactions. Can be used to boost their occurrence.
+        :param interaction_radius_bound: Maximum distance allowed for an ET interaction.
+        :param interaction_rate_threshold: Threshold rate to consider an ET interaction.
+            Only applies if sites are outside of the interaction_radius_bound.
+        :param distance_factor_type: Accepted values are 'linear' and 'inverse_cubic'
+        :return:
+        """
         # TODO: parameterize over initial state
         con = sqlite3.connect(database_file)
         cur = con.cursor()
@@ -199,11 +193,12 @@ class NPMCInput(MSONable):
         con.commit()
 
         cur.execute(insert_factors_sql,
-                    (1.0, 1, 3, "inverse_cubic"))
+                    (one_site_interaction_factor, two_site_interaction_factor, interaction_radius_bound, interaction_rate_threshold, distance_factor_type))
 
         con.commit()
 
-    def generate_nano_particle_database(self, database_file):
+    def generate_nano_particle_database(self,
+                                        database_file:str):
         con = sqlite3.connect(database_file)
         cur = con.cursor()
 

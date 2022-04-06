@@ -10,6 +10,7 @@ from NanoParticleTools.core import NPMCInput, NPMCRunner
 from NanoParticleTools.inputs.nanoparticle import DopedNanoparticle, NanoParticleConstraint
 from NanoParticleTools.inputs.spectral_kinetics import SpectralKinetics
 from NanoParticleTools.species_data.species import Dopant
+from pymatgen.core import Composition
 
 
 # Save 'trajectory_doc' to the trajectories store (as specified in the JobStore)
@@ -20,6 +21,7 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
              output_dir: Optional[str] = '.',
              initial_states: Optional[Union[Sequence[int], None]] = None,
              spectral_kinetics_args: Optional[dict] = {},
+             initial_state_db_args: Optional[dict] = {},
              npmc_args: Optional[dict] = {}) -> List[dict]:
     """
 
@@ -38,6 +40,8 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
         to be constructed. For more information, check the documentation for
         NanoParticleTools.inputs.spectral_kinetics.SpectralKinetics.__init__()
         Ex. spectral_kinetics_args = {'excitation_power': 1e12, 'excitation_wavelength':980}
+    :param initial_state_db_args: a dictionary specifying the parameters to populate the initial_state_database with.
+        Ex. initial_state_db_args = {'interaction_radius_bound': 3, 'interaction_rate_threshold': 1e20}
     :param npmc_args: a dictionary specifying the parameters to run NPMC with. For more information,
         check the documentation for NanoParticleTools.core.NPMCRunner.run()
     :return: List of trajectory documents
@@ -63,7 +67,7 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
              'npmc_input': os.path.join(output_dir, 'npmc_input.json')}
 
     # Write files
-    npmc_input.generate_initial_state_database(files['initial_state_db_path'])
+    npmc_input.generate_initial_state_database(files['initial_state_db_path'], **initial_state_db_args)
     npmc_input.generate_nano_particle_database(files['np_db_path'])
     with open(files['npmc_input'], 'w') as f:
         json.dump(npmc_input, f, cls=MontyEncoder)
@@ -100,22 +104,34 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
                 dopant_amount[str(dopant.specie)] += 1
             except:
                 dopant_amount[str(dopant.specie)] = 1
+        c = Composition(dopant_amount)
+        _d['formula'] = c.formula.replace(" ", "")
+        _d['nanostructure'] = '-'.join(["core" if i == 0 else "shell" for i, _ in enumerate(nanoparticle.constraints)])
+        _d['nanostructure_size'] = '-'.join(
+            [f"{int(max(c.bounding_box()))}A_core" if i == 0 else f"{int(max(c.bounding_box()))}A_shell" for i, c in
+             enumerate(nanoparticle.constraints)])
+        _d['excitation_power'] = spectral_kinetics.excitation_power
+        _d['excitation_wavelength'] = spectral_kinetics.excitation_wavelength
         _d['dopant_composition'] = dopant_amount
 
         # Add the input parameters to the trajectory document
         _input_d = {'constraints': nanoparticle.constraints,
                     'dopant_seed': nanoparticle.seed,
                     'dopant_specifications': nanoparticle.dopant_specification,
-                    'excitation_power': spectral_kinetics.excitation_power,
-                    'excitation_wavelength': spectral_kinetics.excitation_wavelength,
                     'n_levels': [dopant.n_levels for dopant in spectral_kinetics.dopants],
+                    'initial_state_db_args': initial_state_db_args
                     }
         _d['input'] = _input_d
 
         # Add output to the trajectory document
-        _output_d = {'simulation_time': trajectory.simulation_time,
-                     'summary': trajectory.get_summary()
-                     }
+        _output_d = {'simulation_time': trajectory.simulation_time}
+        summary = trajectory.get_summary()
+        keys = ['interaction_id', 'number_of_sites', 'species_id_1', 'species_id_2', 'left_state_1', 'left_state_2',
+                'right_state_1', 'right_state_2', 'interaction_type', 'rate_coefficient', 'dNdT', 'dNdT per atom',
+                'occurences', 'occurences per atom']
+        _output_d['summary_keys'] = keys
+        _output_d['summary'] = [[interaction[key] for key in keys] for interaction in summary]
+
         x, population_evolution, state_evolution = trajectory.get_state_evolution()
         _output_d['x_populations'] = x
         _output_d['y_populations'] = population_evolution

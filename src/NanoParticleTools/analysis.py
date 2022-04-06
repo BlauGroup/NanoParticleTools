@@ -134,7 +134,7 @@ class Trajectory():
                 combined_id += 1
         return state_map_species_id, state_map_species_name
 
-    def get_state_evolution(self, step_size=1e-6):
+    def get_state_evolution(self, step_size=1e-5):
         state_map_species_id, state_map_species_name = self.get_state_map()
         states = np.zeros((len(self.initial_states), self.npmc_input.spectral_kinetics.total_n_levels))
         for i, (state, site) in enumerate(zip(self.initial_states, self.npmc_input.nanoparticle.dopant_sites)):
