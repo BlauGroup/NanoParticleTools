@@ -130,7 +130,8 @@ from monty.json import MSONable
 from functools import lru_cache
 
 class NPMCInput(MSONable):
-    def load_trajectories(self, database_file):
+    def load_trajectories(self,
+                          database_file:str):
         con = sqlite3.connect(database_file)
         cur = con.cursor()
 
@@ -178,7 +179,21 @@ class NPMCInput(MSONable):
     def species(self):
         return get_species(self.spectral_kinetics)
 
-    def generate_initial_state_database(self, database_file):
+    def generate_initial_state_database(self,
+                                        database_file: str,
+                                        one_site_interaction_factor: Optional[Union[float, int]] = 1,
+                                        two_site_interaction_factor: Optional[Union[float, int]] = 1,
+                                        interaction_radius_bound: Optional[Union[float, int]] = 3,
+                                        distance_factor_type: Optional[str] = 'inverse_cubic'):
+        """
+
+        :param database_file: name of file to write database to
+        :param one_site_interaction_factor: Weighting for one site interactions. Can be used to boost their occurrence.
+        :param two_site_interaction_factor: Weighting for two site interactions. Can be used to boost their occurrence.
+        :param interaction_radius_bound: Maximum distance allowed for an ET interaction.
+        :param distance_factor_type: Accepted values are 'linear' and 'inverse_cubic'
+        :return:
+        """
         # TODO: parameterize over initial state
         con = sqlite3.connect(database_file)
         cur = con.cursor()
@@ -199,11 +214,12 @@ class NPMCInput(MSONable):
         con.commit()
 
         cur.execute(insert_factors_sql,
-                    (1.0, 1, 3, "inverse_cubic"))
+                    (one_site_interaction_factor, two_site_interaction_factor, interaction_radius_bound, distance_factor_type))
 
         con.commit()
 
-    def generate_nano_particle_database(self, database_file):
+    def generate_nano_particle_database(self,
+                                        database_file:str):
         con = sqlite3.connect(database_file)
         cur = con.cursor()
 
