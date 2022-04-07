@@ -67,7 +67,13 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
              'npmc_input': os.path.join(output_dir, 'npmc_input.json')}
 
     # Write files
-    npmc_input.generate_initial_state_database(files['initial_state_db_path'], **initial_state_db_args)
+    _initial_state_db_args = {'one_site_interaction_factor': 1,
+                              'two_site_interaction_factor': 1,
+                              'interaction_radius_bound': 3,
+                              'interaction_rate_threshold': 1e40,
+                              'distance_factor_type': 'inverse_cubic'}
+    _initial_state_db_args.update(initial_state_db_args)
+    npmc_input.generate_initial_state_database(files['initial_state_db_path'], **_initial_state_db_args)
     npmc_input.generate_nano_particle_database(files['np_db_path'])
     with open(files['npmc_input'], 'w') as f:
         json.dump(npmc_input, f, cls=MontyEncoder)
