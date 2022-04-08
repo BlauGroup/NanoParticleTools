@@ -41,7 +41,7 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
         NanoParticleTools.inputs.spectral_kinetics.SpectralKinetics.__init__()
         Ex. spectral_kinetics_args = {'excitation_power': 1e12, 'excitation_wavelength':980}
     :param initial_state_db_args: a dictionary specifying the parameters to populate the initial_state_database with.
-        Ex. initial_state_db_args = {'interaction_radius_bound': 3, 'interaction_rate_threshold': 1e20}
+        Ex. initial_state_db_args = {'interaction_radius_bound': 3}
     :param npmc_args: a dictionary specifying the parameters to run NPMC with. For more information,
         check the documentation for NanoParticleTools.core.NPMCRunner.run()
     :return: List of trajectory documents
@@ -70,7 +70,6 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
     _initial_state_db_args = {'one_site_interaction_factor': 1,
                               'two_site_interaction_factor': 1,
                               'interaction_radius_bound': 3,
-                              'interaction_rate_threshold': 1e40,
                               'distance_factor_type': 'inverse_cubic'}
     _initial_state_db_args.update(initial_state_db_args)
     npmc_input.generate_initial_state_database(files['initial_state_db_path'], **_initial_state_db_args)
