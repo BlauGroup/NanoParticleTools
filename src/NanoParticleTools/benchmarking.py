@@ -11,7 +11,7 @@ from maggma.stores import MemoryStore
 from jobflow import JobStore
 import time
 from multiprocessing import Pool
-import datetime
+from bson import uuid
 
 def run_single_npmc(data):
     constraints = data[0]
@@ -19,7 +19,7 @@ def run_single_npmc(data):
     npmc_args = data[2]
     spectral_kinetics_args = data[3]
 
-    dir_name = f'./scratch_{datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")}'
+    dir_name = f'./scratch_{str(uuid.uuid4())}'
     flow = get_npmc_flow(constraints = constraints,
                          dopant_specifications = dopant_specifications,
                          doping_seed = 0,
