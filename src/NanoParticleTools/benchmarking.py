@@ -11,6 +11,7 @@ from maggma.stores import MemoryStore
 from jobflow import JobStore
 import time
 from multiprocessing import Pool
+import datetime
 
 def run_single_npmc(data):
     constraints = data[0]
@@ -18,15 +19,13 @@ def run_single_npmc(data):
     npmc_args = data[2]
     spectral_kinetics_args = data[3]
 
-    if os.path.exists(f'./scratch_{npmc_args["num_sims"]}_{npmc_args["simulation_length"]}'):
-        shutil.rmtree(f'./scratch_{npmc_args["num_sims"]}_{npmc_args["simulation_length"]}')
-
+    dir_name = os.path.join('./scratch_', datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
     flow = get_npmc_flow(constraints = constraints,
                          dopant_specifications = dopant_specifications,
                          doping_seed = 0,
                          spectral_kinetics_args = spectral_kinetics_args,
                          npmc_args = npmc_args,
-                         output_dir = f'./scratch_{npmc_args["num_sims"]}_{npmc_args["simulation_length"]}')
+                         output_dir = dir_name)
 
     # Store the output data locally in a memorystore
     docs_store = MemoryStore()
