@@ -19,7 +19,7 @@ def run_single_npmc(data):
     npmc_args = data[2]
     spectral_kinetics_args = data[3]
 
-    dir_name = os.path.join('./scratch_', datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
+    dir_name = f'./scratch_{datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")}')
     flow = get_npmc_flow(constraints = constraints,
                          dopant_specifications = dopant_specifications,
                          doping_seed = 0,
