@@ -56,7 +56,7 @@ class SpectralKinetics(MSONable):
         :param stokes_shift: wavenumbers
         :param initial_populations:
         :param excitation_wavelength: the wavelength of the incident radiation in in nm
-        :param excitation_power: the incident power density in ergs/cm^2 (1e7 erg/s/cm^2 = 1 W/cm^2)
+        :param excitation_power: the incident power density in W/cm^2 (1 W/cm^2 = 1e7 erg/s/cm^2)
         :param kwargs:
 
         #TODO: energy_transfer_mode
@@ -97,7 +97,7 @@ class SpectralKinetics(MSONable):
 
     @property
     def incident_photon_flux(self):
-        return self.excitation_power / (h_CGS * c_CGS * self.incident_wavenumber)  # in photons/s/cm^2
+        return self.excitation_power * 1e7/ (h_CGS * c_CGS * self.incident_wavenumber)  # in photons/s/cm^2
 
     @property
     def total_n_levels(self):
