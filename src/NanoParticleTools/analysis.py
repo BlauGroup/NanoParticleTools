@@ -1,7 +1,6 @@
 from typing import Optional
 
 import numpy as np
-import pandas as pd
 from collections import Counter
 from functools import lru_cache
 import os
@@ -11,12 +10,19 @@ from NanoParticleTools.inputs.util import specie_energy_level_to_combined_energy
 
 
 class SimulationReplayer():
-    def __init__(self, trajectories, npmc_input):
+    def __init__(self,
+                 trajectories,
+                 npmc_input):
         self.trajectories = trajectories
         self.npmc_input = npmc_input
 
     @classmethod
     def from_run_directory(cls, run_dir):
+        """
+        Convenience constructor to obtain
+        :param run_dir:
+        :return:
+        """
         with open(os.path.join(run_dir, 'npmc_input.json'), 'rb') as f:
             npmc_input = json.load(f, cls=MontyDecoder)
         npmc_input.load_trajectories(os.path.join(run_dir, 'initial_state.sqlite'))
@@ -141,37 +147,83 @@ class Trajectory():
             _state = state_map_species_name[str(site.specie)][state]
             states[i, _state] = 1
 
-
-        x = np.arange(0, self.simulation_time, step_size)
+        x = np.arange(0, self.simulation_time + step_size, step_size)
         site_evolution = np.zeros((len(x), states.shape[0]))
         population_evolution = np.zeros((len(x), states.shape[1]))
+        #         print(x.shape, site_evolution.shape, population_evolution.shape)
         current_time = 0
         event_i = 0
         for i, time_interval in enumerate(x):
-            while current_time < time_interval:
+            while current_time < time_interval and event_i < len(self.trajectory):
                 # Propagate steps
                 donor_i, acceptor_i, _interaction_id, _time = self.trajectory[event_i]
                 _interaction = self.npmc_input.interactions[_interaction_id]
 
+                # Update the states for the sites corresponding to this interaction event
+                # Apply the event to the donor site
                 states[donor_i][state_map_species_id[_interaction['species_id_1']][_interaction['left_state_1']]] = 0
                 states[donor_i][state_map_species_id[_interaction['species_id_1']][_interaction['right_state_1']]] = 1
                 if _interaction['number_of_sites'] == 2:
+                    # If this is a two-site interaction, apply the event to the acceptor ion
                     states[acceptor_i][
                         state_map_species_id[_interaction['species_id_2']][_interaction['left_state_2']]] = 0
                     states[acceptor_i][
                         state_map_species_id[_interaction['species_id_2']][_interaction['right_state_2']]] = 1
                 event_i += 1
                 current_time = _time
-
             # Save states
             population_evolution[i, :] = np.sum(states, axis=0)
-            # print(i, states.shape)
-            # print(np.where(states > 0)[1].shape)
             site_evolution[i, :] = np.where(states > 0)[1]
 
         # Factors to normalize levels array by (# of atoms of each type)
         normalization_factors = np.hstack([[self.species_counter[i]] * dopant.n_levels for i, dopant in
                                            enumerate(self.npmc_input.spectral_kinetics.dopants)])
 
-        population_evolution = np.divide(population_evolution, normalization_factors)
-        return x, population_evolution, site_evolution
+        overall_population_evolution = np.divide(population_evolution, normalization_factors)
+
+        population_by_constraint = self._population_evolution_by_constraint(site_evolution)
+
+        return x, overall_population_evolution, population_by_constraint, site_evolution
+
+    def _population_evolution_by_constraint(self, site_evolution):
+        sites = np.array([site.coords for site in self.npmc_input.nanoparticle.dopant_sites])
+        species_names = np.array([str(site.specie) for site in self.npmc_input.nanoparticle.dopant_sites])
+
+        # Get the indices for dopants within each constraint
+        site_indices_by_constraint = []
+        for constraint in self.npmc_input.nanoparticle.constraints:
+
+            indices_inside_constraint = set(np.where(constraint.sites_in_bounds(sites))[0])
+
+            for l in site_indices_by_constraint:
+                indices_inside_constraint = indices_inside_constraint - set(l)
+            site_indices_by_constraint.append(sorted(list(indices_inside_constraint)))
+
+        population_by_constraint = []
+        for n, _ in enumerate(self.npmc_input.nanoparticle.constraints):
+            site_indices = site_indices_by_constraint[n]
+            layer_site_evolution = site_evolution[:, site_indices]
+            species_counter = Counter(species_names[site_indices])
+
+            # Set the shape of the array
+            n_time_intervals = layer_site_evolution.shape[0]
+            n_levels = self.npmc_input.spectral_kinetics.total_n_levels
+            layer_population = np.zeros((n_time_intervals, n_levels))
+
+            # Iterate through the time intervals and bin the energy levels
+            for i, _l in enumerate(layer_site_evolution):
+                c = Counter(_l)
+                for key in c:
+                    layer_population[i, int(key)] += c[key]
+
+            # Normalize values, so that the max population is 1
+            normalization_factors = np.hstack([[species_counter[dopant.symbol]] * dopant.n_levels for dopant in
+                                               self.npmc_input.spectral_kinetics.dopants])
+            # Avoid divide by zero by making normalization factor = 1 for elements not in the shell
+            normalization_factors[normalization_factors == 0] = 1
+            layer_population = np.divide(layer_population, normalization_factors)
+
+            # Add to the list of populations separated by layer
+            population_by_constraint.append(layer_population)
+
+        return population_by_constraint

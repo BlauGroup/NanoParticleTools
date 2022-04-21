@@ -137,10 +137,11 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
         _output_d['summary_keys'] = keys
         _output_d['summary'] = [[interaction[key] for key in keys] for interaction in summary]
 
-        x, population_evolution, state_evolution = trajectory.get_state_evolution()
+        x, overall_population_evolution, population_by_constraint, site_evolution = trajectory.get_state_evolution()
         _output_d['x_populations'] = x
-        _output_d['y_populations'] = population_evolution
-        _output_d['final_states'] = state_evolution[-1, :]
+        _output_d['y_overall_populations'] = overall_population_evolution
+        _output_d['y_constraint_populations'] = population_by_constraint
+        _output_d['final_states'] = site_evolution[-1, :]
 
         _d['output'] = _output_d
 
