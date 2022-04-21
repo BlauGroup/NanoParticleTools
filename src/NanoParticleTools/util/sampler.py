@@ -113,24 +113,4 @@ class NanoParticleSampler():
                 dopant_specifications.append((n, _concentration, el, 'Y'))
         return constraints, dopant_specifications
 
-#     def get_all_combinations(self, excitation_wavelengths, excitation_powers, n_shells, dopants):
-#         # Combinations of dopants in each layer
-#         # Dopant concentrations will be populated later
-#         dopant_combinations = [()]
-#         for i in range(1, len(dopants)+1):
-#             dopant_combinations.extend(combinations(dopants, i))
-
-#         # Permute combinations of core/shells
-#         nanoparticle_configurations = [] # Length of this list determines number of shells. (1 = no shell, 2 = 1 shell, ... 4 = 3 shells)
-#         for n in n_shells:
-#             layers = []
-#             layers.append(dopant_combinations) # For core
-#             for i in range(n):
-#                 layers.append(dopant_combinations)
-#             nanoparticle_configurations.extend(list(product(*layers)))
-
-#         # Find full configurational space
-#         all_combinations = list(product(excitation_wavelengths, excitation_powers, nanoparticle_configurations))
-#         return all_combinations
-
 
