@@ -185,6 +185,8 @@ class DopedNanoparticle(MSONable):
                    dopant_species: str,
                    replaced_species: str,
                    rng: np.random.default_rng):
+        if dopant_species == 'Surface':
+            dopant_species = 'Na'
         sites_in_constraint = self._sites[constraint_index]
 
         # Identify the possible sites for the dopant
@@ -199,7 +201,7 @@ class DopedNanoparticle(MSONable):
         # Randomly pick sites to place dopants
         dopant_sites = rng.choice(possible_dopant_sites, int(n_dopants), replace=False)
         for i in dopant_sites:
-            self._sites[constraint_index][i].species = Composition(dopant_species)
+            self._sites[constraint_index][i].species = {dopant_species: 1}
 
         # Keep track of concentrations in each shell
         self._dopant_concentration[constraint_index][dopant_species] = len(dopant_sites) / n_host_sites

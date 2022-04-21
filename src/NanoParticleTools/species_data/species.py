@@ -42,6 +42,8 @@ class Dopant(MSONable):
         :param concentration:
         :param n_levels:
         """
+        if symbol == 'Surface':
+            symbol = 'Na'
         self.symbol = symbol
         self.molar_concentration = molar_concentration
         # super().__init__(symbol, None)
@@ -71,8 +73,12 @@ class Dopant(MSONable):
 
     @lru_cache
     def species_data(self):
+        if self.symbol == 'Na':
+            symbol = 'Surface'
+        else:
+            symbol = self.symbol
         # Load Data from json file
-        with open(os.path.join(SPECIES_DATA_PATH, f'{self.symbol}.json'), 'r') as f:
+        with open(os.path.join(SPECIES_DATA_PATH, f'{symbol}.json'), 'r') as f:
             species_data = json.load(f)
 
         return species_data
