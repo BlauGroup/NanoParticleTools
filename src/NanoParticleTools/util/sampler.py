@@ -57,11 +57,16 @@ class NanoParticleSampler():
         excitation_wavelength = self.rng.choice(excitation_wavelengths)
         excitation_power = self.rng.choice(excitation_powers)
 
-        # Determine number of shells
-        n_shells = self.rng.choice(list(range(0, 3 + 1)), p=np.divide([1, 8, 64, 512], np.sum([1, 8, 64, 512])))
-
+        # Determine the weights for random selection from distribution
         n_dopant_weights = [math.comb(len(dopants), i) for i in range(len(dopants) + 1)]
-        n_dopant_weights = np.divide(n_dopant_weights, sum(n_dopant_weights))
+        n_shell_weights = [np.power(sum(n_dopant_weights), i) for i in range(4)]
+
+        n_dopant_weights = np.divide(n_dopant_weights, np.sum(n_dopant_weights))
+        n_shell_weights = np.divide(n_shell_weights, np.sum(n_shell_weights))
+
+        # Determine number of shells
+        n_shells = self.rng.choice(list(range(0, 3 + 1)), p=n_shell_weights)
+
         nanoparticle_config = []
         for _ in range(0, n_shells + 1):
             n_dopants_in_layer = self.rng.choice(range(len(dopants) + 1), p=n_dopant_weights)
