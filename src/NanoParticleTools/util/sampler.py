@@ -7,10 +7,10 @@ import math
 class NanoParticleSampler():
     def __init__(self,
                  seed,
-                 min_core_radius: Optional[float] = 4,
-                 max_core_radius: Optional[float] = 4,
-                 min_shell_thickness: Optional[float] = 1,
-                 max_shell_thickness: Optional[float] = 2.5,
+                 min_core_radius: Optional[float] = 40,
+                 max_core_radius: Optional[float] = 40,
+                 min_shell_thickness: Optional[float] = 10,
+                 max_shell_thickness: Optional[float] = 25,
                  min_concentration: Optional[float] = 0,
                  max_concentration: Optional[float] = 0.4,
                  concentration_constraint: Optional[float] = 0.5):
