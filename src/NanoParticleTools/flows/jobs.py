@@ -111,6 +111,7 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
         _d = {'simulation_seed': trajectory.seed,
               'dopant_seed': nanoparticle.seed,
               'simulation_length': len(trajectory.trajectory),
+              'simulation_time': trajectory.simulation_time,
               'n_constraints': len(nanoparticle.constraints),
               'n_dopant_sites': len(nanoparticle.dopant_sites),
               'n_dopants': len(spectral_kinetics.dopants),
@@ -136,7 +137,7 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
         _d['input'] = _input_d
 
         # Add output to the trajectory document
-        _output_d = {'simulation_time': trajectory.simulation_time}
+        _output_d = {}
         summary = trajectory.get_summary()
         keys = ['interaction_id', 'number_of_sites', 'species_id_1', 'species_id_2', 'left_state_1', 'left_state_2',
                 'right_state_1', 'right_state_2', 'interaction_type', 'rate_coefficient', 'dNdT', 'dNdT per atom',

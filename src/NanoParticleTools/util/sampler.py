@@ -1,7 +1,7 @@
 from typing import Optional
-from itertools import combinations, product
 import numpy as np
 from NanoParticleTools.inputs.nanoparticle import SphericalConstraint
+import math
 
 
 class NanoParticleSampler():
