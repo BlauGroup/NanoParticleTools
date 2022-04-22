@@ -256,7 +256,8 @@ class NPMCRunner:
             num_sims: int = 10,
             base_seed: int = 1000,
             thread_count: int = 8,
-            simulation_length: int = 100000):
+            simulation_length: int = None,
+            simulation_time: float = None):
         """
 
         :param np_database: a sqlite database containing the reaction network and metadata.
@@ -273,6 +274,9 @@ class NPMCRunner:
                     f'--initial_state_database={self.initial_state}',
                     f'--number_of_simulations={str(num_sims)}',
                     f'--base_seed={str(base_seed)}',
-                    f'--thread_count={str(thread_count)}',
-                    f'--step_cutoff={str(simulation_length)}']
+                    f'--thread_count={str(thread_count)}']
+        if simulation_length is not None:
+            run_args.append(f'--step_cutoff={str(simulation_length)}')
+        elif simulation_time is not None:
+            run_args.append(f'--time_cutoff={str(simulation_time)}')
         subprocess.run(' '.join(run_args), shell=True)
