@@ -11,6 +11,8 @@ from NanoParticleTools.inputs.nanoparticle import DopedNanoparticle, NanoParticl
 from NanoParticleTools.inputs.spectral_kinetics import SpectralKinetics
 from NanoParticleTools.species_data.species import Dopant
 from pymatgen.core import Composition
+from collections import Counter
+import numpy as np
 
 
 # Save 'trajectory_doc' to the trajectories store (as specified in the JobStore)
@@ -22,7 +24,8 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
              initial_states: Optional[Union[Sequence[int], None]] = None,
              spectral_kinetics_args: Optional[dict] = {},
              initial_state_db_args: Optional[dict] = {},
-             npmc_args: Optional[dict] = {}) -> List[dict]:
+             npmc_args: Optional[dict] = {},
+             **kwargs) -> List[dict]:
     """
 
     :param constraints: Constraints from which to build the Nanoparticle.
@@ -93,16 +96,6 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
     # Analysis of trajectories and generate documents
     results = []
     for seed, trajectory in simulation_replayer.trajectories.items():
-        _d = {'simulation_seed': trajectory.seed,
-              'simulation_length': len(trajectory.trajectory),
-              'n_dopant_sites': len(nanoparticle.dopant_sites),
-              'n_dopants': len(spectral_kinetics.dopants),
-              'total_n_levels': spectral_kinetics.total_n_levels,
-              'dopant_concentration': nanoparticle._dopant_concentration,
-              'overall_dopant_concentration': nanoparticle.dopant_concentrations,
-              'dopants': [str(dopant.symbol) for dopant in spectral_kinetics.dopants],
-              }
-
         dopant_amount = {}
         for dopant in nanoparticle.dopant_sites:
             try:
@@ -110,26 +103,41 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
             except:
                 dopant_amount[str(dopant.specie)] = 1
         c = Composition(dopant_amount)
-        _d['formula'] = c.formula.replace(" ", "")
-        _d['nanostructure'] = '-'.join(["core" if i == 0 else "shell" for i, _ in enumerate(nanoparticle.constraints)])
-        _d['nanostructure_size'] = '-'.join(
+        nanostructure = '-'.join(["core" if i == 0 else "shell" for i, _ in enumerate(nanoparticle.constraints)])
+        nanostructure_size = '-'.join(
             [f"{int(max(c.bounding_box()))}A_core" if i == 0 else f"{int(max(c.bounding_box()))}A_shell" for i, c in
              enumerate(nanoparticle.constraints)])
-        _d['excitation_power'] = spectral_kinetics.excitation_power
-        _d['excitation_wavelength'] = spectral_kinetics.excitation_wavelength
-        _d['dopant_composition'] = dopant_amount
+        formula_by_constraint = get_formula_by_constraint(nanoparticle)
+        _d = {'simulation_seed': trajectory.seed,
+              'dopant_seed': nanoparticle.seed,
+              'simulation_length': len(trajectory.trajectory),
+              'simulation_time': trajectory.simulation_time,
+              'n_constraints': len(nanoparticle.constraints),
+              'n_dopant_sites': len(nanoparticle.dopant_sites),
+              'n_dopants': len(spectral_kinetics.dopants),
+              'formula': c.formula.replace(" ", ""),
+              'nanostructure': nanostructure,
+              'nanostructure_size': nanostructure_size,
+              'total_n_levels': spectral_kinetics.total_n_levels,
+              'formula_by_constraint': formula_by_constraint,
+              'dopants': [str(dopant.symbol) for dopant in spectral_kinetics.dopants],
+              'dopant_concentration': nanoparticle._dopant_concentration,
+              'overall_dopant_concentration': nanoparticle.dopant_concentrations,
+              'excitation_power': spectral_kinetics.excitation_power,
+              'excitation_wavelength': spectral_kinetics.excitation_wavelength,
+              'dopant_composition': dopant_amount,
+              }
 
         # Add the input parameters to the trajectory document
         _input_d = {'constraints': nanoparticle.constraints,
-                    'dopant_seed': nanoparticle.seed,
                     'dopant_specifications': nanoparticle.dopant_specification,
                     'n_levels': [dopant.n_levels for dopant in spectral_kinetics.dopants],
-                    'initial_state_db_args': initial_state_db_args
+                    'initial_state_db_args': _initial_state_db_args
                     }
         _d['input'] = _input_d
 
         # Add output to the trajectory document
-        _output_d = {'simulation_time': trajectory.simulation_time}
+        _output_d = {}
         summary = trajectory.get_summary()
         keys = ['interaction_id', 'number_of_sites', 'species_id_1', 'species_id_2', 'left_state_1', 'left_state_2',
                 'right_state_1', 'right_state_2', 'interaction_type', 'rate_coefficient', 'dNdT', 'dNdT per atom',
@@ -137,13 +145,35 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
         _output_d['summary_keys'] = keys
         _output_d['summary'] = [[interaction[key] for key in keys] for interaction in summary]
 
-        x, population_evolution, state_evolution = trajectory.get_state_evolution()
+        x, overall_population_evolution, population_by_constraint, site_evolution = trajectory.get_state_evolution()
         _output_d['x_populations'] = x
-        _output_d['y_populations'] = population_evolution
-        _output_d['final_states'] = state_evolution[-1, :]
+        _output_d['y_overall_populations'] = overall_population_evolution
+        _output_d['y_constraint_populations'] = population_by_constraint
+        _output_d['final_states'] = site_evolution[-1, :]
 
         _d['output'] = _output_d
 
         # Use the "trajectory_doc" key to ensure that each gets saved as a separate trajectory
         results.append({'trajectory_doc': _d})
     return results
+
+
+def get_formula_by_constraint(nanoparticle):
+    sites = np.array([site.coords for site in nanoparticle.dopant_sites])
+    species_names = np.array([str(site.specie) for site in nanoparticle.dopant_sites])
+
+    # Get the indices for dopants within each constraint
+    site_indices_by_constraint = []
+    for constraint in nanoparticle.constraints:
+
+        indices_inside_constraint = set(np.where(constraint.sites_in_bounds(sites))[0])
+
+        for l in site_indices_by_constraint:
+            indices_inside_constraint = indices_inside_constraint - set(l)
+        site_indices_by_constraint.append(sorted(list(indices_inside_constraint)))
+
+    formula_by_constraint = []
+    for indices in site_indices_by_constraint:
+        formula = Composition(Counter(species_names[indices])).formula.replace(" ", "")
+        formula_by_constraint.append(formula)
+    return formula_by_constraint

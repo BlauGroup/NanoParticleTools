@@ -1,6 +1,6 @@
 {
   "excitation_wavelength": 976,
-  "excitation_power": 1e7,
+  "excitation_power": 1,
   "time_step": 1e-4,
   "num_steps": 100,
   "max_error": 1e-12,
