@@ -90,8 +90,8 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
     # Initialize a simulation replayer
     simulation_replayer = SimulationReplayer.from_run_directory(files['output_dir'])
     if len(simulation_replayer.trajectories) != npmc_args['num_sims']:
-        raise RuntimeError('Run did not successfully complete. Expected {npmc_args["num_sims"]} trajectories, '
-                           'found {len(simulation_replayer.trajectories)}.')
+        raise RuntimeError(f'Run did not successfully complete. Expected {npmc_args["num_sims"]} trajectories, '
+                           f'found {len(simulation_replayer.trajectories)}.')
 
     # TODO: figure out why the nanoparticle sites gets cleared.
     nanoparticle.generate() # generate nanoparticle, since it's state is cleared
