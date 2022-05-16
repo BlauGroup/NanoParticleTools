@@ -15,6 +15,7 @@ def initialize():
         config_dict = json.load(f)
     dopants = [Dopant('Er', 0.02, 34), Dopant('Yb', 0.1, 2)]
     sk = SpectralKinetics(dopants, **config_dict)
+    return sk
 
 def test_line_strength_matrix():
     # Check line_strength_matrix
