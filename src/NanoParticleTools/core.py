@@ -309,6 +309,6 @@ class NPMCRunner:
         elif simulation_time is not None:
             run_args.append(f'--time_cutoff={str(simulation_time)}')
         print(f"Running NPMC using the command: \"{' '.join(run_args)}\"")
-        with open(log_file+"stdout", "w") as f_std, open(log_file+"stderr", "w", buffering=1) as f_err:
+        with open(log_file+"stdout", "a") as f_std, open(log_file+"stderr", "a", buffering=1) as f_err:
             self.process = subprocess.Popen(run_args, stdout=f_std, stderr=f_err)
         self.process.wait()
