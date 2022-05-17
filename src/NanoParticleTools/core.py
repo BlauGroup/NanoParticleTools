@@ -277,6 +277,7 @@ class NPMCRunner:
     def error_handler(self, _signo, _stack_frame):
         # os.kill(self.process.pid, signal.SIGINT)
         # do nothing. NPMC should handle it's exit. Then things should error out naturally
+        self.process.send_signal(signal.SIGINT)
         return
 
     def run(self,
