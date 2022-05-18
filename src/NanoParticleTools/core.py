@@ -7,6 +7,7 @@ from NanoParticleTools.inputs.nanoparticle import DopedNanoparticle
 from NanoParticleTools.inputs.spectral_kinetics import SpectralKinetics
 from NanoParticleTools.inputs.util import get_all_interactions, get_sites, get_species
 import signal
+import time
 
 create_species_table_sql = """
     CREATE TABLE species (
@@ -275,9 +276,10 @@ class NPMCRunner:
         self.process = None
 
     def error_handler(self, _signo, _stack_frame):
-        # os.kill(self.process.pid, signal.SIGINT)
-        # do nothing. NPMC should handle it's exit. Then things should error out naturally
-        return
+        # Sleep for 30 seconds before exiting
+        time.sleep(40)
+        # Kill the program
+        raise RuntimeError(f'Job killed by signal {_signo}')
 
     def run(self,
             npmc_command: str = 'NPMC',
