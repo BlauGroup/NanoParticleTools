@@ -257,6 +257,9 @@ class SpectralKinetics(MSONable):
         magnetic_dipole_radiative_rates = np.zeros((self.total_n_levels, self.total_n_levels))
 
         for dopant_index, dopant in enumerate(self.dopants):
+            if dopant.symbol in dopant.SURFACE_DOPANT_SYMBOLS_TO_NAMES:
+                # Don't calculate this for surface
+                continue
             num_eigenvectors = len(dopant.eigenvector_sl)
 
             s_vector = dopant.eigenvector_sl[:, 0]

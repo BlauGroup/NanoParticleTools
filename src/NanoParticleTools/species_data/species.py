@@ -32,6 +32,8 @@ class Transition(MSONable):
         return f'{self.initial_level.label}->{self.final_level.label}'
 
 class Dopant(MSONable):
+    SURFACE_DOPANT_SYMBOLS_TO_NAMES = {'Na': 'Surface', 'Mg': 'Surface6'}
+    SURFACE_DOPANT_NAMES_TO_SYMBOLS = {'Surface': 'Na', 'Surface6': 'Mg'}
     def __init__(self,
                  symbol: str,
                  molar_concentration: float,
@@ -42,8 +44,8 @@ class Dopant(MSONable):
         :param concentration:
         :param n_levels:
         """
-        if symbol == 'Surface':
-            symbol = 'Na'
+        if symbol in self.SURFACE_DOPANT_NAMES_TO_SYMBOLS:
+            symbol = self.SURFACE_DOPANT_NAMES_TO_SYMBOLS[symbol]
         self.symbol = symbol
         self.molar_concentration = molar_concentration
         # super().__init__(symbol, None)
@@ -61,6 +63,9 @@ class Dopant(MSONable):
 
         :return:
         """
+        if self.symbol in self.SURFACE_DOPANT_SYMBOLS_TO_NAMES.keys():
+            # Surface will not have these parameters
+            return
         if self.eigenvector_sl.shape[0] != self.intermediate_coupling_coefficients.shape[1]:
             raise ValueError(
                 'Error: The number of eigenvectors does not match the number of intermediate coupling coefficients')
@@ -73,8 +78,9 @@ class Dopant(MSONable):
 
     @lru_cache
     def species_data(self):
-        if self.symbol == 'Na':
-            symbol = 'Surface'
+
+        if self.symbol in self.SURFACE_DOPANT_SYMBOLS_TO_NAMES:
+            symbol = self.SURFACE_DOPANT_SYMBOLS_TO_NAMES[self.symbol]
         else:
             symbol = self.symbol
         # Load Data from json file
@@ -103,16 +109,22 @@ class Dopant(MSONable):
     @property
     @lru_cache
     def judd_ofelt_parameters(self):
+        if 'JO_params' not in self.species_data():
+            return []
         return self.species_data()['JO_params']
 
     @property
     @lru_cache
-    def intermediate_coupling_coefficients(self):\
+    def intermediate_coupling_coefficients(self):
+        if 'intermediateCouplingCoeffs' not in self.species_data():
+            return []
         return np.array(self.species_data()['intermediateCouplingCoeffs'])
 
     @property
     @lru_cache
     def eigenvector_sl(self):
+        if 'eigenvectorSL' not in self.species_data():
+            return []
         return np.array(self.species_data()['eigenvectorSL'])
 
     @property
