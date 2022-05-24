@@ -28,6 +28,7 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
              initial_state_db_args: Optional[dict] = {},
              npmc_args: Optional[dict] = {},
              override: Optional[bool] = False,
+             population_record_interval: Optional[float] = 1e-5,
              **kwargs) -> List[dict]:
     """
 
@@ -51,6 +52,7 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
     :param npmc_args: a dictionary specifying the parameters to run NPMC with. For more information,
         check the documentation for NanoParticleTools.core.NPMCRunner.run()
     :param override: If an existing NPMC run exists, override that run (deletes existing run in the folder
+    :param population_record_interval: Interval to record the population of states (in s)
     :return: List of trajectory documents
     """
 
@@ -198,7 +200,7 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
         _output_d['summary_keys'] = keys
         _output_d['summary'] = [[interaction[key] for key in keys] for interaction in summary]
 
-        x, overall_population_evolution, population_by_constraint, site_evolution = trajectory.get_state_evolution()
+        x, overall_population_evolution, population_by_constraint, site_evolution = trajectory.get_state_evolution(step_size=population_record_interval)
         _output_d['x_populations'] = x
         _output_d['y_overall_populations'] = overall_population_evolution
         _output_d['y_constraint_populations'] = population_by_constraint
