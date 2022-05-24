@@ -32,8 +32,8 @@ class Transition(MSONable):
         return f'{self.initial_level.label}->{self.final_level.label}'
 
 class Dopant(MSONable):
-    SURFACE_DOPANT_SYMBOLS_TO_NAMES = {'Na': 'Surface', 'Mg': 'Surface6'}
-    SURFACE_DOPANT_NAMES_TO_SYMBOLS = {'Surface': 'Na', 'Surface6': 'Mg'}
+    SURFACE_DOPANT_SYMBOLS_TO_NAMES = {'Na': 'Surface', 'Mg': 'Surface6', 'Al': 'Surface3', 'Si': 'Surface4', 'P': 'Surface5'}
+    SURFACE_DOPANT_NAMES_TO_SYMBOLS = {'Surface': 'Na', 'Surface6': 'Mg', 'Surface3': 'Al', 'Surface4': 'Si', 'Surface5': 'P'}
     def __init__(self,
                  symbol: str,
                  molar_concentration: float,
