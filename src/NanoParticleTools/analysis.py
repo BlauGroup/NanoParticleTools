@@ -6,15 +6,18 @@ from functools import lru_cache
 import os
 import json
 from monty.json import MontyDecoder
+import sqlite3
 from NanoParticleTools.inputs.util import specie_energy_level_to_combined_energy_level
 
 
 class SimulationReplayer():
     def __init__(self,
                  trajectories,
-                 npmc_input):
+                 npmc_input,
+                 seeds):
         self.trajectories = trajectories
         self.npmc_input = npmc_input
+        self.seeds = seeds
 
     @classmethod
     def from_run_directory(cls, run_dir):
@@ -25,13 +28,21 @@ class SimulationReplayer():
         """
         with open(os.path.join(run_dir, 'npmc_input.json'), 'rb') as f:
             npmc_input = json.load(f, cls=MontyDecoder)
-        npmc_input.load_trajectories(os.path.join(run_dir, 'initial_state.sqlite'))
+
+        db_file = os.path.join(run_dir, 'initial_state.sqlite')
+        with sqlite3.connect(db_file) as con:
+            cur = con.cursor()
+            sql_cmd = 'select seed from trajectories where step=0'
+            seeds = set([row[0] for row in cur.execute(sql_cmd)])
+
+        # Don't load trajectories at the sametime, else a OOM event may occur
+        # npmc_input.load_trajectories(os.path.join(run_dir, 'initial_state.sqlite'))
 
         trajectories = {}
-        for seed in npmc_input.trajectories:
-            _traj = Trajectory(seed, npmc_input)
+        for seed in seeds:
+            _traj = Trajectory(seed, npmc_input, db_file)
             trajectories[seed] = _traj
-        return cls(trajectories, npmc_input)
+        return cls(trajectories, npmc_input, seeds)
 
     def get_single_trajectory_summary(self, seed=None):
         try:
@@ -44,7 +55,7 @@ class SimulationReplayer():
 
     def get_summaries(self):
         dndts = {}
-        for seed in self.npmc_input.trajectories:
+        for seed in self.seeds:
             _d = {}
             _d['summary'] = self.get_single_trajectory_summary(seed)
             _d['simulation_time'] = self.trajectories[seed].simulation_time
@@ -56,9 +67,10 @@ class SimulationReplayer():
 
 
 class Trajectory():
-    def __init__(self, seed, npmc_input):
+    def __init__(self, seed, npmc_input, database_file):
         self.seed = seed
         self.npmc_input = npmc_input
+        self.database_file = database_file
         self.species_counter = Counter([site['species_id'] for site in self.npmc_input.sites.values()])
 
     @property
@@ -66,8 +78,10 @@ class Trajectory():
         return self.npmc_input.initial_states
 
     @property
+    @lru_cache(maxsize=1)
     def trajectory(self):
-        return self.npmc_input.trajectories[self.seed]
+        # Here we load the trajectory only when it is needed.
+        return self.npmc_input.load_trajectory(self.seed, self.database_file)
 
     @property
     def simulation_time(self):

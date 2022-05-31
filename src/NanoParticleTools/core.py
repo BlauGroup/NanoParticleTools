@@ -124,6 +124,28 @@ from monty.json import MSONable
 from functools import lru_cache
 
 class NPMCInput(MSONable):
+
+    def load_trajectory(self, seed, database_file):
+        with sqlite3.connect(database_file) as con:
+            cur = con.cursor()
+
+            trajectory = []
+            sql_get_single_trajectory = f"select * from trajectories where seed={seed}"
+            for row in cur.execute(sql_get_single_trajectory):
+                seed = row[0]
+                # step = row[1] # This is not used, save some time/memory by keeping it commented
+                time = row[2]
+                site_id_1 = row[3]
+                site_id_2 = row[4]
+                interaction_id = row[5]
+
+                trajectory.append([site_id_1, site_id_2, interaction_id, time])
+
+        if len(trajectory) == 0:
+            raise ValueError("Invalid Seed")
+        else:
+            return trajectory
+
     def load_trajectories(self,
                           database_file:str):
         with sqlite3.connect(database_file) as con:
