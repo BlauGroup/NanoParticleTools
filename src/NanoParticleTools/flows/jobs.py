@@ -210,6 +210,7 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
 
         # Use the "trajectory_doc" key to ensure that each gets saved as a separate trajectory
         results.append({'trajectory_doc': _d})
+        trajectory.trajectory.cache_clear()
     return results
 
 
