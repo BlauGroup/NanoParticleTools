@@ -5,7 +5,7 @@ from typing import Sequence, Tuple, Optional, Union, List
 from jobflow import job
 from monty.json import MontyEncoder
 
-from NanoParticleTools.analysis import SimulationReplayer
+from NanoParticleTools.analysis import SimulationReplayer, Trajectory
 from NanoParticleTools.core import NPMCInput, NPMCRunner, create_interupt_state_sql, create_interupt_cutoff_sql
 from NanoParticleTools.inputs.nanoparticle import DopedNanoparticle, NanoParticleConstraint
 from NanoParticleTools.inputs.spectral_kinetics import SpectralKinetics
@@ -210,7 +210,7 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
 
         # Use the "trajectory_doc" key to ensure that each gets saved as a separate trajectory
         results.append({'trajectory_doc': _d})
-        trajectory.trajectory.fget.cache_clear()
+        Trajectory.trajectory.fget.cache_clear()
     return results
 
 
