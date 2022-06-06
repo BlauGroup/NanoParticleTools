@@ -4,7 +4,8 @@ import numpy as np
 
 from NanoParticleTools.inputs.spectral_kinetics import SpectralKinetics
 from NanoParticleTools.species_data.species import Dopant
-
+from pymatgen.core import Composition
+from collections import Counter
 
 def specie_energy_level_to_combined_energy_level(species, energy_level, dopants):
     if isinstance(species, str):
@@ -173,3 +174,23 @@ def get_species(sk):
                       'degrees_of_freedom': dopant.n_levels}
 
     return species
+
+def get_formula_by_constraint(nanoparticle):
+    sites = np.array([site.coords for site in nanoparticle.dopant_sites])
+    species_names = np.array([str(site.specie) for site in nanoparticle.dopant_sites])
+
+    # Get the indices for dopants within each constraint
+    site_indices_by_constraint = []
+    for constraint in nanoparticle.constraints:
+
+        indices_inside_constraint = set(np.where(constraint.sites_in_bounds(sites))[0])
+
+        for l in site_indices_by_constraint:
+            indices_inside_constraint = indices_inside_constraint - set(l)
+        site_indices_by_constraint.append(sorted(list(indices_inside_constraint)))
+
+    formula_by_constraint = []
+    for indices in site_indices_by_constraint:
+        formula = Composition(Counter(species_names[indices])).formula.replace(" ", "")
+        formula_by_constraint.append(formula)
+    return formula_by_constraint
