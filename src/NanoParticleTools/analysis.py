@@ -232,8 +232,9 @@ class SimulationReplayer():
 
             # Add output to the trajectory document
             _output_d = {}
+            dndt_keys[dndt_keys.index('rate')] = 'rate_coefficient'
             _output_d['summary_keys'] = dndt_keys
-            _output_d['summary'] = dndt
+            _output_d['summary'] = dndt[seed]
 
             
             _output_d['x_populations'] = x[seed]
