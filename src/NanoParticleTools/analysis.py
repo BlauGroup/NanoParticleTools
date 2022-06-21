@@ -187,6 +187,9 @@ class SimulationReplayer():
             overall_population_evolution[seed] = np.divide(population_evolution[seed], normalization_factors)
 
         dndt_keys, dndt = self.calculate_dndt()
+        # Change rate to rate_coefficient for clarity
+        dndt_keys[dndt_keys.index('rate')] = 'rate_coefficient'
+
         population_by_constraint = self._population_evolution_by_constraint(site_evolution)
 
         results = []
@@ -232,7 +235,6 @@ class SimulationReplayer():
 
             # Add output to the trajectory document
             _output_d = {}
-            dndt_keys[dndt_keys.index('rate')] = 'rate_coefficient'
             _output_d['summary_keys'] = dndt_keys
             _output_d['summary'] = dndt[seed]
 
