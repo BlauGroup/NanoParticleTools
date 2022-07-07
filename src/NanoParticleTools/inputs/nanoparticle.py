@@ -185,8 +185,9 @@ class DopedNanoparticle(MSONable):
                    dopant_species: str,
                    replaced_species: str,
                    rng: np.random.default_rng):
-        if dopant_species == 'Surface':
-            dopant_species = 'Na'
+        if dopant_species in Dopant.SURFACE_DOPANT_NAMES_TO_SYMBOLS:
+            dopant_species = Dopant.SURFACE_DOPANT_NAMES_TO_SYMBOLS[dopant_species]
+
         sites_in_constraint = self._sites[constraint_index]
 
         # Identify the possible sites for the dopant

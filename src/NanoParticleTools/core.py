@@ -6,6 +6,8 @@ import subprocess
 from NanoParticleTools.inputs.nanoparticle import DopedNanoparticle
 from NanoParticleTools.inputs.spectral_kinetics import SpectralKinetics
 from NanoParticleTools.inputs.util import get_all_interactions, get_sites, get_species
+import signal
+import time
 
 create_species_table_sql = """
     CREATE TABLE species (
@@ -101,30 +103,69 @@ insert_factors_sql = """
 sql_get_trajectory = """
     SELECT * FROM trajectories;
 """
+
+create_interupt_state_sql = """
+    CREATE TABLE interupt_state (
+        seed                INTEGER NOT NULL,
+        site_id             INTEGER NOT NULL,
+        degree_of_freedom  INTEGER NOT NULL
+    );
+"""
+
+create_interupt_cutoff_sql = """
+    CREATE TABLE interupt_cutoff (
+        seed                INTEGER NOT NULL,
+        step                INTEGER NOT NULL,
+        time                REAL NOT NULL
+    );
+"""
+
 from monty.json import MSONable
 from functools import lru_cache
 
 class NPMCInput(MSONable):
+
+    def load_trajectory(self, seed, database_file):
+        with sqlite3.connect(database_file) as con:
+            cur = con.cursor()
+
+            trajectory = []
+            sql_get_single_trajectory = f"select * from trajectories where seed={seed}"
+            for row in cur.execute(sql_get_single_trajectory):
+                seed = row[0]
+                # step = row[1] # This is not used, save some time/memory by keeping it commented
+                time = row[2]
+                site_id_1 = row[3]
+                site_id_2 = row[4]
+                interaction_id = row[5]
+
+                trajectory.append([site_id_1, site_id_2, interaction_id, time])
+
+        if len(trajectory) == 0:
+            raise ValueError("Invalid Seed")
+        else:
+            return trajectory
+
     def load_trajectories(self,
                           database_file:str):
-        con = sqlite3.connect(database_file)
-        cur = con.cursor()
+        with sqlite3.connect(database_file) as con:
+            cur = con.cursor()
 
-        trajectories = {}
-        for row in cur.execute(sql_get_trajectory):
-            seed = row[0]
-            # step = row[1] # This is not used, save some time/memory by keeping it commented
-            time = row[2]
-            site_id_1 = row[3]
-            site_id_2 = row[4]
-            interaction_id = row[5]
+            trajectories = {}
+            for row in cur.execute(sql_get_trajectory):
+                seed = row[0]
+                # step = row[1] # This is not used, save some time/memory by keeping it commented
+                time = row[2]
+                site_id_1 = row[3]
+                site_id_2 = row[4]
+                interaction_id = row[5]
 
-            if seed not in trajectories:
-                trajectories[seed] = []
+                if seed not in trajectories:
+                    trajectories[seed] = []
 
-            trajectories[seed].append([site_id_1, site_id_2, interaction_id, time])
+                trajectories[seed].append([site_id_1, site_id_2, interaction_id, time])
 
-        self.trajectories = trajectories
+            self.trajectories = trajectories
 
     def __init__(self, spectral_kinetics: SpectralKinetics,
                  nanoparticle: DopedNanoparticle,
@@ -170,86 +211,97 @@ class NPMCInput(MSONable):
         :return:
         """
         # TODO: parameterize over initial state
-        con = sqlite3.connect(database_file)
-        cur = con.cursor()
+        with sqlite3.connect(database_file) as con:
+            cur = con.cursor()
 
-        cur.execute(create_initial_state_table_sql)
-        cur.execute(create_trajectories_table_sql)
-        cur.execute(create_factors_table_sql)
-        con.commit()
+            cur.execute(create_initial_state_table_sql)
+            cur.execute(create_trajectories_table_sql)
+            cur.execute(create_factors_table_sql)
+            cur.execute(create_interupt_state_sql)
+            cur.execute(create_interupt_cutoff_sql)
+            con.commit()
 
-        for i in self.sites:
-            site_id = self.sites[i]['site_id']
-            state_id = self.initial_states[i]
-            cur.execute(insert_initial_state_sql,
-                        (site_id,
-                         state_id
-                         ))
+            for i in self.sites:
+                site_id = self.sites[i]['site_id']
+                state_id = self.initial_states[i]
+                cur.execute(insert_initial_state_sql,
+                            (site_id,
+                             state_id
+                             ))
 
-        con.commit()
+            con.commit()
 
-        cur.execute(insert_factors_sql,
-                    (one_site_interaction_factor, two_site_interaction_factor, interaction_radius_bound, distance_factor_type))
+            cur.execute(insert_factors_sql,
+                        (one_site_interaction_factor, two_site_interaction_factor, interaction_radius_bound, distance_factor_type))
 
-        con.commit()
+            con.commit()
 
     def generate_nano_particle_database(self,
                                         database_file:str):
-        con = sqlite3.connect(database_file)
-        cur = con.cursor()
+        with sqlite3.connect(database_file) as con:
+            cur = con.cursor()
 
-        # create tables
-        cur.execute(create_species_table_sql)
-        cur.execute(create_sites_table_sql)
-        cur.execute(create_interactions_table_sql)
-        cur.execute(create_metadata_table_sql)
+            # create tables
+            cur.execute(create_species_table_sql)
+            cur.execute(create_sites_table_sql)
+            cur.execute(create_interactions_table_sql)
+            cur.execute(create_metadata_table_sql)
 
-        for i in self.species:
-            row = self.species[i]
-            cur.execute(insert_species_sql,
-                        (row['species_id'],
-                         row['degrees_of_freedom']))
+            for i in self.species:
+                row = self.species[i]
+                cur.execute(insert_species_sql,
+                            (row['species_id'],
+                             row['degrees_of_freedom']))
 
-        con.commit()
+            con.commit()
 
-        for i in self.sites:
-            row = self.sites[i]
-            cur.execute(insert_site_sql,
-                        (row['site_id'],
-                         row['x'],
-                         row['y'],
-                         row['z'],
-                         row['species_id']))
-        con.commit()
+            for i in self.sites:
+                row = self.sites[i]
+                cur.execute(insert_site_sql,
+                            (row['site_id'],
+                             row['x'],
+                             row['y'],
+                             row['z'],
+                             row['species_id']))
+            con.commit()
 
-        for i in self.interactions:
-            row = self.interactions[i]
-            cur.execute(insert_interaction_sql,
-                        (row['interaction_id'],
-                         row['number_of_sites'],
-                         row['species_id_1'],
-                         row['species_id_2'],
-                         row['left_state_1'],
-                         row['left_state_2'],
-                         row['right_state_1'],
-                         row['right_state_2'],
-                         row['rate'],
-                         row['interaction_type']))
+            for i in self.interactions:
+                row = self.interactions[i]
+                cur.execute(insert_interaction_sql,
+                            (row['interaction_id'],
+                             row['number_of_sites'],
+                             row['species_id_1'],
+                             row['species_id_2'],
+                             row['left_state_1'],
+                             row['left_state_2'],
+                             row['right_state_1'],
+                             row['right_state_2'],
+                             row['rate'],
+                             row['interaction_type']))
 
-        cur.execute(insert_metadata_sql,
-                    (len(self.species),
-                     len(self.sites),
-                     len(self.interactions)))
+            cur.execute(insert_metadata_sql,
+                        (len(self.species),
+                         len(self.sites),
+                         len(self.interactions)))
 
-        con.commit()
+            con.commit()
 
-
+import os
 class NPMCRunner:
     def __init__(self,
                  np_db_path,
                  initial_state_db_path):
         self.np_database = np_db_path
         self.initial_state = initial_state_db_path
+        signal.signal(signal.SIGINT, self.error_handler)
+        signal.signal(signal.SIGTERM, self.error_handler)
+        self.process = None
+
+    def error_handler(self, _signo, _stack_frame):
+        # Sleep for 30 seconds before exiting
+        time.sleep(40)
+        # Kill the program
+        raise RuntimeError(f'Job killed by signal {_signo}')
 
     def run(self,
             npmc_command: str = 'NPMC',
@@ -257,7 +309,8 @@ class NPMCRunner:
             base_seed: int = 1000,
             thread_count: int = 8,
             simulation_length: int = None,
-            simulation_time: float = None):
+            simulation_time: float = None,
+            log_file=''):
         """
 
         :param np_database: a sqlite database containing the reaction network and metadata.
@@ -279,4 +332,7 @@ class NPMCRunner:
             run_args.append(f'--step_cutoff={str(simulation_length)}')
         elif simulation_time is not None:
             run_args.append(f'--time_cutoff={str(simulation_time)}')
-        subprocess.run(' '.join(run_args), shell=True)
+        print(f"Running NPMC using the command: \"{' '.join(run_args)}\"")
+        with open(log_file+"stdout", "a") as f_std, open(log_file+"stderr", "a", buffering=1) as f_err:
+            self.process = subprocess.Popen(run_args, stdout=f_std, stderr=f_err)
+        self.process.wait()
