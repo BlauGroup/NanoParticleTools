@@ -149,7 +149,7 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
     # Check that desired number of simulations was run
     if len(data[0].keys()) != npmc_args['num_sims']:
         raise RuntimeError(f'Run did not successfully complete. Expected {npmc_args["num_sims"]} trajectories, '
-                           f'found {len(simulation_replayer.trajectories)}.')
+                           f'found {len(data[0].keys())}.')
 
     # get population by shell
 
