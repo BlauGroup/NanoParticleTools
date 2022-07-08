@@ -17,6 +17,8 @@ setup(name='NanoParticleTools',
           "jobflow",
           "atomate2",
           "maggma",
-          "pytest"
+          "pytest",
+          "torch==1.11.0",
+          "pytorch-lightning==1.6.4"
       ]
       )
