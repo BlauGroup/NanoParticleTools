@@ -28,7 +28,7 @@ class UCNPBuilder(Builder):
     
     
     def get_grouped_docs(self):
-        group_keys = ["data.n_dopants", "data.n_dopant_sites", "data.formula", "data.nanostructure_size", "data.formula_by_constraint", "data.excitation_power", "data.excitation_wavelength", "data.input.constraints", "data.input.dopant_specifications"]
+        group_keys = ["data.n_dopants", "data.n_dopant_sites", "data.formula", "data.nanostructure_size", "data.formula_by_constraint", "data.excitation_power", "data.excitation_wavelength"]
         return self.source.groupby(keys=group_keys, criteria=self.docs_filter, properties=["_id"])
     
     def get_items(self):

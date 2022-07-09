@@ -15,16 +15,19 @@ class SpectrumModel(pl.LightningModule):
                  loss_function: Optional[Callable[[List, List], float]] = F.mse_loss,
                  l2_regularization_weight: float = 0):
         super().__init__()
+        
+        self.learning_rate = learning_rate
+        self.l2_regularization_weight = l2_regularization_weight
+
+        self.save_hyperparameters()
+
         self.net = nn.Sequential(nn.Linear(n_input_nodes, n_hidden),
                                  nn.Softplus(),
                                  nn.Linear(n_hidden, n_hidden),
                                  nn.Softplus(),
                                  nn.Linear(n_hidden, n_output_nodes))
-        
-        self.learning_rate = learning_rate
         self.lr_scheduler = lr_scheduler
         self.loss_function = loss_function
-        self.l2_regularization_weight = l2_regularization_weight
     
     def forward(self, x):
         return self.net(x)
@@ -41,7 +44,7 @@ class SpectrumModel(pl.LightningModule):
         x, y = batch
         y_hat = self(x)
         train_loss = self.loss_function(y_hat, y)
-        self.log('train_loss', train_loss, prog_bar=True)
+        self.log('train_loss', train_loss)
         return train_loss
     
     def validation_step(self, 
@@ -50,7 +53,7 @@ class SpectrumModel(pl.LightningModule):
         x, y = batch
         y_hat = self(x)
         val_loss = self.loss_function(y_hat, y)
-        self.log('val_loss', val_loss, prog_bar=True)
+        self.log('val_loss', val_loss)
         
     def test_step(self, 
                   batch, 
@@ -58,7 +61,7 @@ class SpectrumModel(pl.LightningModule):
         x, y = batch
         y_hat = self(x)
         test_loss = self.loss_function(y_hat, y)
-        self.log('test_loss', test_loss, prog_bar=True)
+        self.log('test_loss', test_loss)
         
     def predict_step(self, 
                      batch, 

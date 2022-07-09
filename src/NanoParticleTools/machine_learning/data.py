@@ -1,10 +1,13 @@
-from maggma.core import Store
 from torch.utils.data import Dataset, DataLoader
-from functools import lru_cache
+from monty.json import MontyEncoder, MontyDecoder
 from typing import Union, Dict, List, Tuple
+from maggma.core import Store
+from functools import lru_cache
 import torch
 import json
 import numpy as np
+import warnings
+import os
 
 class DataProcessor():
     def __init__(self, fields):
@@ -106,62 +109,80 @@ class LabelProcessor(DataProcessor):
         return list(coarsened_spectrum)
         
 
-class NPMCStoreDataset(Dataset):
+class NPMCDataset(Dataset):
     
     def __init__(self, 
-                 store: Store, 
-                 doc_filter, 
-                 feature_processor,
-                 label_processor):
-        self.store = store
-        self.doc_filter = doc_filter
+                 features: torch.tensor,
+                 labels: torch.tensor, 
+                 feature_processor: DataProcessor,
+                 label_processor: DataProcessor):
+        self.features = features
+        self.labels = labels
         self.feature_processor = feature_processor
         self.label_processor = label_processor
-        self._object_ids = None
     
-    @property
-    def object_ids(self):
-        if self._object_ids is None:
-            self.store.connect()
-            self._object_ids = [doc['_id'] for doc in self.store.query(self.doc_filter, properties=['_id'])]
-            self.store.close()
-        return self._object_ids
-    
-    @property
-    def required_fields(self):
-        return self.feature_processor.required_fields + self.label_processor.required_fields
-    
-    def query(self, query=None):
-        if query is None:
-            query = self.doc_filter
+    @staticmethod
+    def process_docs(docs, 
+                     feature_processor: DataProcessor,
+                     label_processor: DataProcessor):
+        features = []
+        labels = []
+        for doc in docs:
+            features.append(feature_processor.process_doc(doc))
+            labels.append(label_processor.process_doc(doc))
             
-        self.store.connect()
-        results = list(self.store.query(query, properties=self.requried_fields))
-        self.store.close()
+        features = torch.tensor(np.vstack(features))
+        labels = torch.tensor(np.vstack(labels))
         
-        return results
+        return features.float(), labels.float()
     
-    def query_one(self, query=None):
-        if query is None:
-            query = self.doc_filter
-            
-        self.store.connect()
-        result = self.store.query_one(query, properties=self.required_fields)
-        self.store.close()
-        return result
+    @classmethod
+    def from_file(cls, 
+                  feature_processor: DataProcessor,
+                  label_processor: DataProcessor,
+                  doc_file='npmc_data.json'):
         
+        with open(doc_file, 'r') as f:
+            documents = json.load(f, cls=MontyDecoder)
+            
+        features, labels = cls.process_docs(documents, feature_processor, label_processor)
+        
+        return cls(features, labels, feature_processor, label_processor)
+        
+    @classmethod
+    def from_store(cls, 
+                   store: Store,
+                   doc_filter: Dict, 
+                   feature_processor: DataProcessor,
+                   label_processor: DataProcessor,
+                   cache_doc_file: str = 'npmc_data.json',
+                   override = False):
+        
+        required_fields = feature_processor.required_fields + label_processor.required_fields
+        
+        #query for all documents
+        store.connect()
+        documents = list(store.query(doc_filter, properties=required_fields))
+        store.close()
+        
+        if not override and os.path.exists(cache_doc_file):
+            warnings.warn(f'Existing data file {cache_doc_file} found, will not override. Rerun using the "override=True" argument to overwrite existing file')
+        else:
+            with open(cache_doc_file, 'w') as f:
+                json.dump(documents, f, cls=MontyEncoder)
+        
+        features, labels = cls.process_docs(documents, feature_processor, label_processor)
+        
+        return cls(features, labels, feature_processor, label_processor)
+
     def __len__(self):
-        return len(self.object_ids)
+        return self.features.size()[0]
         
     def __getitem__(self, idx):
-        doc = self.query_one({'_id': self.object_ids[idx]})
-        feature = self.feature_processor.process_doc(doc)
-        labels = self.label_processor.process_doc(doc)
-        
-        return torch.tensor(feature).float(), torch.tensor(labels).float()
+        return self.features[idx], self.labels[idx]
     
     def get_random(self):
-        _idx = np.random.choice(range(len(self.object_ids)))
+        _idx = np.random.choice(range(len(self)))
         
         return self[_idx]
 
