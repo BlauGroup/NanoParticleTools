@@ -10,6 +10,15 @@ import warnings
 import os
 
 class DataProcessor():
+    """
+    Template for a data processor. The data processor allows modularity in definitions
+    of how data is to be converted from a dictionary (typically a fireworks output document)
+    to the desired form. This can be used for features or labels.
+
+    To implementation a DataProcessor, override the process_docs function.
+
+    Fields are specified to ensure they are present in documents
+    """
     def __init__(self, fields):
         """
         :param fields: fields required in the document(s) to be processed
@@ -39,6 +48,10 @@ class FeatureProcessor(DataProcessor):
                  max_layers: int = 4,
                  possible_elements: List[str] = ['Yb', 'Er', 'Nd'],
                  **kwargs):
+        """
+        :param max_layers: 
+        :param possible_elements:
+        """
         
         super().__init__(**kwargs)
         
@@ -74,6 +87,12 @@ class LabelProcessor(DataProcessor):
                  log: bool = False,
                  normalize: bool = False,
                  **kwargs):
+        """
+        :param spectrum_range: Range over which the spectrum should be cropped
+        :param output_size: Number of bins in the resultant spectra. This quantity will be used as the # of output does in the NN
+        :param log: Apply the log function to the data. This will scale data which spans multiple orders of magnitude.
+        :param normalize: Normalize the integrated area of the spectrum to 1
+        """
         
         super().__init__(**kwargs)
         
@@ -84,6 +103,11 @@ class LabelProcessor(DataProcessor):
     
     @property
     def x(self):
+        """
+        Returns the x bins for the processed data.
+
+        Typically used to plot the spectrum
+        """
         _x = np.linspace(*self.spectrum_range, self.output_size+1)
         
         return (_x[:-1]+_x[1:])/2
@@ -102,7 +126,7 @@ class LabelProcessor(DataProcessor):
         
         coarsened_spectrum = np.sum(np.reshape(y, (self.output_size, -1)), axis=1)
         if self.log:
-            coarsened_spectrum = np.log10(coarsened_spectrum)
+            coarsened_spectrum = np.log10(coarsened_spectrum + 1)
         if self.normalize:
             coarsened_spectrum = coarsened_spectrum/np.sum(coarsened_spectrum)
         
@@ -110,12 +134,20 @@ class LabelProcessor(DataProcessor):
         
 
 class NPMCDataset(Dataset):
+    """
     
+    """
     def __init__(self, 
                  features: torch.tensor,
                  labels: torch.tensor, 
                  feature_processor: DataProcessor,
                  label_processor: DataProcessor):
+        """
+        :param features: A Pytorch tensor of the feature data. Axis 0 should correspond to separate data points
+        :param labels: A Pytorch tensor of the label data. Axis 0 should correspond to separate data points
+        :param feature_processor:
+        :param label_processor:
+        """
         self.features = features
         self.labels = labels
         self.feature_processor = feature_processor
@@ -125,6 +157,10 @@ class NPMCDataset(Dataset):
     def process_docs(docs, 
                      feature_processor: DataProcessor,
                      label_processor: DataProcessor):
+        """
+        :param feature_processor:
+        :param label_processor:
+        """
         features = []
         labels = []
         for doc in docs:
@@ -142,6 +178,7 @@ class NPMCDataset(Dataset):
                   label_processor: DataProcessor,
                   doc_file='npmc_data.json'):
         
+        # TODO: check if all the required fields are in the docs
         with open(doc_file, 'r') as f:
             documents = json.load(f, cls=MontyDecoder)
             
