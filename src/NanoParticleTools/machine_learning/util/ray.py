@@ -100,7 +100,7 @@ def train_spectrum_model(config: dict,
 def tune_npmc_asha(num_samples: Optional[int] = 10, 
                    num_epochs: Optional[int] = 1000, 
                    wandb_project: Optional[str] = None,
-                   wandb_save_dir: Optional[str] = None,
+                   save_dir: Optional[str] = None,
                    resources_per_trial: Optional[dict] = {'cpu': 4}):
     """
     :param config: a config dictionary for the model
@@ -134,14 +134,14 @@ def tune_npmc_asha(num_samples: Optional[int] = 10,
     if wandb_project is None:
         date = ''.join([f'{val}{sym}'for val, sym in zip(datetime.datetime.now().isoformat().split('.')[0].split(':'), ['h', 'm', 's'])])
         wandb_project = f'Raytune-{date}'
-    if wandb_save_dir is None:
-        wandb_save_dir = os.path.join(os.environ['HOME'], 'wandb_logs')
+    if save_dir is None:
+        save_dir = os.path.join(os.environ['HOME'], 'train_output')
 
     train_fn_with_parameters = tune.with_parameters(train_spectrum_model,
                                                     num_epochs = num_epochs,
                                                     num_gpus = resources_per_trial.get('gpu', 0),
                                                     wandb_project = wandb_project,
-                                                    wandb_save_dir = wandb_save_dir,
+                                                    wandb_save_dir = save_dir,
                                                     tune = True)
     
     analysis = tune.run(train_fn_with_parameters,
@@ -153,6 +153,7 @@ def tune_npmc_asha(num_samples: Optional[int] = 10,
                         scheduler=scheduler,
                         progress_reporter=reporter,
                         reuse_actors=False,
+                        local_dir=save_dir,
                         name="tune_npmc_asha")
 
     print("Best hyperparameters found were: ", analysis.best_config)
