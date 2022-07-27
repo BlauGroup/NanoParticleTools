@@ -1,6 +1,6 @@
 from torch.utils.data import Dataset, DataLoader
 from monty.json import MontyEncoder, MontyDecoder
-from typing import Union, Dict, List, Tuple
+from typing import Union, Dict, List, Tuple, Optional
 from maggma.core import Store
 from functools import lru_cache
 import torch
@@ -8,6 +8,7 @@ import json
 import numpy as np
 import warnings
 import os
+import pytorch_lightning as pl
 
 class DataProcessor():
     """
@@ -79,6 +80,57 @@ class FeatureProcessor(DataProcessor):
             feature.append(_layer_feature)
         return np.hstack(feature)
 
+    def __str__(self):
+        return f"Feature Processor - {self.max_layers} x [radius, x_{', x_'.join(self.possible_elements)}]"
+
+class VolumeFeatureProcessor(DataProcessor):
+    def __init__(self,
+                 max_layers: int = 4,
+                 possible_elements: List[str] = ['Yb', 'Er', 'Nd'],
+                 **kwargs):
+        """
+        :param max_layers: 
+        :param possible_elements:
+        """
+        
+        super().__init__(**kwargs)
+        
+        self.max_layers = max_layers
+        self.possible_elements = possible_elements
+        
+    def process_doc(self, 
+                    doc: dict) -> List:
+        constraints = self.get_item_from_doc(doc, 'input.constraints')
+        dopant_concentration = self.get_item_from_doc(doc, 'dopant_concentration')
+        
+        # Construct the feature array
+        feature = []
+        r_lower_bound = 0
+        for layer in range(self.max_layers):
+            _layer_feature = []
+            try:
+                if isinstance(constraints[layer], dict):
+                    radius = constraints[layer]['radius']
+                else:
+                    radius = constraints[layer].radius
+                
+                volume = 4/3*np.pi*(radius**3-r_lower_bound**3)
+                r_lower_bound = radius
+                _layer_feature.append(radius)
+                _layer_feature.append(volume/1000000)
+            except:
+                _layer_feature.append(0)
+                _layer_feature.append(0)
+            for el in self.possible_elements:
+                try:
+                    _layer_feature.append(dopant_concentration[layer][el]*100)
+                except:
+                    _layer_feature.append(0)
+            feature.append(_layer_feature)
+        return np.hstack(feature)
+    
+    def __str__(self):
+        return f"Feature Processor - {self.max_layers} x [radius, volume, x_{', x_'.join(self.possible_elements)}]"
     
 class LabelProcessor(DataProcessor):
     def __init__(self, 
@@ -131,6 +183,9 @@ class LabelProcessor(DataProcessor):
             coarsened_spectrum = coarsened_spectrum/np.sum(coarsened_spectrum)
         
         return list(coarsened_spectrum)
+    
+    def __str__(self):
+        return f"Label Processor - {self.output_size} bins, x_min = {self.spectrum_range[0]}, x_max = {self.spectrum_range[1]}, log = {self.log}, normalize = {self.normalize}"
         
 
 class NPMCDataset(Dataset):
@@ -189,11 +244,11 @@ class NPMCDataset(Dataset):
     @classmethod
     def from_store(cls, 
                    store: Store,
-                   doc_filter: Dict, 
                    feature_processor: DataProcessor,
                    label_processor: DataProcessor,
-                   cache_doc_file: str = 'npmc_data.json',
-                   override = False):
+                   doc_filter: Optional[Dict] = {}, 
+                   cache_doc_file: Optional[str] = 'npmc_data.json',
+                   override: Optional[bool] = False):
         
         required_fields = feature_processor.required_fields + label_processor.required_fields
         
@@ -222,6 +277,74 @@ class NPMCDataset(Dataset):
         _idx = np.random.choice(range(len(self)))
         
         return self[_idx]
+
+class NPMCDataModule(pl.LightningDataModule):
+    def __init__(self,
+                 feature_processor: DataProcessor,
+                 label_processor: DataProcessor,
+                 data_store = None, 
+                 data_dir = None,
+                 batch_size: int = 16, 
+                 validation_split: Union[int, float] = 0.15,
+                 test_split: Union[int, float] = 0.15,
+                 random_split_seed = 0):
+        super().__init__()
+        
+        self.data_store = data_store
+        self.data_dir = data_dir
+        self.batch_size = batch_size
+        self.validation_split = validation_split
+        self.test_split = test_split
+        self.random_split_seed = random_split_seed
+
+        self.save_hyperparameters()
+
+        if data_store is None and data_dir is None:
+            raise ValueError("data_store or data_dir must be specified")
+        
+        self.feature_processor = feature_processor
+        self.label_processor = label_processor
+    
+    def setup(self, 
+              stage: Optional[str] = None):
+        dataset = None    
+        if self.data_store is not None:
+            dataset = NPMCDataset.from_store(store=self.data_store,
+                                             feature_processor = self.feature_processor,
+                                             label_processor = self.label_processor)
+        elif self.data_dir is not None:
+            dataset = NPMCDataset.from_file(doc_file = self.data_dir,
+                                            feature_processor = self.feature_processor,
+                                            label_processor = self.label_processor)
+
+        if isinstance(self.test_split, float):
+            test_size = int(len(dataset) * self.test_split)
+        else:
+            test_size = self.test_split
+
+        remaining_size = len(dataset) - test_size
+        if isinstance(self.validation_split, float):
+            validation_size = int(remaining_size * self.validation_split)
+        else:
+            if self.validation_split >= remaining_size / 2:
+                warnings.warn('Warning: Validation size is larger than training set')
+            validation_size = self.validation_split
+
+        train_size = remaining_size - validation_size
+
+
+        self.npmc_train, self.npmc_val, self.npmc_test = torch.utils.data.random_split(dataset, 
+                                                                                       [train_size, test_size, validation_size],
+                                                                                       generator = torch.Generator().manual_seed(self.random_split_seed))
+
+    def train_dataloader(self):
+        return DataLoader(self.npmc_train, self.batch_size, shuffle=True)
+    
+    def val_dataloader(self):
+        return DataLoader(self.npmc_val, self.batch_size, shuffle=False)
+
+    def test_dataloader(self):
+        return DataLoader(self.npmc_test, self.batch_size, shuffle=False)
 
 
 def split_data(dataset, batch_size, validation_split=0.15, test_split=0.15):

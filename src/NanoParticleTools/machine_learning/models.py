@@ -10,8 +10,11 @@ class SpectrumModel(pl.LightningModule):
     def __init__(self, 
                  n_input_nodes: Optional[int]=16, 
                  n_output_nodes: Optional[int]=20,
-                 n_hidden_layers: int = 2,
-                 n_hidden_nodes: Optional[Union[int, List[int]]] = 128, 
+                 n_hidden_layers: Union[int, float] = 2,
+                 n_hidden_1: Union[int, float] = 128,
+                 n_hidden_2: Union[int, float] = 128,
+                 n_hidden_3: Union[int, float] = 128,
+                 n_hidden_4: Union[int, float] = 128,
                  learning_rate: Optional[float]=1e-5,
                  lr_scheduler: Optional[Callable[[torch.optim.Optimizer], torch.optim.lr_scheduler._LRScheduler]]=None,
                  loss_function: Optional[Callable[[List, List], float]] = F.mse_loss,
@@ -26,35 +29,39 @@ class SpectrumModel(pl.LightningModule):
         self.l2_regularization_weight = l2_regularization_weight
         self.dropout_probability = dropout_probability
 
-        self.save_hyperparameters()
-
-        if isinstance(n_hidden_nodes, int):
-            n_hidden_nodes = [n_hidden_nodes for _ in range(n_hidden_layers)]
-        elif isinstance(n_hidden_nodes, list) and len(n_hidden_nodes) != n_hidden_layers:
-            raise ValueError(f'Specified n_hidden_layers = {n_hidden_layers}, but length of n_hidden is {len(n_hidden_nodes)}')
-        else:
-            raise ValueError('n_hidden is not of type int')
-        
         self.n_input_nodes = n_input_nodes
-        self.n_hidden_nodes = n_hidden_nodes
         self.n_output_nodes = n_output_nodes
-        self.n_hidden_layers = n_hidden_layers
-                    
-        current_n_nodes = n_input_nodes
+        # Make sure to cast the following floats into ints, allowing for BO to tune the # of hidden nodes
+        self.n_hidden_layers = int(n_hidden_layers)
+        self.n_hidden_1 = int(n_hidden_1) if self.n_hidden_layers >= 1 else 0
+        self.n_hidden_2 = int(n_hidden_2) if self.n_hidden_layers >= 2 else 0
+        self.n_hidden_3 = int(n_hidden_3) if self.n_hidden_layers >= 3 else 0
+        self.n_hidden_4 = int(n_hidden_4) if self.n_hidden_layers >= 4 else 0
+
+        self.save_hyperparameters()
+        hidden_sizes = [self.n_hidden_1, self.n_hidden_2, self.n_hidden_3, self.n_hidden_4]
+
+        current_n_nodes = self.n_input_nodes
         layers = []
-        for i, layer in enumerate(range(n_hidden_layers)):
-            layers.append(nn.Linear(current_n_nodes, n_hidden_nodes[i]))
-            layers.append(nn.Softplus())
-            if dropout_probability > 0:
-                layers.append(nn.Dropout(dropout_probability))
-            current_n_nodes = n_hidden_nodes[i]
-        layers.append(nn.Linear(current_n_nodes, n_output_nodes))
+        for i in range(self.n_hidden_layers):
+            layers.extend(self._get_layer(current_n_nodes, hidden_sizes[i]))
+            current_n_nodes = hidden_sizes[i]
+        layers.append(nn.Linear(current_n_nodes, self.n_output_nodes))
         # Add a final softplus to constrain outputs to be always positive
         layers.append(nn.ReLU())
 
         self.net = nn.Sequential(*layers)
         self.lr_scheduler = lr_scheduler
         self.loss_function = loss_function
+
+    def _get_layer(self, n_input_nodes, n_output_nodes):
+        _layers = []
+        _layers.append(nn.Linear(n_input_nodes, n_output_nodes))
+        _layers.append(nn.Softplus())
+        if self.dropout_probability > 0:
+            _layers.append(nn.Dropout(self.dropout_probability))       
+        return _layers
+
     
     def describe(self):
         """
