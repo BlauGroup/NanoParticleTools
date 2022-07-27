@@ -19,6 +19,7 @@ from ray.tune.integration.pytorch_lightning import TuneReportCallback
 import datetime
 from matplotlib import pyplot as plt
 import numpy as np
+from fireworks.config import LAUNCHPAD_LOC
 
 def train_spectrum_model(config: dict, 
                               num_epochs: Optional[int] = 10, 
@@ -47,7 +48,7 @@ def train_spectrum_model(config: dict,
     if os.path.exists('npmc_data.json'):
         data_module = NPMCDataModule(feature_processor=feature_processor, label_processor=label_processor, data_dir='npmc_data.json', batch_size=16)
     else:
-        data_store = MongoStore.from_launchpad_file('/Volumes/GoogleDrive/My Drive/Postdoc Work/Jupyter_Notebooks/my_launchpad_test.yaml', 'avg_npmc_20220708')
+        data_store = MongoStore.from_launchpad_file(LAUNCHPAD_LOC, 'avg_npmc_20220708')
         data_module = NPMCDataModule(feature_processor=feature_processor, label_processor=label_processor, data_store=data_store, batch_size=16)
     # Make the model
     model = SpectrumModel(lr_scheduler = get_sequential,
