@@ -19,7 +19,7 @@ from ray.tune.integration.pytorch_lightning import TuneReportCallback
 import datetime
 from matplotlib import pyplot as plt
 import numpy as np
-from fireworks.config import LAUNCHPAD_LOC
+from fireworks.fw_config import LAUNCHPAD_LOC
 
 def train_spectrum_model(config: dict, 
                               num_epochs: Optional[int] = 10, 
