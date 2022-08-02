@@ -27,6 +27,10 @@ class DataProcessor():
         self.fields = fields
 
     @property
+    def returns_tuple(self):
+        pass
+
+    @property
     def required_fields(self):
         return self.fields
         
@@ -59,8 +63,12 @@ class FeatureProcessor(DataProcessor):
         self.max_layers = max_layers
         self.possible_elements = possible_elements
         
+    @property
+    def returns_tuple(self):
+        return False
+
     def process_doc(self, 
-                    doc: dict) -> List:
+                    doc: dict) -> torch.Tensor:
         constraints = self.get_item_from_doc(doc, 'input.constraints')
         dopant_concentration = self.get_item_from_doc(doc, 'dopant_concentration')
         
@@ -78,7 +86,7 @@ class FeatureProcessor(DataProcessor):
                 except:
                     _layer_feature.append(0)
             feature.append(_layer_feature)
-        return np.hstack(feature)
+        return torch.tensor(np.hstack(feature)).float()
 
     def __str__(self):
         return f"Feature Processor - {self.max_layers} x [radius, x_{', x_'.join(self.possible_elements)}]"
@@ -98,8 +106,12 @@ class VolumeFeatureProcessor(DataProcessor):
         self.max_layers = max_layers
         self.possible_elements = possible_elements
         
+    @property
+    def returns_tuple(self):
+        return False
+
     def process_doc(self, 
-                    doc: dict) -> List:
+                    doc: dict) -> torch.Tensor:
         constraints = self.get_item_from_doc(doc, 'input.constraints')
         dopant_concentration = self.get_item_from_doc(doc, 'dopant_concentration')
         
@@ -127,7 +139,7 @@ class VolumeFeatureProcessor(DataProcessor):
                 except:
                     _layer_feature.append(0)
             feature.append(_layer_feature)
-        return np.hstack(feature)
+        return torch.tensor(np.hstack(feature)).float()
     
     def __str__(self):
         return f"Feature Processor - {self.max_layers} x [radius, volume, x_{', x_'.join(self.possible_elements)}]"
@@ -165,7 +177,7 @@ class LabelProcessor(DataProcessor):
         return (_x[:-1]+_x[1:])/2
 
     def process_doc(self, 
-                    doc: dict) -> List:
+                    doc: dict) -> torch.Tensor:
         spectrum_x = self.get_item_from_doc(doc, 'output.spectrum_x')
         spectrum_y = self.get_item_from_doc(doc, 'output.spectrum_y')
         min_i = np.argmin(np.abs(np.subtract(spectrum_x, self.spectrum_range[0])))
@@ -182,7 +194,7 @@ class LabelProcessor(DataProcessor):
         if self.normalize:
             coarsened_spectrum = coarsened_spectrum/np.sum(coarsened_spectrum)
         
-        return list(coarsened_spectrum)
+        return torch.tensor(coarsened_spectrum).float()
     
     def __str__(self):
         return f"Label Processor - {self.output_size} bins, x_min = {self.spectrum_range[0]}, x_max = {self.spectrum_range[1]}, log = {self.log}, normalize = {self.normalize}"
@@ -219,13 +231,23 @@ class NPMCDataset(Dataset):
         features = []
         labels = []
         for doc in docs:
-            features.append(feature_processor.process_doc(doc))
-            labels.append(label_processor.process_doc(doc))
+            feature = feature_processor.process_doc(doc)
             
-        features = torch.tensor(np.vstack(features))
-        labels = torch.tensor(np.vstack(labels))
+            if feature_processor.returns_tuple:
+                try:
+                    for i, item in enumerate(feature):
+                        features[i].append(item)
+                except:
+                    for i, item in enumerate(feature):
+                        features.append([item])
+            labels.append(label_processor.process_doc(doc))
         
-        return features.float(), labels.float()
+        if feature_processor.returns_tuple:
+            for i in range(len(features)):
+                features[i] = torch.vstack(features[i])
+                
+        labels = torch.vstack(labels)
+        return features, labels
     
     @classmethod
     def from_file(cls, 
@@ -268,10 +290,13 @@ class NPMCDataset(Dataset):
         return cls(features, labels, feature_processor, label_processor)
 
     def __len__(self):
-        return self.features.size()[0]
+        return self.labels.size()[0]
         
     def __getitem__(self, idx):
-        return self.features[idx], self.labels[idx]
+        if self.feature_processor.returns_tuple:
+            return tuple([f[idx] for f in self.features]), self.labels[idx]
+        else:
+            return self.features[idx], self.labels[idx]
     
     def get_random(self):
         _idx = np.random.choice(range(len(self)))
