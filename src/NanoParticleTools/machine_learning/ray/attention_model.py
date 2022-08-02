@@ -104,12 +104,8 @@ def train_spectrum_model(config: dict,
         data_store = MongoStore.from_launchpad_file(LAUNCHPAD_LOC, 'avg_npmc_20220708')
         data_module = NPMCDataModule(feature_processor=feature_processor, label_processor=label_processor, data_store=data_store, batch_size=16)
     # Make the model
-    model = SpectrumAttentionModel(n_output_nodes=400,
-                               lr_scheduler=get_sequential,
+    model = SpectrumAttentionModel(lr_scheduler=get_sequential,
                                optimizer_type='adam',
-                               learning_rate=5e-3,
-                               embedding_dimension=100,
-                               nn_layers=[256, 256],
                                **config)
     
     # Make logger
@@ -137,11 +133,11 @@ def train_spectrum_model(config: dict,
     
     rng = np.random.default_rng(seed = 10)
     for i in rng.choice(range(len(data_module.npmc_test)), 10, replace=False):
-        X, y = data_module.npmc_test[i]
+        (types, volumes, compositions), y = data_module.npmc_test[i]
         
         fig = plt.figure(dpi=150)
         plt.plot(data_module.label_processor.x, np.power(10, y.numpy())-1, label='NPMC', alpha=1)
-        plt.plot(data_module.label_processor.x, np.power(10, model(X).detach().numpy())-1, label='NN', alpha=0.5)
+        plt.plot(data_module.label_processor.x, np.power(10, model(types, volumes, compositions).detach().numpy())-1, label='NN', alpha=0.5)
         plt.xlabel('Wavelength (nm)', fontsize=18)
         plt.ylabel('Relative Intensity (a.u.)', fontsize=18)
         plt.xticks(fontsize=14)
@@ -168,14 +164,14 @@ def tune_npmc_asha(config: dict,
     :param wandb_project: wandb_project name
     :param wandb_save_dir: Directory to save wandb files to
     """
-    config = {'n_output_nodes': 400, 
-          'n_hidden_layers': tune.choice([1, 2, 3, 4]),
-          'nn_layers': tune.sample_from(lambda spec: [tune.choice([16, 64, 128, 256, 512]) for i in range(spec.config.n_hidden_layers)]),
-          'embedding_dimension': tune.choice([64, 128, 256]),
-          'n_heads': tune.choice([1, 2, 4, 8]),
-          'learning_rate': tune.choice([1e-5, 1e-4, 1e-3, 5e-3, 1e-2]),
-          'l2_regularization_weight': tune.choice([0, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1]),
-          'dropout_probability': tune.choice([0.05, 0.1, 0.25, 0.5])}
+    # config = {'n_output_nodes': 400, 
+    #       'n_hidden_layers': tune.choice([1, 2, 3, 4]),
+    #       'nn_layers': tune.sample_from(lambda spec: [tune.choice([16, 64, 128, 256, 512]) for i in range(spec.config.n_hidden_layers)]),
+    #       'embedding_dimension': tune.choice([64, 128, 256]),
+    #       'n_heads': tune.choice([1, 2, 4, 8]),
+    #       'learning_rate': tune.choice([1e-5, 1e-4, 1e-3, 5e-3, 1e-2]),
+    #       'l2_regularization_weight': tune.choice([0, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1]),
+    #       'dropout_probability': tune.choice([0.05, 0.1, 0.25, 0.5])}
 
     scheduler = ASHAScheduler(
         max_t=num_epochs,
@@ -183,7 +179,7 @@ def tune_npmc_asha(config: dict,
         reduction_factor=2)
 
     reporter = TrialTerminationReporter(
-        parameter_columns=["embedding_dimension", "n_heads" "nn_layers", "learning_rate", "l2_regularization_weight", "dropout_probability"],
+        parameter_columns=["embedding_dimension", "n_heads", "nn_layers", "learning_rate", "l2_regularization_weight", "dropout_probability"],
         metric_columns=["loss", "training_iteration"])
 
 

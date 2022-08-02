@@ -166,6 +166,7 @@ class SpectrumAttentionModel(pl.LightningModule):
                  loss_function: Optional[Callable[[List, List], float]] = F.mse_loss,
                  l2_regularization_weight: float = 0,
                  dropout_probability: float = 0, 
+                 embedding_dropout_probability: float = 0,
                  optimizer_type: str = 'SGD',
                  **kwargs):
         """
@@ -180,6 +181,7 @@ class SpectrumAttentionModel(pl.LightningModule):
         self.learning_rate = learning_rate
         self.l2_regularization_weight = l2_regularization_weight
         self.dropout_probability = dropout_probability
+        self.embedding_dropout_probability = embedding_dropout_probability
         self.lr_scheduler = lr_scheduler
         self.loss_function = loss_function
 
@@ -200,6 +202,7 @@ class SpectrumAttentionModel(pl.LightningModule):
             raise ValueError('Expected dopants to be of type list or dict')
         
         self.embedding = nn.Embedding(len(self.dopant_map), self.embedding_dimension)
+        self.embedding_dropout = nn.Dropout(self.embedding_dropout_probability)
         self.multihead_attn = nn.MultiheadAttention(self.embedding_dimension, self.n_heads)
 
         # Build the Feed Forward Neural Network Architecture
@@ -240,6 +243,7 @@ class SpectrumAttentionModel(pl.LightningModule):
         # Perform the look-up to embed the vectors
         embedding = self.embedding(types)
         
+        embedding = self.embedding_dropout(embedding)
         # Multiply by both volume and compositions.
         # This will have the effect of zero-ing out the embedding vector
         # where the dopant does not exist. Additionally, it will
@@ -257,7 +261,7 @@ class SpectrumAttentionModel(pl.LightningModule):
         ## Now we apply the mask
         masked_attn_output = attn_output * mask
         
-        x = torch.sum(masked_attn_output, dim=-2)
+        x = torch.mean(masked_attn_output, dim=-2)
         # return x
         return self.nn(x)
 
