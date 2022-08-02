@@ -240,7 +240,7 @@ class SpectrumAttentionModel(pl.LightningModule):
         return [optimizer], [lr_scheduler]
 
     def forward(self, types, volumes, compositions):
-        # Perform the look-up to embed the vectors
+        # Perform the look-up to create the embedding vectors
         embedding = self.embedding(types)
         
         embedding = self.embedding_dropout(embedding)
@@ -256,7 +256,8 @@ class SpectrumAttentionModel(pl.LightningModule):
         ## First, compute the mask
         mask = np.ones(attn_output.size())
         mask[compositions == 0] = 0
-        mask = torch.tensor(mask, requires_grad=False).float()
+        mask = torch.Tensor(mask, requires_grad=False).float()
+        mask = mask.type_as(types)
 
         ## Now we apply the mask
         masked_attn_output = attn_output * mask
