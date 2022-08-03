@@ -15,12 +15,15 @@ from typing import Optional, Union
 from NanoParticleTools.machine_learning.models import SpectrumAttentionModel
 from NanoParticleTools.machine_learning.data import LabelProcessor, VolumeFeatureProcessor, NPMCDataModule
 from NanoParticleTools.machine_learning.util.reporters import TrialTerminationReporter
+from NanoParticleTools.inputs.nanoparticle import SphericalConstraint
+from NanoParticleTools.util.visualization import plot_nanoparticle
 from NanoParticleTools.machine_learning.util.learning_rate import get_sequential
 from ray.tune.integration.pytorch_lightning import TuneReportCallback
 import datetime
 from matplotlib import pyplot as plt
 import numpy as np
 from fireworks.fw_config import LAUNCHPAD_LOC
+
 
 class TransformerFeatureProcessor(DataProcessor):
     def __init__(self,
@@ -109,7 +112,10 @@ def train_spectrum_model(config: dict,
                                **config)
     
     # Make logger
-    wandb_logger = WandbLogger(entity="esivonxay", project=wandb_project, save_dir=wandb_save_dir)
+    wandb_logger = WandbLogger(entity="esivonxay", 
+                               project=wandb_project, 
+                               save_dir=wandb_save_dir,
+                               log_model=True)
 
     # Configure callbacks
     callbacks = []
@@ -131,21 +137,48 @@ def train_spectrum_model(config: dict,
         # Don't do anything with the exception to allow the wandb logger to finish
         print(e)
     
+    columns = ['name', 'nanoparticle', 'spectrum', 'zoomed_spectrum', 'loss', 'npmc_qy', 'pred_qy']
+    data = []
     rng = np.random.default_rng(seed = 10)
     for i in rng.choice(range(len(data_module.npmc_test)), 10, replace=False):
         (types, volumes, compositions), y = data_module.npmc_test[i]
+        y_hat, loss = model._evaluate_step(data_module.npmc_test[i])
         
         fig = plt.figure(dpi=150)
         plt.plot(data_module.label_processor.x, np.power(10, y.numpy())-1, label='NPMC', alpha=1)
-        plt.plot(data_module.label_processor.x, np.power(10, model(types, volumes, compositions).detach().numpy())-1, label='NN', alpha=0.5)
+        plt.plot(data_module.label_processor.x, np.power(10, y_hat.detach().numpy())-1, label='NN', alpha=0.5)
         plt.xlabel('Wavelength (nm)', fontsize=18)
         plt.ylabel('Relative Intensity (a.u.)', fontsize=18)
         plt.xticks(fontsize=14)
         plt.yticks(fontsize=14)
-        plt.ylim(0, 1e4)
+        plt.legend()
         plt.tight_layout()
         
-        trainer.logger.experiment.log({'spectrum': fig})
+        fig.canvas.draw()
+        full_fig_data = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+        full_fig_data = full_fig_data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+        
+        
+        plt.ylim(0, 1e4)
+        fig.canvas.draw()
+        fig_data = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+        fig_data = fig_data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+        
+        constraints, dopant_specifications = get_np_template_from_feature(types, volumes, compositions, data_module.feature_processor)
+        nanoparticle = plot_nanoparticle(constraints, dopant_specifications, as_np_array=True)
+        
+        npmc_qy = torch.sum(y[int(y.size()[-1]/2):], dim=-1)/ torch.sum(y[:int(y.size()[-1]/2)], dim=-1)
+        pred_qy = torch.sum(y_hat[int(y_hat.size()[-1]/2):], dim=-1)/ torch.sum(y_hat[:int(y_hat.size()[-1]/2)], dim=-1)
+        
+        data.append([wandb_logger.experiment.name, 
+                     wandb.Image(nanoparticle),
+                     wandb.Image(full_fig_data), 
+                     wandb.Image(fig_data), 
+                     loss, 
+                     npmc_qy,
+                     pred_qy])
+        # trainer.logger.experiment.log({'spectrum': fig})
+    wandb_logger.log_table(key='sample_table', columns=columns, data=data)
     # Finalize the wandb logging
     wandb.finish()
 
@@ -209,3 +242,19 @@ def tune_npmc_asha(config: dict,
                         name="tune_npmc_asha")
 
     print("Best hyperparameters found were: ", analysis.best_config)
+
+def get_np_template_from_feature(types, volumes, compositions, feature_processor):
+    possible_elements = feature_processor.possible_elements
+    
+    types = types.reshape(-1, len(possible_elements))
+    compositions = compositions.reshape(-1, len(possible_elements))
+    dopant_specifications = []
+    for i in range(types.shape[0]):
+        for j in range(types.shape[1]):
+            dopant_specifications.append((i, compositions[i][j].item(), possible_elements[j], 'Y'))
+
+    layer_volumes = volumes.reshape(-1, len(possible_elements))[:, 0]
+    cum_volumes = torch.cumsum(layer_volumes, dim=0)
+    radii = torch.pow(cum_volumes * 3 / (4 * np.pi), 1/3)*100
+    constraints = [SphericalConstraint(radius.item()) for radius in radii]
+    return constraints, dopant_specifications
