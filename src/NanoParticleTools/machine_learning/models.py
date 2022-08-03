@@ -168,6 +168,7 @@ class SpectrumAttentionModel(pl.LightningModule):
                  dropout_probability: float = 0, 
                  embedding_dropout_probability: float = 0,
                  optimizer_type: str = 'SGD',
+                 sum_attention_output: Optional[bool] = False,
                  **kwargs):
         """
         :param nn_layers: 
@@ -184,6 +185,7 @@ class SpectrumAttentionModel(pl.LightningModule):
         self.embedding_dropout_probability = embedding_dropout_probability
         self.lr_scheduler = lr_scheduler
         self.loss_function = loss_function
+        self.sum_attention_output = sum_attention_output
 
 
         self.n_layers = len(nn_layers)
@@ -264,9 +266,13 @@ class SpectrumAttentionModel(pl.LightningModule):
         ## Now we apply the mask
         masked_attn_output = attn_output * mask
         
-        x = torch.mean(masked_attn_output, dim=-2)
-        # return x
-        return self.nn(x)
+        if self.sum_attention_output:
+            x = torch.mean(masked_attn_output, dim=-2)
+            output = self.nn(x)
+        else:
+            x = self.nn(masked_attn_output)
+            output = torch.sum(x, dim=-2)
+        return output
 
     def _evaluate_step(self, 
                        batch):
