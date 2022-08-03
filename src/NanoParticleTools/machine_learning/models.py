@@ -240,6 +240,10 @@ class SpectrumAttentionModel(pl.LightningModule):
         return [optimizer], [lr_scheduler]
 
     def forward(self, types, volumes, compositions):
+        types = types.to(self.device)
+        volumes = volumes.to(self.device)
+        compositions = compositions.to(self.device)
+
         # Perform the look-up to create the embedding vectors
         embedding = self.embedding(types)
         
@@ -254,10 +258,8 @@ class SpectrumAttentionModel(pl.LightningModule):
 
         # Apply a mask
         ## First, compute the mask
-        mask = np.ones(attn_output.size())
-        mask[compositions == 0] = 0
-        mask = torch.Tensor(mask, requires_grad=False).float()
-        mask = mask.type_as(types)
+        mask = torch.where(embedding == 0, torch.zeros(attn_output.size(), device=self.device), torch.ones(attn_output.size(), device=self.device))
+        mask.to(self.device)
 
         ## Now we apply the mask
         masked_attn_output = attn_output * mask
