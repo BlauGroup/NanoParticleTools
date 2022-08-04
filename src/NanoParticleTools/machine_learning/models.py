@@ -197,7 +197,7 @@ class SpectrumAttentionModel(SpectrumModelBase):
         
         self.embedding = nn.Embedding(len(self.dopants), self.embedding_dimension)
         self.embedding_dropout = nn.Dropout(self.embedding_dropout)
-        self.multihead_attn = nn.MultiheadAttention(self.embedding_dimension, self.n_heads)
+        self.multihead_attn = nn.MultiheadAttention(self.embedding_dimension, self.n_heads, batch_first=True)
 
         self.save_hyperparameters()
 
