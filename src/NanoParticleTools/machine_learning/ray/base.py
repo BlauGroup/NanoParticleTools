@@ -1,4 +1,5 @@
 from NanoParticleTools.machine_learning.data import *
+from NanoParticleTools.machine_learning.util.learning_rate import get_sequential
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.callbacks import LearningRateMonitor
 from pytorch_lightning.loggers import WandbLogger
@@ -19,7 +20,7 @@ from NanoParticleTools.machine_learning.data import LabelProcessor, VolumeFeatur
 from NanoParticleTools.machine_learning.util.reporters import TrialTerminationReporter
 from NanoParticleTools.inputs.nanoparticle import SphericalConstraint
 from NanoParticleTools.util.visualization import plot_nanoparticle
-# from NanoParticleTools.machine_learning.util.learning_rate import get_sequential
+from NanoParticleTools.machine_learning.util.learning_rate import get_sequential
 from ray.tune.integration.pytorch_lightning import TuneReportCallback
 import datetime
 from matplotlib import pyplot as plt
@@ -35,7 +36,7 @@ def train_spectrum_model(config: dict,
                          wandb_project: Optional[str] = 'default_project',
                          wandb_save_dir: Optional[str] = os.environ['HOME'],
                          tune = False,
-                         lr_milestone=600):
+                         lr_scheduler=get_sequential):
     """
     
     :param config: a config dictionary for the model
@@ -59,13 +60,8 @@ def train_spectrum_model(config: dict,
         data_store = MongoStore.from_launchpad_file(LAUNCHPAD_LOC, 'avg_npmc_20220708')
         data_module = NPMCDataModule(feature_processor=feature_processor, label_processor=label_processor, data_store=data_store, batch_size=16)
 
-    def get_sequential(optimizer):
-        linear_lr = LinearLR(optimizer, start_factor=0.01, end_factor=1, total_iters=10)
-        exponential_lr = ExponentialLR(optimizer, gamma=0.995)
-        return SequentialLR(optimizer, [linear_lr, exponential_lr], milestones=[lr_milestone])
-
     # Make the model
-    model = model_cls(lr_scheduler=get_sequential,
+    model = model_cls(lr_scheduler=lr_scheduler,
                       optimizer_type='adam',
                       **config)
     
