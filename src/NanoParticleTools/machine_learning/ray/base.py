@@ -137,6 +137,9 @@ def train_spectrum_model(config: dict,
 
 
 def tune_npmc_asha(config: dict, 
+                   model_cls: SpectrumModelBase,
+                   feature_processor: FeatureProcessor,
+                   label_processor: Optional[LabelProcessor] = None,
                    num_samples: Optional[int] = 10, 
                    num_epochs: Optional[int] = 1000, 
                    wandb_project: Optional[str] = None,
@@ -150,22 +153,14 @@ def tune_npmc_asha(config: dict,
     :param wandb_project: wandb_project name
     :param wandb_save_dir: Directory to save wandb files to
     """
-    # config = {'n_output_nodes': 400, 
-    #       'n_hidden_layers': tune.choice([1, 2, 3, 4]),
-    #       'nn_layers': tune.sample_from(lambda spec: [tune.choice([16, 64, 128, 256, 512]) for i in range(spec.config.n_hidden_layers)]),
-    #       'embedding_dimension': tune.choice([64, 128, 256]),
-    #       'n_heads': tune.choice([1, 2, 4, 8]),
-    #       'learning_rate': tune.choice([1e-5, 1e-4, 1e-3, 5e-3, 1e-2]),
-    #       'l2_regularization_weight': tune.choice([0, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1]),
-    #       'dropout_probability': tune.choice([0.05, 0.1, 0.25, 0.5])}
 
     scheduler = ASHAScheduler(
         max_t=num_epochs,
-        grace_period=100,
+        grace_period=min(max(num_epochs//10, 1), 100),
         reduction_factor=2)
 
     reporter = TrialTerminationReporter(
-        parameter_columns=["embedding_dimension", "n_heads", "nn_layers", "learning_rate", "l2_regularization_weight", "dropout_probability"],
+        parameter_columns=["nn_layers", "learning_rate", "l2_regularization_weight", "dropout_probability"],
         metric_columns=["loss", "training_iteration"])
 
 
@@ -176,6 +171,9 @@ def tune_npmc_asha(config: dict,
         save_dir = os.path.join(os.environ['HOME'], 'train_output')
 
     train_fn_with_parameters = tune.with_parameters(train_spectrum_model,
+                                                    model_cls = model_cls,
+                                                    feature_processor = feature_processor,
+                                                    label_processor = label_processor,
                                                     num_epochs = num_epochs,
                                                     num_gpus = resources_per_trial.get('gpu', 0),
                                                     wandb_project = wandb_project,

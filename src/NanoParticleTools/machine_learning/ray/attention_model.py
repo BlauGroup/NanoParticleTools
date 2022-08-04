@@ -27,6 +27,7 @@ from fireworks.fw_config import LAUNCHPAD_LOC
 
 class TransformerFeatureProcessor(DataProcessor):
     def __init__(self,
+                 fields = ['formula_by_constraint', 'dopant_concentration', 'input.constraints'],
                  max_layers: int = 4,
                  possible_elements: List[str] = ['Yb', 'Er', 'Nd'],
                  **kwargs):
@@ -34,8 +35,7 @@ class TransformerFeatureProcessor(DataProcessor):
         :param max_layers: 
         :param possible_elements:
         """
-        
-        super().__init__(**kwargs)
+        super().__init__(fields=fields, **kwargs)
         
         self.max_layers = max_layers
         self.possible_elements = possible_elements

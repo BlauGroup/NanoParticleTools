@@ -174,11 +174,11 @@ class SpectrumModel(SpectrumModelBase):
         loss = self.loss_function(y_hat, y)
         return y_hat, loss
 
-class SpectrumAttentionModel(pl.LightningModule):
+class SpectrumAttentionModel(SpectrumModelBase):
     def __init__(self,
                  embedding_dimension: Optional[int] = 12,
                  n_heads: Optional[int] = 4,
-                 embedding_dropout_probability: float = 0,
+                 embedding_dropout: float = 0,
                  sum_attention_output: Optional[bool] = False,
                  **kwargs):
         """
@@ -187,16 +187,16 @@ class SpectrumAttentionModel(pl.LightningModule):
         :param embedding_dimension: size of embedding vector
         :param n_heads: Number of heads to use in the Multiheaded Attention step
         """
-        super().__init__()
+        super().__init__(n_input_nodes=embedding_dimension, **kwargs)
 
-        self.embedding_dropout_probability = embedding_dropout_probability
+        self.embedding_dropout = embedding_dropout
         self.sum_attention_output = sum_attention_output
         
         self.embedding_dimension = embedding_dimension
         self.n_heads = n_heads
         
-        self.embedding = nn.Embedding(len(self.dopant_map), self.embedding_dimension)
-        self.embedding_dropout = nn.Dropout(self.embedding_dropout_probability)
+        self.embedding = nn.Embedding(len(self.dopants), self.embedding_dimension)
+        self.embedding_dropout = nn.Dropout(self.embedding_dropout)
         self.multihead_attn = nn.MultiheadAttention(self.embedding_dimension, self.n_heads)
 
         self.save_hyperparameters()
