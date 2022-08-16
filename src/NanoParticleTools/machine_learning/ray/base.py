@@ -91,7 +91,7 @@ def train_spectrum_model(config: dict,
         # Don't do anything with the exception to allow the wandb logger to finish
         print(e)
     
-    columns = ['name', 'nanoparticle', 'spectrum', 'zoomed_spectrum', 'loss', 'npmc_qy', 'pred_qy']
+    columns = ['name', 'nanoparticle', 'spectrum', 'zoomed_spectrum', 'MSE loss', 'L1 loss', 'Smooth L1 loss', 'npmc_qy', 'pred_qy']
     data = []
     rng = np.random.default_rng(seed = 10)
     for i in rng.choice(range(len(data_module.npmc_test)), 10, replace=False):
@@ -132,6 +132,8 @@ def train_spectrum_model(config: dict,
                      wandb.Image(full_fig_data), 
                      wandb.Image(fig_data), 
                      loss, 
+                     F.l1_loss(y_hat, y),
+                     F.smooth_l1_loss(y_hat, y),
                      npmc_qy,
                      pred_qy])
         # trainer.logger.experiment.log({'spectrum': fig})
