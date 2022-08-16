@@ -307,6 +307,7 @@ class NPMCDataModule(pl.LightningDataModule):
     def __init__(self,
                  feature_processor: DataProcessor,
                  label_processor: DataProcessor,
+                 doc_filter: Optional[dict] = None,
                  data_store = None, 
                  data_dir = None,
                  batch_size: int = 16, 
@@ -315,6 +316,9 @@ class NPMCDataModule(pl.LightningDataModule):
                  random_split_seed = 0):
         super().__init__()
         
+        if doc_filter and data_store is None:
+            raise ValueError('To use a doc_filter, the source must be a Store')
+        self.doc_filter = doc_filter
         self.data_store = data_store
         self.data_dir = data_dir
         self.batch_size = batch_size
@@ -335,6 +339,7 @@ class NPMCDataModule(pl.LightningDataModule):
         dataset = None    
         if self.data_store is not None:
             dataset = NPMCDataset.from_store(store=self.data_store,
+                                             doc_filter=self.doc_filter,
                                              feature_processor = self.feature_processor,
                                              label_processor = self.label_processor)
         elif self.data_dir is not None:
