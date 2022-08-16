@@ -117,6 +117,7 @@ def train_spectrum_model(config: dict,
         
         
         plt.ylim(0, 1e4)
+        plt.tight_layout()
         fig.canvas.draw()
         fig_data = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
         fig_data = fig_data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
