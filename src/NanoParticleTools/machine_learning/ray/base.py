@@ -26,6 +26,7 @@ import datetime
 from matplotlib import pyplot as plt
 import numpy as np
 from fireworks.fw_config import LAUNCHPAD_LOC
+from torch.nn import functional as F
 
 def train_spectrum_model(config: dict, 
                          model_cls: SpectrumModelBase,
@@ -33,6 +34,7 @@ def train_spectrum_model(config: dict,
                          label_processor: Optional[LabelProcessor] = None,
                          num_epochs: Optional[int] = 10, 
                          num_gpus: Union[int, float] = 0,
+                         wandb_name: Optional[str] = None,
                          wandb_project: Optional[str] = 'default_project',
                          wandb_save_dir: Optional[str] = os.environ['HOME'],
                          tune = False,
@@ -66,7 +68,8 @@ def train_spectrum_model(config: dict,
                       **config)
     
     # Make logger
-    wandb_logger = WandbLogger(entity="esivonxay", 
+    wandb_logger = WandbLogger(name=wandb_name,
+                               entity="esivonxay", 
                                project=wandb_project, 
                                save_dir=wandb_save_dir,
                                log_model=True)
