@@ -240,11 +240,15 @@ class NPMCDataset(Dataset):
                 except:
                     for i, item in enumerate(feature):
                         features.append([item])
+            else:
+                features.append(feature)
             labels.append(label_processor.process_doc(doc))
         
         if feature_processor.returns_tuple:
             for i in range(len(features)):
                 features[i] = torch.vstack(features[i])
+        else:
+            features = torch.vstack(features)
                 
         labels = torch.vstack(labels)
         return features, labels
