@@ -152,7 +152,7 @@ class SpectrumModel(SpectrumModelBase):
         return '_'.join(descriptors)
 
     def forward(self, x):
-        return self.net(x)
+        return self.nn(x)
     
     def configure_optimizers(self) -> Union[List[torch.optim.Optimizer], List[torch.optim.lr_scheduler._LRScheduler]]:
         """
@@ -250,7 +250,8 @@ class TransformerSpectrumModel(SpectrumModelBase):
                  transformer_dropout: Optional[float] = 0,
                  sum_attention_output: Optional[bool] = False,
                  **kwargs):
-        
+        if 'n_input_nodes' in kwargs:
+            del kwargs['n_input_nodes']
         super().__init__(n_input_nodes=embedding_dimension, **kwargs)
         
         self.embedding_dimension = embedding_dimension
