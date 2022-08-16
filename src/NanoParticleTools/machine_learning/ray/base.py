@@ -38,7 +38,8 @@ def train_spectrum_model(config: dict,
                          wandb_project: Optional[str] = 'default_project',
                          wandb_save_dir: Optional[str] = os.environ['HOME'],
                          tune = False,
-                         lr_scheduler=get_sequential):
+                         lr_scheduler=get_sequential,
+                         data_module: Optional[NPMCDataModule] = None):
     """
     
     :param config: a config dictionary for the model
@@ -56,11 +57,12 @@ def train_spectrum_model(config: dict,
                                         log = True,
                                         normalize = False)
     
-    if os.path.exists('npmc_data.json'):
-        data_module = NPMCDataModule(feature_processor=feature_processor, label_processor=label_processor, data_dir='npmc_data.json', batch_size=16)
-    else:
-        data_store = MongoStore.from_launchpad_file(LAUNCHPAD_LOC, 'avg_npmc_20220708')
-        data_module = NPMCDataModule(feature_processor=feature_processor, label_processor=label_processor, data_store=data_store, batch_size=16)
+    if data_module is None:
+        if os.path.exists('npmc_data.json'):
+            data_module = NPMCDataModule(feature_processor=feature_processor, label_processor=label_processor, data_dir='npmc_data.json', batch_size=16)
+        else:
+            data_store = MongoStore.from_launchpad_file(LAUNCHPAD_LOC, 'avg_npmc_20220708')
+            data_module = NPMCDataModule(feature_processor=feature_processor, label_processor=label_processor, data_store=data_store, batch_size=16)
 
     # Make the model
     model = model_cls(lr_scheduler=lr_scheduler,
