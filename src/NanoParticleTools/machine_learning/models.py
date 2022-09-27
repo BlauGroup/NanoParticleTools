@@ -272,7 +272,7 @@ class TransformerSpectrumModel(SpectrumModelBase):
         (types, volumes, compositions), y = batch
         y_hat = self(types, volumes, compositions)
         loss = self.loss_function(y_hat, y)
-        return y_hat, loss
+        return y_hat, loss 
     
     def forward(self, types, volumes, compositions):
         types = types.to(self.device)
