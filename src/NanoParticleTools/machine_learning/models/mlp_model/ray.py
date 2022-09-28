@@ -3,7 +3,6 @@ from pytorch_lightning.callbacks import LearningRateMonitor
 from pytorch_lightning.loggers import WandbLogger
 import wandb
 import pytorch_lightning as pl
-import shutil
 import os
 import math
 from ray import tune
@@ -11,17 +10,18 @@ from ray.tune.schedulers import ASHAScheduler
 from maggma.stores.mongolike import MongoStore
 from typing import Optional, Union
 
-from NanoParticleTools.machine_learning.models import SpectrumModel, SpectrumModelBase
-from NanoParticleTools.machine_learning.data import LabelProcessor, VolumeFeatureProcessor, NPMCDataModule, FeatureProcessor
-from NanoParticleTools.machine_learning.util.reporters import TrialTerminationReporter
-from NanoParticleTools.machine_learning.util.learning_rate import get_sequential
-from NanoParticleTools.inputs.nanoparticle import SphericalConstraint
+from .model import SpectrumModel, SpectrumModelBase
+from .._data import LabelProcessor, FeatureProcessor, NPMCDataModule
+from ...util.reporters import TrialTerminationReporter
+from ...util.learning_rate import get_sequential
+from ....inputs.nanoparticle import SphericalConstraint
+from ....util.visualization import plot_nanoparticle
+
 from ray.tune.integration.pytorch_lightning import TuneReportCallback
 import datetime
 from matplotlib import pyplot as plt
 import numpy as np
 from fireworks.fw_config import LAUNCHPAD_LOC
-from NanoParticleTools.util.visualization import plot_nanoparticle
 
 def train_spectrum_model(config: dict, 
                          model_cls: SpectrumModelBase,
@@ -29,7 +29,7 @@ def train_spectrum_model(config: dict,
                          label_processor: Optional[LabelProcessor] = None,
                          num_epochs: Optional[int] = 10, 
                          num_gpus: Union[int, float] = 0,
-                         wandb_name: Optional[str] = None
+                         wandb_name: Optional[str] = None,
                          wandb_project: Optional[str] = 'default_project',
                          wandb_save_dir: Optional[str] = os.environ['HOME'],
                          tune = False,

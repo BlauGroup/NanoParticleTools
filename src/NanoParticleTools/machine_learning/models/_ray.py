@@ -1,13 +1,11 @@
-from NanoParticleTools.machine_learning.data import *
-from NanoParticleTools.machine_learning.util.learning_rate import get_sequential
+from ._data import *
+from ..util.learning_rate import get_sequential
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.callbacks import LearningRateMonitor
 from pytorch_lightning.loggers import WandbLogger
-from torch.optim.lr_scheduler import LinearLR, ExponentialLR, SequentialLR
 
 import wandb
 import pytorch_lightning as pl
-import shutil
 import os
 import math
 from ray import tune
@@ -15,12 +13,12 @@ from ray.tune.schedulers import ASHAScheduler
 from maggma.stores.mongolike import MongoStore
 from typing import Optional, Union
 
-from NanoParticleTools.machine_learning.models import SpectrumAttentionModel, SpectrumModelBase
-from NanoParticleTools.machine_learning.data import LabelProcessor, VolumeFeatureProcessor, NPMCDataModule
-from NanoParticleTools.machine_learning.util.reporters import TrialTerminationReporter
-from NanoParticleTools.inputs.nanoparticle import SphericalConstraint
-from NanoParticleTools.util.visualization import plot_nanoparticle
-from NanoParticleTools.machine_learning.util.learning_rate import get_sequential
+from ._model import SpectrumModelBase
+from ._data import LabelProcessor, DataProcessor, NPMCDataModule
+from ..util.reporters import TrialTerminationReporter
+from ...inputs.nanoparticle import SphericalConstraint
+from ...util.visualization import plot_nanoparticle
+
 from ray.tune.integration.pytorch_lightning import TuneReportCallback
 import datetime
 from matplotlib import pyplot as plt
@@ -30,8 +28,8 @@ from torch.nn import functional as F
 
 def train_spectrum_model(config: dict, 
                          model_cls: SpectrumModelBase,
-                         feature_processor: FeatureProcessor,
-                         label_processor: Optional[LabelProcessor] = None,
+                         feature_processor: DataProcessor,
+                         label_processor: Optional[DataProcessor] = None,
                          num_epochs: Optional[int] = 10, 
                          num_gpus: Union[int, float] = 0,
                          wandb_name: Optional[str] = None,
@@ -96,14 +94,17 @@ def train_spectrum_model(config: dict,
         # Don't do anything with the exception to allow the wandb logger to finish
         print(e)
     
+    # Calculate the testing loss
+    trainer.test(model, dataloaders=data_module.test_dataloader())
+
     columns = ['name', 'nanoparticle', 'spectrum', 'zoomed_spectrum', 'MSE loss', 'L1 loss', 'Smooth L1 loss', 'npmc_qy', 'pred_qy']
-    data = []
+    save_data = []
     rng = np.random.default_rng(seed = 10)
     for i in rng.choice(range(len(data_module.npmc_test)), 10, replace=False):
-        (types, volumes, compositions), y = data_module.npmc_test[i]
-        y_hat, loss = model._evaluate_step(data_module.npmc_test[i])
+        data = data_module.npmc_test[i]
+        y_hat, loss = model._evaluate_step(data)
         
-        npmc_spectrum = np.power(10, y.numpy())-1
+        npmc_spectrum = np.power(10, data.y.numpy())-1
         pred_spectrum = np.power(10, y_hat.detach().numpy())-1
 
         fig = plt.figure(dpi=150)
@@ -127,30 +128,31 @@ def train_spectrum_model(config: dict,
         fig_data = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
         fig_data = fig_data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
         
-        constraints, dopant_specifications = get_np_template_from_feature(types, volumes, compositions, data_module.feature_processor)
-        nanoparticle = plot_nanoparticle(constraints, dopant_specifications, as_np_array=True)
+        nanoparticle = plot_nanoparticle(data.constraints, data.dopant_specifications, as_np_array=True)
         
         npmc_qy = np.sum(npmc_spectrum[:int(npmc_spectrum.size/2)]) / np.sum(npmc_spectrum[int(npmc_spectrum.size/2):]) 
         pred_qy = np.sum(pred_spectrum[:int(pred_spectrum.size/2)]) / np.sum(pred_spectrum[int(pred_spectrum.size/2):])
         
-        data.append([wandb_logger.experiment.name, 
+        save_data.append([wandb_logger.experiment.name, 
                      wandb.Image(nanoparticle),
                      wandb.Image(full_fig_data), 
                      wandb.Image(fig_data), 
                      loss, 
-                     F.l1_loss(y_hat, y),
-                     F.smooth_l1_loss(y_hat, y),
+                     F.l1_loss(y_hat, data.y),
+                     F.smooth_l1_loss(y_hat, data.y),
                      npmc_qy,
                      pred_qy])
         # trainer.logger.experiment.log({'spectrum': fig})
-    wandb_logger.log_table(key='sample_table', columns=columns, data=data)
+    wandb_logger.log_table(key='sample_table', columns=columns, data=save_data)
     # Finalize the wandb logging
     wandb.finish()
+
+    return model
 
 
 def tune_npmc_asha(config: dict, 
                    model_cls: SpectrumModelBase,
-                   feature_processor: FeatureProcessor,
+                   feature_processor: DataProcessor,
                    label_processor: Optional[LabelProcessor] = None,
                    num_samples: Optional[int] = 10, 
                    num_epochs: Optional[int] = 1000, 

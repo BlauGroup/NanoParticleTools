@@ -1,10 +1,9 @@
-from NanoParticleTools.machine_learning.data import *
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.callbacks import LearningRateMonitor
 from pytorch_lightning.loggers import WandbLogger
 import wandb
 import pytorch_lightning as pl
-import shutil
+import torch
 import os
 import math
 from ray import tune
@@ -12,12 +11,15 @@ from ray.tune.schedulers import ASHAScheduler
 from maggma.stores.mongolike import MongoStore
 from typing import Optional, Union
 
-from NanoParticleTools.machine_learning.models import SpectrumAttentionModel
-from NanoParticleTools.machine_learning.data import LabelProcessor, VolumeFeatureProcessor, NPMCDataModule
-from NanoParticleTools.machine_learning.util.reporters import TrialTerminationReporter
-from NanoParticleTools.inputs.nanoparticle import SphericalConstraint
-from NanoParticleTools.util.visualization import plot_nanoparticle
-from NanoParticleTools.machine_learning.util.learning_rate import get_sequential
+# from .._ray import *
+from .model import SpectrumAttentionModel
+from .data import TransformerFeatureProcessor
+from .._data import LabelProcessor, NPMCDataModule
+from ...util.reporters import TrialTerminationReporter
+from ...util.learning_rate import get_sequential
+from ....inputs.nanoparticle import SphericalConstraint
+from ....util.visualization import plot_nanoparticle
+
 from ray.tune.integration.pytorch_lightning import TuneReportCallback
 import datetime
 from matplotlib import pyplot as plt
@@ -25,57 +27,6 @@ import numpy as np
 from fireworks.fw_config import LAUNCHPAD_LOC
 
 
-class TransformerFeatureProcessor(DataProcessor):
-    def __init__(self,
-                 fields = ['formula_by_constraint', 'dopant_concentration', 'input.constraints'],
-                 max_layers: int = 4,
-                 possible_elements: List[str] = ['Yb', 'Er', 'Nd'],
-                 **kwargs):
-        """
-        :param max_layers: 
-        :param possible_elements:
-        """
-        super().__init__(fields=fields, **kwargs)
-        
-        self.max_layers = max_layers
-        self.possible_elements = possible_elements
-        
-    @property
-    def returns_tuple(self):
-        return True
-        
-    def process_doc(self, 
-                    doc: dict) -> torch.Tensor:
-        constraints = self.get_item_from_doc(doc, 'input.constraints')
-        dopant_concentration = self.get_item_from_doc(doc, 'dopant_concentration')
-        
-        types = torch.tensor([j for i in range(self.max_layers) for j in range(len(self.possible_elements))])
-        
-        volumes = []
-        compositions = []
-        r_lower_bound = 0
-        for layer in range(self.max_layers):
-            _layer_feature = []
-            try:
-                if isinstance(constraints[layer], dict):
-                    radius = constraints[layer]['radius']
-                else:
-                    radius = constraints[layer].radius
-                volume = 4/3*np.pi*(radius**3-r_lower_bound**3)
-                r_lower_bound = radius
-                for i in range(len(self.possible_elements)):
-                    volumes.append(volume/1000000)
-            except:
-                for i in range(len(self.possible_elements)):
-                    volumes.append(0)
-            
-            for el in self.possible_elements:
-                try:
-                    compositions.append(dopant_concentration[layer][el])
-                except:
-                    compositions.append(0)
-            
-        return (types, torch.tensor(volumes), torch.tensor(compositions))
 
 def train_spectrum_model(config: dict, 
                          num_epochs: Optional[int] = 10, 

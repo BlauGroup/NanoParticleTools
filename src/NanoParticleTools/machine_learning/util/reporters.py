@@ -1,5 +1,4 @@
-from ray import tune
-from ray.tune import CLIReporter, JupyterNotebookReporter
+from ray.tune import CLIReporter
 from ray.tune.trial import Trial
 
 class ExperimentTerminationReporter(CLIReporter):
