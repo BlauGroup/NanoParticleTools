@@ -72,7 +72,7 @@ class SpectrumModelBase(pl.LightningModule):
         if self.optimizer_type.lower() == 'sgd':
             optimizer = torch.optim.SGD(self.parameters(), lr=self.learning_rate, weight_decay=self.l2_regularization_weight)
         else:
-            optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.l2_regularization_weight)
+            optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.l2_regularization_weight, amsgrad=True)
 
         if self.lr_scheduler is not None:
             lr_scheduler = self.lr_scheduler(optimizer)
