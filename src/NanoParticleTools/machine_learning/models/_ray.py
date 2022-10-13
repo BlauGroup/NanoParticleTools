@@ -1,7 +1,7 @@
 from ._data import *
 from ..util.learning_rate import get_sequential
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-from pytorch_lightning.callbacks import LearningRateMonitor
+from pytorch_lightning.callbacks import LearningRateMonitor, StochasticWeightAveraging, ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 
 import wandb
@@ -83,10 +83,11 @@ def train_spectrum_model(config: dict,
     # Configure callbacks
     callbacks = []
     callbacks.append(LearningRateMonitor(logging_interval='step'))
-    callbacks.append(EarlyStopping(monitor='val_loss', patience=200))
+    # callbacks.append(EarlyStopping(monitor='val_loss', patience=50))
     if tune:
         callbacks.append(TuneReportCallback({"loss": "val_loss"}, on="validation_end"))
-    
+    checkpoint_callback = ModelCheckpoint(save_top_k=2, monitor="val_loss", save_last=True)
+    callbacks.append(checkpoint_callback)
 
     # Run the training
     trainer = pl.Trainer(gpus = math.ceil(num_gpus), 
