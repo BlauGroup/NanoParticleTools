@@ -19,12 +19,17 @@ class GATSpectrumModel(SpectrumModelBase):
                  out_feature_dim: Optional[int] = None,
                  nonlinear_node_info: Optional[bool] = True, 
                  concatenate_embedding: Optional[bool] = False,
+                #  mlp_embedding: Optional[List[int]] = [256],
                  mlp_embedding: Optional[bool] = True,
+                 second_mlp_embedding: Optional[bool] = True,
+                 weight_pair_sum: Optional[bool] = False, 
+                 second_mpnn: Optional[bool] = True,
                  heads=4,
                  gnn_dropout_probability: Optional[float] = 0.6,
                  gnn_activation: Optional[Callable] = F.leaky_relu,
                  sum_attention_output: Optional[bool] = False,
                  embedding_dictionary_size: Optional[int] = 9,
+                 resnet: Optional[bool] = False,
                  **kwargs):
         """
         There are a few ways in which we can add composition and volume information to the model:
@@ -45,7 +50,8 @@ class GATSpectrumModel(SpectrumModelBase):
         """
         if out_feature_dim is None:
             out_feature_dim = in_feature_dim
-        super().__init__(n_input_nodes = out_feature_dim, **kwargs)
+        kwargs['n_input_nodes'] = out_feature_dim
+        super().__init__(**kwargs)
         
         embedding_dim = in_feature_dim
         
@@ -59,16 +65,32 @@ class GATSpectrumModel(SpectrumModelBase):
         if mlp_embedding:
             self.node_embedding_mlp = nn.Sequential(nn.Linear(in_feature_dim, 256),
                                                     nn.Linear(256, in_feature_dim))
+
+        if second_mlp_embedding:
+            self.second_node_embedding_mlp = nn.Sequential(nn.Linear(in_feature_dim, 256),
+                                                    nn.Linear(256, in_feature_dim))
+
+            
         
         self.embedder = nn.Embedding(embedding_dictionary_size, embedding_dim)
-        self.conv1 = pyg_nn.GATv2Conv(in_feature_dim, in_feature_dim, add_self_loops=False, heads=heads)
-        self.conv2 = pyg_nn.GATv2Conv(in_feature_dim*heads, out_feature_dim, add_self_loops=False, heads=heads, concat=False)
+        if second_mpnn:
+            self.conv1 = pyg_nn.GATv2Conv(in_feature_dim, in_feature_dim, add_self_loops=False, heads=heads)
+            self.conv2 = pyg_nn.GATv2Conv(in_feature_dim*heads, out_feature_dim, add_self_loops=False, heads=heads, concat=False)
+        else:
+            self.conv1 = pyg_nn.GATv2Conv(in_feature_dim, out_feature_dim, add_self_loops=False, heads=heads, concat=False)
+
+        if weight_pair_sum:
+            self.pair_weight = nn.Embedding(embedding_dictionary_size, 1)
         
         self.in_feature_dim = in_feature_dim
         self.out_feature_dim = out_feature_dim
         self.nonlinear_node_info = nonlinear_node_info
         self.concatenate_embedding = concatenate_embedding
         self.mlp_embedding = mlp_embedding
+        self.second_mlp_embedding = second_mlp_embedding
+        self.weight_pair_sum = weight_pair_sum
+        self.second_mpnn = second_mpnn
+        self.resnet = resnet
         self.heads = heads
         self.gnn_dropout_probability = gnn_dropout_probability        
         self.gnn_activation = gnn_activation
@@ -96,14 +118,26 @@ class GATSpectrumModel(SpectrumModelBase):
         if self.mlp_embedding:
             x = self.node_embedding_mlp(x)
         
+        if self.second_mlp_embedding:
+            x = self.second_node_embedding_mlp(x)
+        
         # Apply the first layer of the MPNN
-        x = self.conv1(x, data.edge_index)
-        x = self.gnn_activation(x)
+        _x = self.conv1(x, data.edge_index)
+        _x = self.gnn_activation(_x)
+        if self.resnet:
+            x = x.expand(self.heads, *x.shape).moveaxis(0, -2).reshape(*x.shape[:-1], -1) + _x
+        else:
+            x = _x
         
-        # Apply the second layer of the MPNN
-        x = F.dropout(x, self.gnn_dropout_probability, training=self.training)
-        x = self.conv2(x, data.edge_index)
-        
+        if self.second_mpnn:
+            # Apply the second layer of the MPNN
+            _x = F.dropout(x, self.gnn_dropout_probability, training=self.training)
+            _x = self.conv2(_x, data.edge_index)
+            if self.resnet:
+                x = x.reshape(*x.shape[:-1], 4, -1).mean(-2) + _x
+            else:
+                x = _x
+
         if self.sum_attention_output:
             if data.batch is not None:
                 x = scatter(x, data.batch.unsqueeze(1), dim=0, reduce='sum')
@@ -112,7 +146,11 @@ class GATSpectrumModel(SpectrumModelBase):
             output = self.nn(x)
         else:
             x = self.nn(x)
-            
+
+            # Add a weight to the pairwise sum
+            if self.weight_pair_sum:
+                x = torch.einsum('...ij, ...i -> ...ij', x, self.pair_weight(pair_identity).squeeze(dim=-1))
+
             if data.batch is not None:
                 output = scatter(x, data.batch.unsqueeze(1), dim=0, reduce='sum')
             else:

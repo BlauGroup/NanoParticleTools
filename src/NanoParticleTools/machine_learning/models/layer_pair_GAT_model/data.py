@@ -17,21 +17,18 @@ import torch
 class GraphFeatureProcessor(DataProcessor):
     def __init__(self,
                  possible_elements: List[str] = ['Yb', 'Er', 'Nd'],
-                 edge_attr_bias: Union[float, int] = 0.5,
-                 single_edge_attr: Optional[bool] = True,
+                 log_volume: Optional[bool] = False,
                  **kwargs):
         """
         :param possible_elements: 
-        :param edge_attr_bias: A bias added to the edge_attr before applying 1/edge_attr. This serves to eliminate
-            divide by zero and inf in the tensor. Additionally, it acts as a weight on the self-interaction.
+        :param log_volume: Whether to apply a log10 to the volume to reduce orders of magnitude. defaults to False
         """
         super().__init__(fields = ['formula_by_constraint', 'dopant_concentration', 'input'],
                          **kwargs)
         
         self.possible_elements = possible_elements
         self.dopants_dict = {key: i for i, key in enumerate(self.possible_elements)}
-        self.edge_attr_bias = edge_attr_bias
-        self.single_edge_attr = single_edge_attr
+        self.log_volume = log_volume
     
     @property
     @lru_cache
@@ -65,9 +62,15 @@ class GraphFeatureProcessor(DataProcessor):
                 v_j = self.get_volume(r_outer_j) - self.get_volume(r_inner_j)
                 d_mean = r_mean_j - r_mean_i
                 
-                node_features.append([self.edge_type_map[el_i][el_j], d_mean, x_i, x_j, v_i/1e6, v_j/1e6])
+                node_features.append([self.edge_type_map[el_i][el_j], d_mean, x_i, x_j, v_i, v_j])
 
         node_features = torch.tensor(node_features, dtype=torch.float)
+
+        if self.log_volume:
+            node_features[:, -2:] = torch.log10(node_features[:, -2:])
+        else:
+            node_features[:, -2:] = node_features[:, -2:] / 1e6
+
         return {'x': node_features, 
                 'num_nodes': node_features.shape[0]}
     
@@ -109,11 +112,10 @@ class NPMCDataset(BaseNPMCDataset):
     """
     
     """
-    def process_single_doc(doc, 
-                           feature_processor: DataProcessor,
-                           label_processor: DataProcessor) -> Data:
-        _d = feature_processor.process_doc(doc)
-        _d['y'] = label_processor.process_doc(doc)
+    def process_single_doc(self,
+                           idx: int) -> Data:
+        _d = self.feature_processor.process_doc(self.docs[idx])
+        _d['y'] = self.label_processor.process_doc(self.docs[idx])
         return Data(**_d)
 
 class NPMCDataModule(_NPMCDataModule):

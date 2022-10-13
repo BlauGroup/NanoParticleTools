@@ -84,6 +84,7 @@ def train_spectrum_model(config: dict,
     callbacks = []
     callbacks.append(LearningRateMonitor(logging_interval='step'))
     # callbacks.append(EarlyStopping(monitor='val_loss', patience=50))
+    # callbacks.append(StochasticWeightAveraging(swa_lrs=1e-3))
     if tune:
         callbacks.append(TuneReportCallback({"loss": "val_loss"}, on="validation_end"))
     checkpoint_callback = ModelCheckpoint(save_top_k=2, monitor="val_loss", save_last=True)

@@ -126,7 +126,7 @@ class BaseNPMCDataset(Dataset):
     Base class for a NPMC dataset
     """
     def __init__(self, 
-                 data_list: List,
+                 docs: List,
                  feature_processor: DataProcessor,
                  label_processor: DataProcessor):
         """
@@ -135,14 +135,11 @@ class BaseNPMCDataset(Dataset):
         :param feature_processor:
         :param label_processor:
         """
-        self.data_list = data_list
+        self.docs = docs
         self.feature_processor = feature_processor
         self.label_processor = label_processor
 
-    @staticmethod
-    def process_single_doc(doc, 
-                           feature_processor: DataProcessor,
-                           label_processor: DataProcessor):
+    def process_single_doc(self, idx: int):
         """
         Processes a single document and produces datapoint
         """
@@ -151,19 +148,6 @@ class BaseNPMCDataset(Dataset):
     @classmethod
     def collate_fn(cls):
         raise NotImplementedError("Must override collate_fn")
-
-    @classmethod
-    def process_docs(cls,
-                     docs, 
-                     **kwargs) -> List:
-        """
-        :param feature_processor:
-        :param label_processor:
-        """
-        data_list = []
-        for doc in docs:
-            data_list.append(cls.process_single_doc(doc, **kwargs))
-        return data_list
 
     @classmethod
     def from_file(cls, 
@@ -177,19 +161,17 @@ class BaseNPMCDataset(Dataset):
         # TODO: check if all the required fields are in the docs
         with open(doc_file, 'r') as f:
             documents = json.load(f, cls=MontyDecoder)
-            
-        features, labels = cls.process_docs(documents, feature_processor, label_processor)
         
-        return cls(features, labels, feature_processor, label_processor)
+        return cls(documents, feature_processor, label_processor)
 
     @classmethod
     def from_store(cls, 
                    store: Store,
                    feature_processor: DataProcessor,
                    label_processor: DataProcessor,
-                   doc_filter: Optional[Dict] = {}, 
+                   doc_filter: Optional[Dict] = {},
                    n_docs: Optional[int] = None,
-                   override: Optional[bool] = False):
+                   **kwargs):
         
         required_fields = feature_processor.required_fields + label_processor.required_fields
         

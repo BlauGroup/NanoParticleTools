@@ -115,11 +115,10 @@ class NPMCDataset(BaseNPMCDataset):
     """
     
     """
-    def process_single_doc(doc, 
-                           feature_processor: DataProcessor,
-                           label_processor: DataProcessor) -> Data:
-        _d = feature_processor.process_doc(doc)
-        _d['y'] = label_processor.process_doc(doc)
+    def process_single_doc(self,
+                           idx: int) -> Data:
+        _d = self.feature_processor.process_doc(self.docs[idx])
+        _d['y'] = self.label_processor.process_doc(self.docs[idx])
         return Data(**_d)
 
 class NPMCDataModule(_NPMCDataModule):
