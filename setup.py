@@ -18,11 +18,10 @@ setup(name='NanoParticleTools',
           "atomate2",
           "maggma",
           "pytest",
-          "torch==1.11.0",
-          "pytorch-lightning==1.6.4",
+          "torch==1.12.1",
+          "pytorch-lightning==1.7.7",
           "bayesian-optimization",
-          "ray==1.13.0",
-          "wandb==0.12.21",
-          "bayesian-optimization"
+          "ray",
+          "wandb",
       ]
       )
