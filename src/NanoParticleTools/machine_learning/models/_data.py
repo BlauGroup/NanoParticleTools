@@ -10,6 +10,7 @@ from monty.json import MontyDecoder
 import os
 import pytorch_lightning as pl
 from NanoParticleTools.inputs.nanoparticle import NanoParticleConstraint, SphericalConstraint
+from scipy.ndimage import gaussian_filter1d
 
 class DataProcessor():
     """
@@ -65,6 +66,7 @@ class LabelProcessor(DataProcessor):
                  output_size: Optional[int] = 500,
                  log: Optional[bool] = False,
                  normalize: Optional[bool] = False,
+                 gaussian_filter: Optional[float] = 0,
                  **kwargs):
         """
         :param spectrum_range: Range over which the spectrum should be cropped
@@ -79,6 +81,7 @@ class LabelProcessor(DataProcessor):
         self.output_size = output_size
         self.log = log
         self.normalize = normalize
+        self.gaussian_filter = gaussian_filter
     
     @property
     def x(self) -> np.array:
@@ -92,24 +95,27 @@ class LabelProcessor(DataProcessor):
         return (_x[:-1]+_x[1:])/2
 
     def process_doc(self, 
-                    doc: dict) -> torch.Tensor:
-        spectrum_x = self.get_item_from_doc(doc, 'output.spectrum_x')
-        spectrum_y = self.get_item_from_doc(doc, 'output.spectrum_y')
-        min_i = np.argmin(np.abs(np.subtract(spectrum_x, self.spectrum_range[0])))
-        max_i = np.argmin(np.abs(np.subtract(spectrum_x, self.spectrum_range[1])))
+                doc: dict) -> torch.Tensor:
+        spectrum_x = torch.tensor(self.get_item_from_doc(doc, 'output.spectrum_x'))
+        spectrum_y = torch.tensor(self.get_item_from_doc(doc, 'output.spectrum_y'))
+
+        min_i = torch.argmin(torch.abs(torch.subtract(spectrum_x, self.spectrum_range[0])))
+        max_i = torch.argmin(torch.abs(torch.subtract(spectrum_x, self.spectrum_range[1])))
         if self.spectrum_range[1] > spectrum_x[-1]:
             max_i = len(spectrum_x)
         
         x = spectrum_x[min_i:max_i]
         y = spectrum_y[min_i:max_i]
         
-        coarsened_spectrum = np.sum(np.reshape(y, (self.output_size, -1)), axis=1)
+        spectrum = torch.sum(torch.reshape(y, (self.output_size, -1)), axis=1)
+        if self.gaussian_filter > 0:
+            spectrum = torch.tensor(gaussian_filter1d(spectrum, self.gaussian_filter))
         if self.log:
-            coarsened_spectrum = np.log10(coarsened_spectrum + 1)
+            spectrum = torch.log10(spectrum + 1)
         if self.normalize:
-            coarsened_spectrum = coarsened_spectrum/np.sum(coarsened_spectrum)
+            spectrum = spectrum/torch.sum(spectrum)
         
-        return torch.tensor(coarsened_spectrum).float()
+        return spectrum.float()
     
     def __str__(self):
         return f"Label Processor - {self.output_size} bins, x_min = {self.spectrum_range[0]}, x_max = {self.spectrum_range[1]}, log = {self.log}, normalize = {self.normalize}"
