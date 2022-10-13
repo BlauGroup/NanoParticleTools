@@ -19,6 +19,7 @@ class SpectrumModelBase(pl.LightningModule):
                  l2_regularization_weight: float = 0,
                  dropout_probability: float = 0, 
                  optimizer_type: str = 'SGD',
+                 additional_metadata: Optional[dict] = {},
                  **kwargs):
         super().__init__()
 
@@ -28,6 +29,7 @@ class SpectrumModelBase(pl.LightningModule):
         self.dropout_probability = dropout_probability
         self.lr_scheduler = lr_scheduler
         self.loss_function = loss_function
+        self.additional_metadata = additional_metadata
 
 
         self.n_layers = len(nn_layers)
