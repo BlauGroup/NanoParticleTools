@@ -90,11 +90,19 @@ def train_spectrum_model(config: dict,
     callbacks.append(checkpoint_callback)
 
     # Run the training
-    trainer = pl.Trainer(gpus = math.ceil(num_gpus), 
-                         max_epochs=num_epochs, 
-                         enable_progress_bar=False, 
-                         logger=wandb_logger, 
-                         callbacks=callbacks)
+    if num_gpus > 0:
+        trainer = pl.Trainer(accelerator = 'gpu', 
+                             devices = math.ceil(num_gpus), 
+                             max_epochs=num_epochs, 
+                             enable_progress_bar=False, 
+                             logger=wandb_logger, 
+                             callbacks=callbacks)
+    else:
+        trainer = pl.Trainer(max_epochs=num_epochs, 
+                             enable_progress_bar=False, 
+                             logger=wandb_logger, 
+                             callbacks=callbacks)
+
     try:
         trainer.fit(model=model, datamodule=data_module)
     except Exception as e:
