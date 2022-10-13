@@ -61,12 +61,18 @@ def train_spectrum_model(config: dict,
         else:
             data_store = MongoStore.from_launchpad_file(LAUNCHPAD_LOC, 'avg_npmc_20220708')
             data_module = NPMCDataModule(feature_processor=feature_processor, label_processor=label_processor, data_store=data_store, batch_size=16)
+    
+    data_module.setup()
 
     # Make the model
     model = model_cls(lr_scheduler=lr_scheduler,
                       optimizer_type='adam',
                       **config)
     
+    # Prime the module by passing in one datapoint.
+    # This is a precaution in case the model uses lazy parameters. This will prevent errors with respect to lack of weight initialization 
+    y_hat = model(data_module.npmc_train[0])
+
     # Make logger
     wandb_logger = WandbLogger(name=wandb_name,
                                entity="esivonxay", 
