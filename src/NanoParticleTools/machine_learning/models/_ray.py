@@ -110,11 +110,14 @@ def train_spectrum_model(config: dict,
         print(e)
     
     # Calculate the testing loss
-    trainer.test(model, dataloaders=data_module.test_dataloader())
+    trainer.test(dataloaders=data_module.test_dataloader(), ckpt_path='best')
 
     columns = ['name', 'nanoparticle', 'spectrum', 'zoomed_spectrum', 'MSE loss', 'L1 loss', 'Smooth L1 loss', 'npmc_qy', 'pred_qy']
     save_data = []
     rng = np.random.default_rng(seed = 10)
+
+    # Load the best model
+    model = model_cls.load_from_checkpoint(checkpoint_callback.best_model_path)
     for i in rng.choice(range(len(data_module.npmc_test)), 10, replace=False):
         data = data_module.npmc_test[i]
         y_hat, loss = model._evaluate_step(data)
