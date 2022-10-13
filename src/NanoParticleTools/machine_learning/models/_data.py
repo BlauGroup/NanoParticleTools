@@ -188,7 +188,7 @@ class BaseNPMCDataset(Dataset):
                    feature_processor: DataProcessor,
                    label_processor: DataProcessor,
                    doc_filter: Optional[Dict] = {}, 
-                   cache_doc_file: Optional[str] = 'npmc_data.json',
+                   n_docs: Optional[int] = None,
                    override: Optional[bool] = False):
         
         required_fields = feature_processor.required_fields + label_processor.required_fields
@@ -197,16 +197,18 @@ class BaseNPMCDataset(Dataset):
         store.connect()
         documents = list(store.query(doc_filter, properties=required_fields))
         store.close()
-        
-        data_list = cls.process_docs(documents, feature_processor=feature_processor, label_processor=label_processor)
-        
-        return cls(data_list, feature_processor, label_processor)
+
+        # Select a random subset of them if the n_docs argument is passed
+        if n_docs:
+            documents = list(np.random.choice(documents, min(n_docs, len(documents)), replace=False))
+
+        return cls(documents, feature_processor, label_processor, **kwargs)
 
     def __len__(self):
-        return len(self.data_list)
+        return len(self.docs)
 
     def __getitem__(self, idx):
-        return self.data_list[idx]
+        return self.process_single_doc(idx)
     
     def get_random(self):
         _idx = np.random.choice(range(len(self)))
@@ -219,13 +221,16 @@ class NPMCDataModule(pl.LightningDataModule):
                  feature_processor: DataProcessor,
                  label_processor: DataProcessor,
                  dataset_class: Type[Dataset] = BaseNPMCDataset,
-                 doc_filter: Optional[dict] = None,
+                 training_doc_filter: Optional[dict] = None,
                  training_data_store: Optional[Store] = None, 
                  testing_data_store: Optional[Store] = None,
+                 testing_doc_filter: Optional[dict] = None,
                  batch_size: Optional[int] = 16, 
                  validation_split: Optional[float] = 0.15,
                  test_split: Optional[float] = 0.15,
-                 random_split_seed = 0):
+                 random_split_seed = 0,
+                 training_size: Optional[int] = None,
+                 testing_size: Optional[int] = None):
         """
         If a 
 
@@ -248,31 +253,38 @@ class NPMCDataModule(pl.LightningDataModule):
         self.feature_processor = feature_processor
         self.label_processor = label_processor
         self.dataset_class = dataset_class
-        self.doc_filter = doc_filter
+        self.training_doc_filter = training_doc_filter
+        self.testing_doc_filter = testing_doc_filter
         self.training_data_store = training_data_store
         self.testing_data_store = testing_data_store
         self.batch_size = batch_size
         self.validation_split = validation_split
         self.test_split = test_split
         self.random_split_seed = random_split_seed
+        self.training_size = training_size
+        self.testing_size = testing_size
 
         self.save_hyperparameters()
     
+    def get_training_dataset(self):
+        return self.dataset_class.from_store(store=self.training_data_store,
+                                             doc_filter=self.training_doc_filter,
+                                             feature_processor = self.feature_processor,
+                                             label_processor = self.label_processor,
+                                             n_docs=self.training_size)
+
     def setup(self, 
               stage: Optional[str] = None):
-        training_dataset = self.dataset_class.from_store(store=self.training_data_store,
-                                            doc_filter=self.doc_filter,
-                                            feature_processor = self.feature_processor,
-                                            label_processor = self.label_processor)
-
+        training_dataset = self.get_training_dataset()
 
         if self.testing_data_store:
             # Initialize the testing set from the store
 
             testing_dataset = self.dataset_class.from_store(store=self.testing_data_store,
-                                            doc_filter=self.doc_filter,
+                                            doc_filter=self.testing_doc_filter,
                                             feature_processor = self.feature_processor,
-                                            label_processor = self.label_processor)
+                                            label_processor = self.label_processor,
+                                            n_docs=self.testing_size)
 
             # Split the training data in to a test and validation set
             
