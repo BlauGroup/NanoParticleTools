@@ -17,6 +17,7 @@ from maggma.core.store import Store
 import torch
 import itertools
 import os
+import tempfile
 
 # class GraphFeatureProcessor(DataProcessor):
 #     def __init__(self,
@@ -253,7 +254,8 @@ class NPMCDataset(BaseNPMCDataset):
                  docs: List, 
                  feature_processor: DataProcessor, 
                  label_processor: DataProcessor,
-                 data_dir: Optional[str] = '.data'):
+                 data_dir: Optional[str] = '.data',
+                 override_cached_data:Optional[bool]=True):
         try:
             # deserialize the constraints if necessary
             for i, doc in enumerate(docs):
@@ -266,6 +268,13 @@ class NPMCDataset(BaseNPMCDataset):
         self.data_dir = data_dir
 
         if not os.path.exists(data_dir):
+            os.mkdir(data_dir)
+            os.mkdir(os.path.join(data_dir, 'x'))
+            os.mkdir(os.path.join(data_dir, 'y'))
+            self.cached = [False for _ in docs]
+            self.prime_dataset()
+        elif override_cached_data:
+            shutil.rmtree(data_dir)
             os.mkdir(data_dir)
             os.mkdir(os.path.join(data_dir, 'x'))
             os.mkdir(os.path.join(data_dir, 'y'))
@@ -313,27 +322,38 @@ class NPMCDataset(BaseNPMCDataset):
 
 class NPMCDataModule(_NPMCDataModule):
     def __init__(self, 
-                feature_processor: DataProcessor, 
-                label_processor: DataProcessor, 
-                dataset_class: Type[torch.utils.data.Dataset] = ..., 
-                doc_filter: Optional[dict] = None, 
-                training_data_store: Optional[Store] = None, 
-                testing_data_store: Optional[Store] = None, 
-                batch_size: Optional[int] = 16, 
-                validation_split: Optional[float] = 0.15, 
-                test_split: Optional[float] = 0.15, 
-                random_split_seed=0,
-                data_dir: Optional[str] = '.data'):
+                # feature_processor: DataProcessor, 
+                # label_processor: DataProcessor, 
+                # dataset_class: Type[torch.utils.data.Dataset] = ..., 
+                # training_data_store: Optional[Store] = None, 
+                # testing_data_store: Optional[Store] = None, 
+                # batch_size: Optional[int] = 16, 
+                # validation_split: Optional[float] = 0.15, 
+                # test_split: Optional[float] = 0.15, 
+                # random_split_seed=0,
+                training_data_dir: Optional[str] = '.data',
+                testing_data_dir: Optional[str] = '.data',
+                **kwargs):
 
-        super().__init__(feature_processor, label_processor, dataset_class, doc_filter, training_data_store, testing_data_store, batch_size, validation_split, test_split, random_split_seed)
-        self.data_dir = data_dir
+        super().__init__(**kwargs)
+        self.training_data_dir = training_data_dir
+        self.testing_data_dir = testing_data_dir
 
     def get_training_dataset(self):
         return self.dataset_class.from_store(store=self.training_data_store,
-                                            doc_filter=self.doc_filter,
+                                            doc_filter=self.training_doc_filter,
                                             feature_processor = self.feature_processor,
                                             label_processor = self.label_processor,
-                                            data_dir = self.data_dir)
+                                            data_dir = self.training_data_dir,
+                                            n_docs=self.training_size)
+
+    def get_testing_dataset(self):
+        return self.dataset_class.from_store(store=self.testing_data_store,
+                                            doc_filter=self.testing_doc_filter,
+                                            feature_processor = self.feature_processor,
+                                            label_processor = self.label_processor,
+                                            data_dir = self.testing_data_dir,
+                                            n_docs=self.testing_size)
 
     @staticmethod
     def collate(data_list: List[Data]):

@@ -203,10 +203,10 @@ class NPMCDataModule(pl.LightningDataModule):
                  feature_processor: DataProcessor,
                  label_processor: DataProcessor,
                  dataset_class: Type[Dataset] = BaseNPMCDataset,
-                 training_doc_filter: Optional[dict] = None,
                  training_data_store: Optional[Store] = None, 
                  testing_data_store: Optional[Store] = None,
-                 testing_doc_filter: Optional[dict] = None,
+                 training_doc_filter: Optional[dict] = {},
+                 testing_doc_filter: Optional[dict] = {},
                  batch_size: Optional[int] = 16, 
                  validation_split: Optional[float] = 0.15,
                  test_split: Optional[float] = 0.15,
@@ -255,18 +255,20 @@ class NPMCDataModule(pl.LightningDataModule):
                                              label_processor = self.label_processor,
                                              n_docs=self.training_size)
 
+    def get_testing_dataset(self):
+        return self.dataset_class.from_store(store=self.testing_data_store,
+                                            doc_filter=self.testing_doc_filter,
+                                            feature_processor = self.feature_processor,
+                                            label_processor = self.label_processor,
+                                            n_docs=self.testing_size)
+
     def setup(self, 
               stage: Optional[str] = None):
         training_dataset = self.get_training_dataset()
 
         if self.testing_data_store:
             # Initialize the testing set from the store
-
-            testing_dataset = self.dataset_class.from_store(store=self.testing_data_store,
-                                            doc_filter=self.testing_doc_filter,
-                                            feature_processor = self.feature_processor,
-                                            label_processor = self.label_processor,
-                                            n_docs=self.testing_size)
+            testing_dataset = self.get_testing_dataset()
 
             # Split the training data in to a test and validation set
             
