@@ -101,6 +101,24 @@ class DopedNanoparticle(MSONable):
         self.seed = seed
         self.dopant_specification = dopant_specification
 
+        # Check to ensure that the dopant specifications are valid ( 0 <= x <= 1)
+        # Bin the dopant concentration
+        conc_by_layer_and_species = {}
+        for i, x, _, replace_el in dopant_specification:
+            try:
+                conc_by_layer_and_species[i][replace_el] += x
+            except:
+                try: 
+                    conc_by_layer_and_species[i][replace_el] = x
+                except:
+                    conc_by_layer_and_species[i] = {replace_el: x}
+
+        # Check if all concentrations are valid
+        for layer_idx in conc_by_layer_and_species:
+            for replace_el in conc_by_layer_and_species[layer_idx]:
+                assert conc_by_layer_and_species[layer_idx][replace_el] <= 1, f"Dopant concentration in constraint {layer_idx} on {replace_el} sites exceeds 100%"
+                assert conc_by_layer_and_species[layer_idx][replace_el] >= 0, f"Dopant concentration in constraint {layer_idx} on {replace_el} sites is negative"
+
         self._sites = None
         # Move to dopant area
         self.dopant_indices = [[] for _ in self.constraints]
@@ -198,8 +216,13 @@ class DopedNanoparticle(MSONable):
         # TODO: This probably only works if only one species is being substituted.
         n_host_sites = len(possible_dopant_sites) + len(self.dopant_indices[constraint_index])
         n_dopants = np.round(n_host_sites * dopant_concentration)
+        
+        # In some cases, where # of another dopant is rounded up, we may have a rounding error
+        # Therefore, we must limit these dopants to len(possible_dopant_sites)
+        n_dopants = min(n_dopants, len(possible_dopant_sites))
 
         # Randomly pick sites to place dopants
+        print(len(possible_dopant_sites), int(n_dopants))
         dopant_sites = rng.choice(possible_dopant_sites, int(n_dopants), replace=False)
         for i in dopant_sites:
             self._sites[constraint_index][i].species = {dopant_species: 1}
