@@ -6,7 +6,7 @@ from .._data import DataProcessor, LabelProcessor, BaseNPMCDataset
 from .._data import NPMCDataModule as _NPMCDataModule
 
 from torch.utils.data import DataLoader
-# from torch_geometric.loader import DataLoader
+from torch_geometric.loader import DataLoader as pyg_DataLoader
 from torch_geometric.data import Data
 
 from matplotlib import pyplot as plt
@@ -19,107 +19,117 @@ import itertools
 import os
 import tempfile
 
-# class GraphFeatureProcessor(DataProcessor):
-#     def __init__(self,
-#                  possible_elements: List[str] = ['Yb', 'Er', 'Nd'],
-#                  cutoff_distance: Optional[int] = 3,
-#                  resolution: Optional[float] = 0.1,
-#                  **kwargs):
-#         """
-#         :param possible_elements: 
-#         :param edge_attr_bias: A bias added to the edge_attr before applying 1/edge_attr. This serves to eliminate
-#             divide by zero and inf in the tensor. Additionally, it acts as a weight on the self-interaction.
-#         """
-#         super().__init__(fields = ['formula_by_constraint', 'dopant_concentration', 'input'],
-#                          **kwargs)
+class GraphFeatureProcessor(DataProcessor):
+    def __init__(self,
+                 possible_elements: List[str] = ['Yb', 'Er', 'Nd'],
+                 resolution: Optional[float] = 0.1,
+                 full_nanoparticle: Optional[bool] = True,
+                 cutoff_distance: Optional[int] = 3,
+                 log_vol: Optional[bool] = True,
+                 **kwargs):
+        """
+        :param possible_elements:  
+        :param cutoff_distance: 
+        :param resolution: Angstroms
+        """
+        super().__init__(fields = ['formula_by_constraint', 'dopant_concentration', 'input'],
+                         **kwargs)
+
+        self.possible_elements = possible_elements
+        self.n_possible_elements = len(possible_elements)
+        self.dopants_dict = {key: i for i, key in enumerate(self.possible_elements)}
+        self.resolution = resolution
+        self.full_nanoparticle = full_nanoparticle
+        self.cutoff_distance = cutoff_distance
+        self.log_vol = log_vol
+
+    def get_node_features(self, 
+                          constraints: List[NanoParticleConstraint], 
+                          dopant_specifications: List[Tuple[int, float, str, str]]) -> torch.Tensor:
+        # Generate the tensor of concentrations for the original constraints.
+        ## Initialize it to 0
+        concentrations = torch.zeros(len(constraints), self.n_possible_elements)
         
-#         self.possible_elements = possible_elements
-#         self.n_possible_elements = len(possible_elements)
-#         self.dopants_dict = {key: i for i, key in enumerate(self.possible_elements)}
-#         self.cutoff_distance = cutoff_distance
-#         self.resolution = resolution
+        ## Fill in the concentrations that are present
+        for i, x, el, _ in dopant_specifications:
+            concentrations[i][self.dopants_dict[el]] = x
 
-#     def get_node_features(self, 
-#                           constraints: List[NanoParticleConstraint], 
-#                           dopant_specifications: List[Tuple[int, float, str, str]]) -> torch.Tensor:
-#         # Generate the tensor of concentrations for the original constraints.
-#         ## Initialize it to 0
-#         concentrations = torch.zeros(len(constraints), self.n_possible_elements)
+        # Make the array for the representation
+        n_subdivisions = torch.ceil(torch.tensor(constraints[-1].radius) / self.resolution).int()
+        node_features = torch.zeros((n_subdivisions, self.n_possible_elements + 1))
+
+        # Fill in the concentrations
+        start_i = 0
+        for constraint_i in range(len(constraints)):
+            end_i = torch.ceil(torch.tensor(constraints[constraint_i].radius) / self.resolution).int()
+            node_features[start_i:end_i, :self.n_possible_elements] = concentrations[constraint_i]
+            start_i = end_i
+
+        ## Set the third index to volume
+        node_features[:, -1] = self.volume(torch.arange(0, constraints[-1].radius, self.resolution))
+        if self.log_vol:
+            node_features[:, -1] = torch.log10(node_features[:, -1])
+
+        return {'x': node_features}
         
-#         ## Fill in the concentrations that are present
-#         for i, x, el, _ in dopant_specifications:
-#             concentrations[i][self.dopants_dict[el]] = x
+    def get_edge_features(self, 
+                          constraints: List[NanoParticleConstraint]) -> torch.Tensor:
+        # Determine connectivity using a cutoff
+        radius = torch.arange(0, constraints[-1].radius, self.resolution)
+        xy, yx = torch.meshgrid(radius, radius, indexing='xy')
+        distance_matrix = torch.abs(xy - yx)
+        edge_index = torch.vstack(torch.where(distance_matrix <= self.cutoff_distance))
+        edge_attr = distance_matrix[edge_index[0], edge_index[1]]
+        
+        return {'edge_index': edge_index, 
+                'edge_attr': edge_attr}
 
-#         # Make the array for the representation
-#         n_subdivisions = torch.ceil(torch.tensor(constraints[-1].radius) / self.resolution).int()
-#         node_features = torch.zeros((n_subdivisions, self.n_possible_elements, 3))
-
-#         ## Set the first index to identity
-#         node_features[:, :, 0] = torch.ones((n_subdivisions, self.n_possible_elements)) * torch.arange(0, 3)
-
-#         ## Set the second index to concentration
-#         start_i = 0
-#         for constraint_i in range(len(constraints)):
-#             end_i = torch.ceil(torch.tensor(constraints[constraint_i].radius) / self.resolution).int()
-#             node_features[start_i:end_i, :, 1] = concentrations[constraint_i]
-#             start_i = end_i
-
-#         ## Set the third index to volume
-#         node_features[:, :, 2] = self.volume(torch.arange(0, constraints[-1].radius, self.resolution)).unsqueeze(-1).expand(-1, 3)
-
-#         return {'x': node_features}
+    def get_data_graph(self, 
+                       constraints: List[NanoParticleConstraint], 
+                       dopant_specifications: List[Tuple[int, float, str, str]]):
+        
+        output_dict = self.get_node_features(constraints, dopant_specifications)
+        output_dict.update(self.get_edge_features(constraints))
+        
+        return output_dict
     
-#     def get_edge_features(self, 
-#                           constraints: List[NanoParticleConstraint], 
-#                           dopant_specifications: List[Tuple[int, float, str, str]]) -> torch.Tensor:
-#         # Determine connectivity using a cutoff
-#         radius = torch.arange(0, constraints[-1].radius, self.resolution)
-#         xy, yx = torch.meshgrid(radius, radius, indexing='xy')
-#         distance_matrix = torch.abs(xy - yx)
-#         edge_index = torch.vstack(torch.where(distance_matrix <= self.cutoff_distance))
-#         edge_attr = distance_matrix[edge_index[0], edge_index[1]]
-        
-#         return {'edge_index': edge_index, 
-#                 'edge_attr': edge_attr}
-        
-#     def get_data_graph(self, 
-#                        constraints: List[NanoParticleConstraint], 
-#                        dopant_specifications: List[Tuple[int, float, str, str]]):
-        
-#         output_dict = self.get_node_features(constraints, dopant_specifications)
-#         output_dict.update(self.get_edge_features(constraints, dopant_specifications))
-        
-#         return output_dict
-    
-#     def process_doc(self,
-#                     doc: dict) -> dict:
-#         constraints = doc['input']['constraints']
-#         dopant_specifications = doc['input']['dopant_specifications']
+    def process_doc(self,
+                    doc: dict) -> dict:
+        constraints = doc['input']['constraints']
+        dopant_specifications = doc['input']['dopant_specifications']
 
-#         try:
-#             constraints = [SphericalConstraint.from_dict(c) for c in constraints]
-#         except:
-#             pass
+        try:
+            constraints = [SphericalConstraint.from_dict(c) for c in constraints]
+        except:
+            pass
         
-#         return self.get_data_graph(constraints, dopant_specifications)
+        return self.get_data_graph(constraints, dopant_specifications)
 
-#     def volume(self,
-#                radius: Union[List, int, torch.Tensor], 
-#                shell_width: Optional[float] = 0.01) -> torch.Tensor:
-#             """
-#             Takes inner radius
-#             """
-#             if not isinstance(radius, torch.Tensor):
-#                 radius = torch.tensor(radius)
+    def volume(self,
+               radius: Union[List, int, torch.Tensor], 
+               shell_width: Optional[float] = 0.01) -> torch.Tensor:
+            """
+            Takes inner radius
+            """
+            if not isinstance(radius, torch.Tensor):
+                radius = torch.tensor(radius)
                 
-#             outer_radius = radius + shell_width
+            outer_radius = radius + shell_width
             
             
-#             return self.sphere_volume(outer_radius) - self.sphere_volume(radius)
+            return self.sphere_volume(outer_radius) - self.sphere_volume(radius)
 
-#     @staticmethod
-#     def sphere_volume(radius: torch.Tensor) -> torch.Tensor:
-#         return 3/4*torch.pi*torch.pow(radius, 3)
+    @staticmethod
+    def sphere_volume(radius: torch.Tensor) -> torch.Tensor:
+        return 3/4*torch.pi*torch.pow(radius, 3)
+
+    @property
+    def is_graph(self):
+        return True
+
+    def __str__(self) -> str:
+        return f"Discrete Graph Feature Processor - resolution = {self.resolution}A"
+
 
 class FeatureProcessor(DataProcessor):
     def __init__(self,
@@ -144,7 +154,7 @@ class FeatureProcessor(DataProcessor):
         self.resolution = resolution
         self.max_np_size = max_np_size
         self.max_divisions = -int(max_np_size // -resolution)
-        assert dims > 0 and dims <= 3
+        assert dims > 0 and dims <= 3, "Representation for must be 1, 2, or 3 dimensions"
         self.dims = dims
         self.full_nanoparticle = full_nanoparticle
 
@@ -207,7 +217,7 @@ class FeatureProcessor(DataProcessor):
             node_features = torch.nn.functional.avg_pool3d(node_features, 2, 2)
 
         return {'x': node_features}
-    
+
     def get_data_graph(self, 
                        constraints: List[NanoParticleConstraint], 
                        dopant_specifications: List[Tuple[int, float, str, str]]):
@@ -249,6 +259,10 @@ class FeatureProcessor(DataProcessor):
     def __str__(self) -> str:
         return f"CNN Feature Processor - resolution = {self.resolution}A - max_np_size = {self.max_np_size}"
 
+    @property
+    def is_graph(self):
+        return False
+
 class NPMCDataset(BaseNPMCDataset):
     def __init__(self, 
                  docs: List, 
@@ -271,6 +285,9 @@ class NPMCDataset(BaseNPMCDataset):
             os.mkdir(data_dir)
             os.mkdir(os.path.join(data_dir, 'x'))
             os.mkdir(os.path.join(data_dir, 'y'))
+            if self.feature_processor.is_graph:
+                os.mkdir(os.path.join(data_dir, 'edge_index'))
+                os.mkdir(os.path.join(data_dir, 'edge_attr'))
             self.cached = [False for _ in docs]
             self.prime_dataset()
         elif override_cached_data:
@@ -278,6 +295,9 @@ class NPMCDataset(BaseNPMCDataset):
             os.mkdir(data_dir)
             os.mkdir(os.path.join(data_dir, 'x'))
             os.mkdir(os.path.join(data_dir, 'y'))
+            if self.feature_processor.is_graph:
+                os.mkdir(os.path.join(data_dir, 'edge_index'))
+                os.mkdir(os.path.join(data_dir, 'edge_attr'))
             self.cached = [False for _ in docs]
             self.prime_dataset()
         else:
@@ -306,6 +326,9 @@ class NPMCDataset(BaseNPMCDataset):
                   'y': torch.load(os.path.join(self.data_dir, 'y', str(idx))),
                   'constraints': self.docs[idx]['input']['constraints'],
                   'dopant_specifications': self.docs[idx]['input']['dopant_specifications']}
+            if self.feature_processor.is_graph:
+                _d['edge_index'] = torch.load(os.path.join(self.data_dir, 'edge_index', str(idx)))
+                _d['edge_attr'] = torch.load(os.path.join(self.data_dir, 'edge_attr', str(idx)))
         else:
             # Process this item for the first time
             _d = self.feature_processor.process_doc(self.docs[idx])
@@ -316,6 +339,9 @@ class NPMCDataset(BaseNPMCDataset):
             # Cache this item to file
             torch.save(_d['x'], os.path.join(self.data_dir, 'x', str(idx)))
             torch.save(_d['y'], os.path.join(self.data_dir, 'y', str(idx)))
+            if self.feature_processor.is_graph:
+                torch.save(_d['edge_index'], os.path.join(self.data_dir, 'edge_index', str(idx)))
+                torch.save(_d['edge_attr'], os.path.join(self.data_dir, 'edge_attr', str(idx)))
             self.cached[idx] = True
 
         return Data(**_d)
@@ -366,10 +392,25 @@ class NPMCDataModule(_NPMCDataModule):
         return Data(x=x, y=y)
 
     def train_dataloader(self) -> DataLoader:
-        return DataLoader(self.npmc_train, self.batch_size, collate_fn=self.collate, shuffle=True, num_workers=0)
+        if self.feature_processor.is_graph:
+            # The data is graph structured
+            return pyg_DataLoader(self.npmc_train, self.batch_size, shuffle=True, num_workers=0)
+        else:
+            # The data is in an image representation
+            return DataLoader(self.npmc_train, self.batch_size, collate_fn=self.collate, shuffle=True, num_workers=0)
     
     def val_dataloader(self) -> DataLoader:
-        return DataLoader(self.npmc_val, self.batch_size, collate_fn=self.collate, shuffle=False, num_workers=0)
+        if self.feature_processor.is_graph:
+            # The data is graph structured
+            return pyg_DataLoader(self.npmc_train, self.batch_size, shuffle=False, num_workers=0)
+        else:
+            # The data is in an image representation
+            return DataLoader(self.npmc_val, self.batch_size, collate_fn=self.collate, shuffle=False, num_workers=0)
 
     def test_dataloader(self) -> DataLoader:
-        return DataLoader(self.npmc_test, self.batch_size, collate_fn=self.collate, shuffle=False, num_workers=0)
+        if self.feature_processor.is_graph:
+            # The data is graph structured
+            return pyg_DataLoader(self.npmc_train, self.batch_size, shuffle=True, num_workers=0)
+        else:
+            # The data is in an image representation
+            return DataLoader(self.npmc_test, self.batch_size, collate_fn=self.collate, shuffle=False, num_workers=0)
