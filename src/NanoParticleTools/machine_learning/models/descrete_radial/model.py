@@ -3,6 +3,8 @@ from torch import nn
 from torch.nn import functional as F
 from typing import Callable, Union, Optional, List
 import pytorch_lightning as pl
+from torch_geometric import nn as pyg_nn
+from torch_scatter.scatter import scatter
 
 class CNNModel(pl.LightningModule):
     def __init__(self, 
@@ -94,6 +96,122 @@ class CNNModel(pl.LightningModule):
 
         if self.lr_scheduler is not None:
             lr_scheduler = self.lr_scheduler(optimizer)
+        return [optimizer], [lr_scheduler]
+    
+    def layer_summary(self, x_shape):
+        x = torch.randn(*x_shape)
+        if len(x.shape) == self.img_dimension+1:
+            x = x.unsqueeze(dim=0)
+        
+        for layer in self.nn:
+            x = layer(x)
+            print(layer.__class__.__name__, 'output shape:\t', x.shape)
+    
+    def _evaluate_step(self, 
+                       data):
+        y_hat = self(data)
+        y = data.y
+        loss = self.loss_function(y_hat, y)
+        return y_hat, loss
+    
+    def training_step(self, 
+                      batch, 
+                      batch_idx):
+        _, loss = self._evaluate_step(batch)
+        self.log('train_loss', loss)
+        return loss
+    
+    def validation_step(self, 
+                        batch, 
+                        batch_idx):
+        _, loss = self._evaluate_step(batch)
+        self.log('val_loss', loss)
+        return loss
+        
+    def test_step(self, 
+                  batch, 
+                  batch_idx):
+        _, loss = self._evaluate_step(batch)
+        self.log('test_loss', loss)
+        return loss
+        
+    def predict_step(self, 
+                     batch, 
+                     batch_idx):
+        pred, _ = self._evaluate_step(batch)
+        return pred
+
+class DiscreteGraphModel(pl.LightningModule):
+    def __init__(self,
+                 input_channels=3,
+                 n_output_nodes=400, 
+                 learning_rate: Optional[float]=1e-5,
+                 lr_scheduler: Optional[Callable[[torch.optim.Optimizer], torch.optim.lr_scheduler._LRScheduler]]=None,
+                 loss_function: Optional[Callable[[List, List], float]] = F.mse_loss,
+                 l2_regularization_weight: float = 0,
+                 dropout_probability: float = 0, 
+                 optimizer_type: str = 'SGD',
+                 activation_module: Optional[torch.nn.Module] = nn.SiLU,
+                 mlp_layers = [128, 256],
+                 mpnn_channels = [64, 128],
+                 mpnn_module: Optional[torch.nn.Module] = pyg_nn.GATv2Conv,
+                 mpnn_kwargs: Optional[dict] = {'edge_dim':1},
+                 mpnn_operation: Optional[str] = 'x, edge_index, edge_attr -> x',
+                 **kwargs):
+        super().__init__(**kwargs)
+        
+        self.optimizer_type = optimizer_type
+        self.learning_rate = learning_rate
+        self.l2_regularization_weight = l2_regularization_weight
+        self.dropout_probability = dropout_probability
+        self.lr_scheduler = lr_scheduler
+        self.loss_function = loss_function
+        self.activation_module = activation_module            
+        
+        # Build the mpnn layers
+        mpnn_modules = []
+        for i, _ in enumerate(_mlp_channels:=[input_channels]+mpnn_channels):
+            if i == len(_mlp_channels)-1:
+                 break
+            mpnn_modules.append((mpnn_module(*_mlp_channels[i:i+2], **mpnn_kwargs), mpnn_operation))
+            mpnn_modules.append(activation_module(inplace=True))
+        
+        # Build the mlp layers
+        mlp_modules = []
+        for i, _ in enumerate(mlp_sizes:=[mpnn_channels[-1]]+mlp_layers+[n_output_nodes]):
+            if i == len(mlp_sizes)-1:
+                 break
+            mlp_modules.append(nn.Dropout())
+            mlp_modules.append(nn.Linear(*mlp_sizes[i:i+2]))
+            mlp_modules.append(activation_module(inplace=True))
+            
+        # Construct the primary module
+        self.nn = pyg_nn.Sequential('x, edge_index, edge_attr, edge_weight',
+                                    mpnn_modules+mlp_modules)
+        
+        self.save_hyperparameters()
+
+    def forward(self, data):
+        x = self.nn(x=data.x[:, :3], edge_index=data.edge_index, edge_attr=data.edge_attr, edge_weight=data.edge_weight)
+        
+        if data.batch:
+            return scatter(x, data.batch.unsqueeze(1), dim=0, reduce='sum')
+        else:
+            return torch.sum(x, dim=0)
+    
+    def configure_optimizers(self) -> Union[List[torch.optim.Optimizer], List[torch.optim.lr_scheduler._LRScheduler]]:
+        """
+        """ 
+        # Default to the adam optimizer               
+        if self.optimizer_type.lower() == 'sgd':
+            optimizer = torch.optim.SGD(self.parameters(), lr=self.learning_rate, weight_decay=self.l2_regularization_weight)
+        else:
+            optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.l2_regularization_weight, amsgrad=True)
+
+        if self.lr_scheduler is not None:
+            lr_scheduler = self.lr_scheduler(optimizer)
+        else:
+            lr_scheduler = None
         return [optimizer], [lr_scheduler]
     
     def layer_summary(self, x_shape):
