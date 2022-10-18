@@ -194,7 +194,7 @@ class DiscreteGraphModel(pl.LightningModule):
     def forward(self, data):
         x = self.nn(x=data.x[:, :3], edge_index=data.edge_index, edge_attr=data.edge_attr, edge_weight=data.edge_weight)
         
-        if data.batch:
+        if data.batch is not None:
             return scatter(x, data.batch.unsqueeze(1), dim=0, reduce='sum')
         else:
             return torch.sum(x, dim=0)
