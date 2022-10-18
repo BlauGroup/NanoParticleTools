@@ -226,7 +226,10 @@ class DiscreteGraphModel(pl.LightningModule):
     def _evaluate_step(self, 
                        data):
         y_hat = self(data)
-        y = data.y
+        if data.batch is not None:
+            y = data.y.reshape(-1, 400)
+        else:
+            y = data.y
         loss = self.loss_function(y_hat, y)
         return y_hat, loss
     
