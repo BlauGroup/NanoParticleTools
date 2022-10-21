@@ -5,11 +5,13 @@ import torch
 import numpy as np
 from typing import List
 
-SPECIES_TYPE_INDEX = 0
-COMPOSITION_INDEX = 1
-VOLUME_INDEX = 2
 
 class TransformerFeatureProcessor(DataProcessor):
+
+    SPECIES_TYPE_INDEX = 0
+    COMPOSITION_INDEX = 1
+    VOLUME_INDEX = 2
+
     def __init__(self,
                  fields = ['formula_by_constraint', 'dopant_concentration', 'input.constraints'],
                  max_layers: int = 4,
@@ -56,41 +58,8 @@ class TransformerFeatureProcessor(DataProcessor):
                 except:
                     compositions.append(0)
 
-        return torch.vstack([types, torch.tensor(volumes), torch.tensor(compositions)])
+        return {'x': torch.vstack([types, torch.tensor(volumes), torch.tensor(compositions)])}
 
-class Data():
-    def __init__(self, **kwargs):
-        for key, item in kwargs.items():
-            setattr(self, key, item)
-
-class NPMCDataset(BaseNPMCDataset):
-    """
-    
-    """
-
-    def process_single_doc(doc, 
-                           feature_processor: DataProcessor,
-                           label_processor: DataProcessor):
-        _d = {}
-        _d['x'] = feature_processor.process_doc(doc)
-        _d['y'] = label_processor.process_doc(doc)
-        return Data(**_d)
-
-    @staticmethod
-    def collate(data_list: List[Data]):
-        if len(data_list) == 0:
-            return data_list[0]
-        x = torch.concat([data.x for data in data_list]).reshape(-1, *data_list[0].x.shape)
-        y = torch.concat([data.y for data in data_list]).reshape(-1, *data_list[0].y.shape)
-
-        return Data(x=x, y=y)
-
-class NPMCDataModule(_NPMCDataModule):
-    def train_dataloader(self) -> DataLoader:
-        return DataLoader(self.npmc_train, self.batch_size, collate_fn=self.dataset_class.collate, shuffle=True)
-    
-    def val_dataloader(self) -> DataLoader:
-        return DataLoader(self.npmc_val, self.batch_size, collate_fn=self.dataset_class.collate, shuffle=False)
-
-    def test_dataloader(self) -> DataLoader:
-        return DataLoader(self.npmc_test, self.batch_size, collate_fn=self.dataset_class.collate, shuffle=False)
+    @property
+    def is_graph(self):
+        return False

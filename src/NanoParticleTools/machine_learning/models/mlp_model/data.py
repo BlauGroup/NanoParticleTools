@@ -40,10 +40,14 @@ class FeatureProcessor(DataProcessor):
                 except:
                     _layer_feature.append(0)
             feature.append(_layer_feature)
-        return torch.tensor(np.hstack(feature)).float()
+        return {'x': torch.tensor(np.hstack(feature)).float()}
 
     def __str__(self):
         return f"Feature Processor - {self.max_layers} x [radius, x_{', x_'.join(self.possible_elements)}]"
+
+    @property
+    def is_graph(self):
+        return False
 
 
 class VolumeFeatureProcessor(DataProcessor):
@@ -90,44 +94,11 @@ class VolumeFeatureProcessor(DataProcessor):
                 except:
                     _layer_feature.append(0)
             feature.append(_layer_feature)
-        return torch.tensor(np.hstack(feature)).float()
+        return {'x': torch.tensor(np.hstack(feature)).float()}
     
     def __str__(self):
         return f"Feature Processor - {self.max_layers} x [radius, volume, x_{', x_'.join(self.possible_elements)}]"
-    
 
-class Data():
-    def __init__(self, **kwargs):
-        for key, item in kwargs.items():
-            setattr(self, key, item)
-
-class NPMCDataset(BaseNPMCDataset):
-    """
-    
-    """
-
-    def process_single_doc(doc, 
-                           feature_processor: DataProcessor,
-                           label_processor: DataProcessor):
-        _d = {}
-        _d['x'] = feature_processor.process_doc(doc)
-        _d['y'] = label_processor.process_doc(doc)
-        return Data(**_d)
-
-    @staticmethod
-    def collate(data_list: List[Data]):
-        if len(data_list) == 0:
-            return data_list[0]
-        x = torch.vstack([data.x for data in data_list])
-        y = torch.vstack([data.y for data in data_list])
-        return Data(x=x, y=y)
-
-class NPMCDataModule(_NPMCDataModule):
-    def train_dataloader(self) -> DataLoader:
-        return DataLoader(self.npmc_train, self.batch_size, collate_fn=self.dataset_class.collate, shuffle=True)
-    
-    def val_dataloader(self) -> DataLoader:
-        return DataLoader(self.npmc_val, self.batch_size, collate_fn=self.dataset_class.collate, shuffle=False)
-
-    def test_dataloader(self) -> DataLoader:
-        return DataLoader(self.npmc_test, self.batch_size, collate_fn=self.dataset_class.collate, shuffle=False)
+    @property
+    def is_graph(self):
+        return False

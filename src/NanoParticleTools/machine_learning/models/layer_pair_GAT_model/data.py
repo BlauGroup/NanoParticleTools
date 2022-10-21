@@ -90,8 +90,6 @@ class GraphFeatureProcessor(DataProcessor):
         
         output_dict = self.get_node_features(constraints, dopant_specifications)
         output_dict.update(self.get_edge_features(output_dict['x'].shape[0]))
-        output_dict['constraints'] = constraints
-        output_dict['dopant_specifications'] = dopant_specifications
         
         return output_dict
     
@@ -108,22 +106,6 @@ class GraphFeatureProcessor(DataProcessor):
         
         return self.get_data_graph(constraints, dopant_specifications)
         
-class NPMCDataset(BaseNPMCDataset):
-    """
-    
-    """
-    def process_single_doc(self,
-                           idx: int) -> Data:
-        _d = self.feature_processor.process_doc(self.docs[idx])
-        _d['y'] = self.label_processor.process_doc(self.docs[idx])
-        return Data(**_d)
-
-class NPMCDataModule(_NPMCDataModule):
-    def train_dataloader(self) -> DataLoader:
-        return DataLoader(self.npmc_train, self.batch_size, shuffle=True)
-    
-    def val_dataloader(self) -> DataLoader:
-        return DataLoader(self.npmc_val, self.batch_size, shuffle=False)
-
-    def test_dataloader(self) -> DataLoader:
-        return DataLoader(self.npmc_test, self.batch_size, shuffle=False)
+    @property
+    def is_graph(self):
+        return True

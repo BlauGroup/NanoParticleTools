@@ -1,6 +1,8 @@
+from genericpath import isfile
 from pydoc import doc
 from torch.utils.data import Dataset, DataLoader
-from typing import Union, Dict, List, Tuple, Optional, Type
+from torch_geometric.loader import DataLoader as pyg_DataLoader
+from typing import Union, Dict, List, Tuple, Optional, Type, Any
 from maggma.core import Store
 from functools import lru_cache
 import torch
@@ -11,6 +13,9 @@ import os
 import pytorch_lightning as pl
 from NanoParticleTools.inputs.nanoparticle import NanoParticleConstraint, SphericalConstraint
 from scipy.ndimage import gaussian_filter1d
+import hashlib
+from monty.serialization import MontyEncoder
+from torch_geometric.data import Data
 
 class DataProcessor():
     """
@@ -58,6 +63,10 @@ class DataProcessor():
     @staticmethod
     def get_volume(r):
         return 4/3*np.pi*(r**3)
+    
+    @property
+    def is_graph(self):
+        pass
     
 
 class LabelProcessor(DataProcessor):
@@ -115,82 +124,192 @@ class LabelProcessor(DataProcessor):
         if self.normalize:
             spectrum = spectrum/torch.sum(spectrum)
         
-        return spectrum.float()
+        return {'y': spectrum.float()}
     
     def __str__(self):
         return f"Label Processor - {self.output_size} bins, x_min = {self.spectrum_range[0]}, x_max = {self.spectrum_range[1]}, log = {self.log}, normalize = {self.normalize}"
         
 
-class BaseNPMCDataset(Dataset):
+class NPMCDataset(Dataset):
     """
-    Base class for a NPMC dataset
+    NPMC dataset
+    
+    TODO: 1) Figure out a more elegant way to check if the data should be redownloaded (if the store has been updated)
+          2) More elegant way to enforce size of dataset and redownload if the size is incorrect
     """
     def __init__(self, 
-                 docs: List,
+                 root: str,
                  feature_processor: DataProcessor,
-                 label_processor: DataProcessor):
+                 label_processor: DataProcessor, 
+                 data_store: Store,
+                 doc_filter: dict = None,
+                 download = False,
+                 overwrite = False,
+                 use_cache = False,
+                 dataset_size = None):
         """
-        :param features: A Pytorch tensor of the feature data. Axis 0 should correspond to separate data points
-        :param labels: A Pytorch tensor of the label data. Axis 0 should correspond to separate data points
         :param feature_processor:
         :param label_processor:
         """
-        self.docs = docs
+        if doc_filter is None:
+            doc_filter = {}
+
+        self.root = root
         self.feature_processor = feature_processor
         self.label_processor = label_processor
+        self.data_store = data_store
+        self.doc_filter = doc_filter
+        self.overwrite = overwrite
+        self.use_cache = use_cache
+        if dataset_size is None:
+            with self.data_store:
+                self.dataset_size = self.data_store.count()
+        else:
+            self.dataset_size = dataset_size
 
+        if download:
+            self.download()
+        
+        if not self._check_exists():
+            raise RuntimeError("Dataset not downloaded")
+
+        self.docs = self._load_data()
+
+        if len(self.docs) != self.dataset_size:
+            raise RuntimeError("Length of dataset is not of the desired length. Use the 'overwrite=True' to redownload the data")
+
+        self.cached_data = [False for _ in self.docs]
+
+    def _load_data(self):
+        with open(os.path.join(self.raw_folder, 'data.json'), 'r') as f:
+            docs = json.load(f, cls=MontyDecoder)
+        return docs
+
+    @property
+    def raw_folder(self) -> str:
+        return os.path.join(self.root, self.__class__.__name__, "raw")
+
+    @property
+    def processed_folder(self) -> str:
+        return os.path.join(self.root, self.__class__.__name__, "processed")
+
+    @property
+    def hash_file(self) -> str:
+        return os.path.join(self.processed_folder, 'hashes.json')
+
+    @staticmethod
+    def get_hash(dictionary: Dict[str, Any]) -> str:
+        """
+        MD5 hash of a dictionary.
+        Adapted from: https://www.doc.ic.ac.uk/~nuric/coding/how-to-hash-a-dictionary-in-python.html
+        """
+        dhash = hashlib.md5()
+        # We need to sort arguments so {'a': 1, 'b': 2} is
+        # the same as {'b': 2, 'a': 1}
+        encoded = json.dumps(dictionary, sort_keys=True, cls=MontyEncoder).encode()
+        dhash.update(encoded)
+        return dhash.hexdigest()
+
+    def _check_exists(self):
+        if os.path.isfile(os.path.join(self.raw_folder, 'data.json')):
+            return True
+        else:
+            return False
+
+    def _check_processors(self):
+        """
+        We only redownload the data if the feature_processor or label_processor has changed
+        
+        If using a new data store or a new set of data, use the 'overwrite=True' arg
+        """
+        feature_processor_match = self._check_hash('feature_processor', 
+                                                   self.get_hash(self.feature_processor.__dict__))
+        label_processor_match = self._check_hash('label_processor', 
+                                                 self.get_hash(self.label_processor.__dict__))
+
+        return all(feature_processor_match, label_processor_match)
+
+    def _check_hash(self, 
+                    fname: str, 
+                    hash: int):
+        if not os.path.isfile(self.hash_file):
+            return False
+
+        with open(self.hash_file, 'r') as f:
+            hashes = json.load(f)
+        
+        return hashes[fname] == hash
+            
+    def log_processors(self):
+        _d = {}
+        _d['feature_processor'] = self.get_hash(self.feature_processor.__dict__)
+        _d['label_processor'] = self.get_hash(self.label_processor.__dict__)
+        with open(os.path.join(self.raw_folder, 'hashes.json'), 'w') as f:
+            json.dump(_d, f)
+
+    def download(self):
+        required_fields = self.feature_processor.required_fields + self.label_processor.required_fields
+        
+        if self._check_exists() and not self.overwrite:
+            return
+
+        os.makedirs(self.raw_folder, exist_ok=True)
+        os.makedirs(self.raw_folder, exist_ok=True)
+
+        # Download the data
+        with self.data_store:
+            documents = list(self.data_store.query(self.doc_filter, properties=required_fields))
+        
+        if self.dataset_size is not None:
+            # Choose a subset of the total documents
+            documents = np.random.choice(documents, 
+                                         size=min(len(documents), self.dataset_size), 
+                                         replace=False)
+
+        # Write the data to the raw directory
+        with open(os.path.join(self.raw_folder, 'data.json'), 'w') as f:
+            json.dump(documents, f, cls=MontyEncoder)
+        
+        # Log the processor hashes
+        self.log_processors()
+    
     def process_single_doc(self, idx: int):
         """
         Processes a single document and produces datapoint
         """
-        raise NotImplementedError("Must override process_single_doc")
+        doc = self.docs[idx]
+        _d = self.feature_processor.process_doc(doc)
+        _d.update(self.label_processor.process_doc(doc))
+
+        _d['constraints'] = doc['input']['constraints']
+        _d['dopant_specifications'] = doc['input']['dopant_specifications']
+        return Data(**_d)
 
     @classmethod
     def collate_fn(cls):
         raise NotImplementedError("Must override collate_fn")
 
-    @classmethod
-    def from_file(cls, 
-                  feature_processor: DataProcessor,
-                  label_processor: DataProcessor,
-                  doc_file: Optional[str] ='npmc_data.json'):
-
-        if os.path.exists(doc_file) == False:
-            raise ValueError('File {doc_file} does not exist')
-
-        # TODO: check if all the required fields are in the docs
-        with open(doc_file, 'r') as f:
-            documents = json.load(f, cls=MontyDecoder)
-        
-        return cls(documents, feature_processor, label_processor)
-
-    @classmethod
-    def from_store(cls, 
-                   store: Store,
-                   feature_processor: DataProcessor,
-                   label_processor: DataProcessor,
-                   doc_filter: Optional[Dict] = {},
-                   n_docs: Optional[int] = None,
-                   **kwargs):
-        
-        required_fields = feature_processor.required_fields + label_processor.required_fields
-        
-        #query for all documents
-        store.connect()
-        documents = list(store.query(doc_filter, properties=required_fields))
-        store.close()
-
-        # Select a random subset of them if the n_docs argument is passed
-        if n_docs:
-            documents = list(np.random.choice(documents, min(n_docs, len(documents)), replace=False))
-
-        return cls(documents, feature_processor, label_processor, **kwargs)
-
     def __len__(self):
         return len(self.docs)
 
     def __getitem__(self, idx):
-        return self.process_single_doc(idx)
+        if self.use_cache:
+            # Check if this index is cached
+            if self.cached_data[idx]:
+                # fetch from file
+                data = torch.load(os.path.join(self.processed_folder, str(idx), 'data.pt'))
+            else:
+                # generate the point
+                data = self.process_single_doc(idx)
+
+                # now cache it to file
+                os.makedirs(os.path.join(self.processed_folder, str(idx)), exist_ok=True)
+                torch.save(data, os.path.join(self.processed_folder, str(idx), 'data.pt'))
+                self.cached_data[idx] = True
+        else:
+            data = self.process_single_doc(idx)
+        return data
+
     
     def get_random(self):
         _idx = np.random.choice(range(len(self)))
@@ -202,23 +321,24 @@ class NPMCDataModule(pl.LightningDataModule):
     def __init__(self,
                  feature_processor: DataProcessor,
                  label_processor: DataProcessor,
-                 dataset_class: Type[Dataset] = BaseNPMCDataset,
                  training_data_store: Optional[Store] = None, 
                  testing_data_store: Optional[Store] = None,
                  training_doc_filter: Optional[dict] = {},
                  testing_doc_filter: Optional[dict] = {},
+                 training_data_dir: Optional[str] = '.training_data',
+                 testing_data_dir: Optional[str] = '.testing_data',
                  batch_size: Optional[int] = 16, 
                  validation_split: Optional[float] = 0.15,
                  test_split: Optional[float] = 0.15,
                  random_split_seed = 0,
                  training_size: Optional[int] = None,
-                 testing_size: Optional[int] = None):
+                 testing_size: Optional[int] = None,
+                 loader_workers: Optional[int] = 0):
         """
         If a 
 
         :param feature_processor: 
         :param label_processor: 
-        :param dataset_class: 
         :param doc_filter: Query to use for documents
         :param training_data_store:
         :param testing_data_store: 
@@ -234,33 +354,41 @@ class NPMCDataModule(pl.LightningDataModule):
 
         self.feature_processor = feature_processor
         self.label_processor = label_processor
-        self.dataset_class = dataset_class
         self.training_doc_filter = training_doc_filter
         self.testing_doc_filter = testing_doc_filter
         self.training_data_store = training_data_store
         self.testing_data_store = testing_data_store
+        self.training_data_dir = training_data_dir
+        self.testing_data_dir = testing_data_dir
         self.batch_size = batch_size
         self.validation_split = validation_split
         self.test_split = test_split
         self.random_split_seed = random_split_seed
         self.training_size = training_size
         self.testing_size = testing_size
+        self.loader_workers = loader_workers
 
         self.save_hyperparameters()
     
     def get_training_dataset(self):
-        return self.dataset_class.from_store(store=self.training_data_store,
-                                             doc_filter=self.training_doc_filter,
-                                             feature_processor = self.feature_processor,
-                                             label_processor = self.label_processor,
-                                             n_docs=self.training_size)
+        return NPMCDataset.from_store(root=self.training_data_dir,
+                                      feature_processor = self.feature_processor,
+                                      label_processor = self.label_processor,
+                                      data_store=self.training_data_store,
+                                      doc_filter=self.training_doc_filter,
+                                      download=True,
+                                      overwrite=False,
+                                      dataset_size=self.training_size)
 
     def get_testing_dataset(self):
-        return self.dataset_class.from_store(store=self.testing_data_store,
-                                            doc_filter=self.testing_doc_filter,
-                                            feature_processor = self.feature_processor,
-                                            label_processor = self.label_processor,
-                                            n_docs=self.testing_size)
+        return NPMCDataset.from_store(root=self.testing_data_dir,
+                                      feature_processor = self.feature_processor,
+                                      label_processor = self.label_processor,
+                                      data_store=self.testing_data_store,
+                                      doc_filter=self.testing_doc_filter,
+                                      download=True,
+                                      overwrite=False,
+                                      dataset_size=self.testing_size)
 
     def setup(self, 
               stage: Optional[str] = None):
@@ -285,15 +413,40 @@ class NPMCDataModule(pl.LightningDataModule):
             self.npmc_train, self.npmc_val, self.npmc_test = torch.utils.data.random_split(training_dataset, 
                                                                                         [train_size, validation_size, test_size],
                                                                                         generator = torch.Generator().manual_seed(self.random_split_seed))
+    
+    @staticmethod
+    def collate(data_list: List[Data]):
+        if len(data_list) == 0:
+            return data_list[0]
+        
+        x = torch.stack([data.x for data in data_list])
+        y = torch.stack([data.y for data in data_list])
+
+        return Data(x=x, y=y)
 
     def train_dataloader(self) -> DataLoader:
-        return DataLoader(self.npmc_train, self.batch_size, shuffle=True)
+        if self.feature_processor.is_graph:
+            # The data is graph structured
+            return pyg_DataLoader(self.npmc_train, self.batch_size, shuffle=True, num_workers=self.loader_workers)
+        else:
+            # The data is in an image representation
+            return DataLoader(self.npmc_train, self.batch_size, collate_fn=self.collate, shuffle=True, num_workers=self.loader_workers)
     
     def val_dataloader(self) -> DataLoader:
-        return DataLoader(self.npmc_val, self.batch_size, shuffle=False)
+        if self.feature_processor.is_graph:
+            # The data is graph structured
+            return pyg_DataLoader(self.npmc_train, self.batch_size, shuffle=False, num_workers=self.loader_workers)
+        else:
+            # The data is in an image representation
+            return DataLoader(self.npmc_val, self.batch_size, collate_fn=self.collate, shuffle=False, num_workers=self.loader_workers)
 
     def test_dataloader(self) -> DataLoader:
-        return DataLoader(self.npmc_test, self.batch_size, shuffle=False)
+        if self.feature_processor.is_graph:
+            # The data is graph structured
+            return pyg_DataLoader(self.npmc_train, self.batch_size, shuffle=True, num_workers=self.loader_workers)
+        else:
+            # The data is in an image representation
+            return DataLoader(self.npmc_test, self.batch_size, collate_fn=self.collate, shuffle=False, num_workers=self.loader_workers)
 
 
 class UCNPAugmenter():
