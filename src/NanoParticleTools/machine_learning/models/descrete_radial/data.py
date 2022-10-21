@@ -1,23 +1,9 @@
-from platform import node
-import shutil
 from ....inputs.nanoparticle import NanoParticleConstraint, SphericalConstraint
-from ....species_data.species import Dopant
-from .._data import DataProcessor, LabelProcessor, BaseNPMCDataset
-from .._data import NPMCDataModule as _NPMCDataModule
+from .._data import DataProcessor
 
-from torch.utils.data import DataLoader
-from torch_geometric.loader import DataLoader as pyg_DataLoader
-from torch_geometric.data import Data
-
-from matplotlib import pyplot as plt
-import numpy as np
-
-from typing import List, Union, Tuple, Optional, Type
-from maggma.core.store import Store
+from typing import List, Union, Tuple, Optional
 import torch
 import itertools
-import os
-import tempfile
 
 class GraphFeatureProcessor(DataProcessor):
     def __init__(self,

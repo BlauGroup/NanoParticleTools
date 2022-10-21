@@ -1,10 +1,8 @@
 import torch
-from torch.utils import data
 from torch import nn
 import pytorch_lightning as pl
 import torch.nn.functional as F
 from typing import Callable, Optional, Union, List
-import numpy as np
 
 
 class SpectrumModelBase(pl.LightningModule):

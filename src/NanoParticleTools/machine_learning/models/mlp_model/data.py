@@ -1,6 +1,4 @@
-from .._data import DataProcessor, LabelProcessor, BaseNPMCDataset
-from torch.utils.data import DataLoader
-from .._data import NPMCDataModule as _NPMCDataModule
+from .._data import DataProcessor
 from typing import List
 
 import numpy as np

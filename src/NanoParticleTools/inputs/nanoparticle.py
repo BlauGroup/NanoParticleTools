@@ -1,7 +1,7 @@
 from typing import Optional, Sequence, Union, Tuple
 
 import numpy as np
-from pymatgen.core import Composition, Structure, Site, Lattice, Molecule
+from pymatgen.core import Structure, Site, Lattice, Molecule
 from monty.json import MSONable
 from NanoParticleTools.species_data.species import Dopant
 

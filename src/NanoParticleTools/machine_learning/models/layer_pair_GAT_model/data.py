@@ -1,15 +1,7 @@
 from ....inputs.nanoparticle import NanoParticleConstraint, SphericalConstraint
-from ....species_data.species import Dopant
-from .._data import DataProcessor, LabelProcessor, BaseNPMCDataset
-from .._data import NPMCDataModule as _NPMCDataModule
+from .._data import DataProcessor
 
-from torch_geometric.loader import DataLoader
-from torch_geometric.data import Data
-
-from matplotlib import pyplot as plt
-import numpy as np
-
-from typing import List, Union, Tuple, Optional
+from typing import List, Tuple, Optional
 from itertools import combinations_with_replacement
 from functools import lru_cache
 import torch
