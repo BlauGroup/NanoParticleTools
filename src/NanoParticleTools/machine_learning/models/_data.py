@@ -16,6 +16,7 @@ from scipy.ndimage import gaussian_filter1d
 import hashlib
 from monty.serialization import MontyEncoder
 from torch_geometric.data import Data
+import warnings
 
 class DataProcessor():
     """
@@ -161,11 +162,7 @@ class NPMCDataset(Dataset):
         self.doc_filter = doc_filter
         self.overwrite = overwrite
         self.use_cache = use_cache
-        if dataset_size is None:
-            with self.data_store:
-                self.dataset_size = self.data_store.count()
-        else:
-            self.dataset_size = dataset_size
+        self.dataset_size = dataset_size
 
         if download:
             self.download()
@@ -175,8 +172,18 @@ class NPMCDataset(Dataset):
 
         self.docs = self._load_data()
 
-        if len(self.docs) != self.dataset_size:
-            raise RuntimeError("Length of dataset is not of the desired length. Use the 'overwrite=True' to redownload the data")
+        if self.dataset_size is None:
+            with self.data_store:
+                if len(self.docs) != self.data_store.count():
+                    warnings.warn("Length of dataset is not of the desired length. Automatically setting 'overwrite=True' to redownload the data")
+                    self.overwrite = True
+                    self.download()
+                    self.docs = self._load_data()
+        elif len(self.docs) != self.dataset_size:
+            warnings.warn("Length of dataset is not of the desired length. Automatically setting 'overwrite=True' to redownload the data")
+            self.overwrite = True
+            self.download()
+            self.docs = self._load_data()
 
         self.cached_data = [False for _ in self.docs]
 
@@ -262,9 +269,9 @@ class NPMCDataset(Dataset):
         
         if self.dataset_size is not None:
             # Choose a subset of the total documents
-            documents = np.random.choice(documents, 
+            documents = list(np.random.choice(documents, 
                                          size=min(len(documents), self.dataset_size), 
-                                         replace=False)
+                                         replace=False))
 
         # Write the data to the raw directory
         with open(os.path.join(self.raw_folder, 'data.json'), 'w') as f:
@@ -321,7 +328,7 @@ class NPMCDataModule(pl.LightningDataModule):
     def __init__(self,
                  feature_processor: DataProcessor,
                  label_processor: DataProcessor,
-                 training_data_store: Optional[Store] = None, 
+                 training_data_store: Store, 
                  testing_data_store: Optional[Store] = None,
                  training_doc_filter: Optional[dict] = {},
                  testing_doc_filter: Optional[dict] = {},
@@ -368,49 +375,52 @@ class NPMCDataModule(pl.LightningDataModule):
         self.testing_size = testing_size
         self.loader_workers = loader_workers
 
+        self.training_dataset = None
+        self.testing_dataset = None
         self.save_hyperparameters()
     
     def get_training_dataset(self):
-        return NPMCDataset.from_store(root=self.training_data_dir,
-                                      feature_processor = self.feature_processor,
-                                      label_processor = self.label_processor,
-                                      data_store=self.training_data_store,
-                                      doc_filter=self.training_doc_filter,
-                                      download=True,
-                                      overwrite=False,
-                                      dataset_size=self.training_size)
+        return NPMCDataset(root=self.training_data_dir,
+                           feature_processor = self.feature_processor,
+                           label_processor = self.label_processor,
+                           data_store=self.training_data_store,
+                           doc_filter=self.training_doc_filter,
+                           download=True,
+                           overwrite=False,
+                           dataset_size=self.training_size)
 
     def get_testing_dataset(self):
-        return NPMCDataset.from_store(root=self.testing_data_dir,
-                                      feature_processor = self.feature_processor,
-                                      label_processor = self.label_processor,
-                                      data_store=self.testing_data_store,
-                                      doc_filter=self.testing_doc_filter,
-                                      download=True,
-                                      overwrite=False,
-                                      dataset_size=self.testing_size)
+        if self.testing_data_store is not None:
+            return NPMCDataset(root=self.testing_data_dir,
+                            feature_processor = self.feature_processor,
+                            label_processor = self.label_processor,
+                            data_store=self.testing_data_store,
+                            doc_filter=self.testing_doc_filter,
+                            download=True,
+                            overwrite=False,
+                            dataset_size=self.testing_size)
+        return None
+
+    def prepare_data(self) -> None:
+        self.training_dataset = self.get_training_dataset()
+        self.testing_dataset = self.get_testing_dataset()
 
     def setup(self, 
               stage: Optional[str] = None):
-        training_dataset = self.get_training_dataset()
 
-        if self.testing_data_store:
-            # Initialize the testing set from the store
-            testing_dataset = self.get_testing_dataset()
-
+        if self.testing_dataset:
             # Split the training data in to a test and validation set
-            
-            validation_size = int(len(training_dataset) * self.validation_split)
-            train_size = len(training_dataset) - validation_size
-            self.npmc_train, self.npmc_val = torch.utils.data.random_split(training_dataset, 
+            validation_size = int(len(self.training_dataset) * self.validation_split)
+            train_size = len(self.training_dataset) - validation_size
+            self.npmc_train, self.npmc_val = torch.utils.data.random_split(self.training_dataset, 
                                                                            [train_size, validation_size],
                                                                            generator = torch.Generator().manual_seed(self.random_split_seed))
-            self.npmc_test = testing_dataset
+            self.npmc_test = self.testing_dataset
         else:
-            test_size = int(len(training_dataset) * self.test_split)
-            validation_size = int(len(training_dataset) * self.validation_split)
-            train_size = len(training_dataset) - validation_size - test_size
-            self.npmc_train, self.npmc_val, self.npmc_test = torch.utils.data.random_split(training_dataset, 
+            test_size = int(len(self.training_dataset) * self.test_split)
+            validation_size = int(len(self.training_dataset) * self.validation_split)
+            train_size = len(self.training_dataset) - validation_size - test_size
+            self.npmc_train, self.npmc_val, self.npmc_test = torch.utils.data.random_split(self.training_dataset, 
                                                                                         [train_size, validation_size, test_size],
                                                                                         generator = torch.Generator().manual_seed(self.random_split_seed))
     
