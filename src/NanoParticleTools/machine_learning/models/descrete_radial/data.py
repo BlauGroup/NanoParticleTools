@@ -56,12 +56,13 @@ class GraphFeatureProcessor(DataProcessor):
             node_features[start_i:end_i, :self.n_possible_elements] = concentrations[constraint_i]
             start_i = end_i
 
-        ## Set the third index to volume
-        node_features[:, -1] = self.volume(torch.arange(0, constraints[-1].radius, self.resolution))
+        ## Set the last index to volume
+        volume = self.volume(torch.arange(0, constraints[-1].radius, self.resolution))
         if self.log_vol:
-            node_features[:, -1] = torch.log10(node_features[:, -1])
+            volume = torch.log10(volume)
 
-        return {'x': node_features}
+        return {'x': node_features,
+                'volume': volume}
         
     def get_edge_features(self, 
                           constraints: List[NanoParticleConstraint]) -> torch.Tensor:
