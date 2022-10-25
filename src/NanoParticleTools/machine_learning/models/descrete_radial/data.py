@@ -12,6 +12,7 @@ class GraphFeatureProcessor(DataProcessor):
                  full_nanoparticle: Optional[bool] = True,
                  cutoff_distance: Optional[int] = 3,
                  log_vol: Optional[bool] = True,
+                 shift_composition: Optional[bool] = False,
                  **kwargs):
         """
         :param possible_elements:  
@@ -28,6 +29,7 @@ class GraphFeatureProcessor(DataProcessor):
         self.full_nanoparticle = full_nanoparticle
         self.cutoff_distance = cutoff_distance
         self.log_vol = log_vol
+        self.shift_composition = shift_composition
 
     def get_node_features(self, 
                           constraints: List[NanoParticleConstraint], 
@@ -38,7 +40,10 @@ class GraphFeatureProcessor(DataProcessor):
         
         ## Fill in the concentrations that are present
         for i, x, el, _ in dopant_specifications:
-            concentrations[i][self.dopants_dict[el]] = x
+            if self.shift_composition:
+                concentrations[i][self.dopants_dict[el]] = x - 0.5
+            else:
+                concentrations[i][self.dopants_dict[el]] = x
 
         # Make the array for the representation
         n_subdivisions = torch.ceil(torch.tensor(constraints[-1].radius) / self.resolution).int()
