@@ -157,6 +157,8 @@ class DiscreteGraphModel(pl.LightningModule):
                  mpnn_module: Optional[torch.nn.Module] = pyg_nn.GATv2Conv,
                  mpnn_kwargs: Optional[dict] = {'edge_dim':1},
                  mpnn_operation: Optional[str] = 'x, edge_index, edge_attr -> x',
+                 aggregation_module: Optional[pyg_nn.Aggregation] = pyg_nn.aggr.Set2Set,
+                 aggregation_kwargs: Optional[dict] = {'processing_step': 10},
                  **kwargs):
         super().__init__(**kwargs)
         
@@ -178,26 +180,33 @@ class DiscreteGraphModel(pl.LightningModule):
         
         # Build the mlp layers
         mlp_modules = []
-        for i, _ in enumerate(mlp_sizes:=[mpnn_channels[-1]]+mlp_layers+[n_output_nodes]):
+        for i, _ in enumerate(mlp_sizes:=[mpnn_channels[-1]*2]+mlp_layers+[n_output_nodes]):
             if i == len(mlp_sizes)-1:
                  break
             mlp_modules.append(nn.Dropout())
             mlp_modules.append(nn.Linear(*mlp_sizes[i:i+2]))
             mlp_modules.append(activation_module(inplace=True))
+
+        ## Initialize the weights to the linear layers according to Xavier Uniform
+        for lin in mlp_modules:
+            if activation_module == nn.SiLU:
+                torch.nn.init.xavier_uniform_(lin.weight, gain=1.519) # 1.519 Seems like a good value for SiLU
+            elif activation_module == nn.ReLU:
+                torch.nn.init.xavier_uniform_(lin.weight, gain=torch.nn.init.calculate_gain('relu')) # Default to 1
             
+        # Use the Set2Set aggregation method to pool the graph into a single global feature vector
+        readout = aggregation_module(mpnn_channels[-1], **aggregation_kwargs)
+        
         # Construct the primary module
+        all_modules = mpnn_modules+[readout]+mlp_modules
         self.nn = pyg_nn.Sequential('x, edge_index, edge_attr, edge_weight',
-                                    mpnn_modules+mlp_modules)
+                                    all_modules)
         
         self.save_hyperparameters()
 
     def forward(self, data):
         x = self.nn(x=data.x[:, :3], edge_index=data.edge_index, edge_attr=data.edge_attr, edge_weight=data.edge_weight)
-        
-        if data.batch is not None:
-            return scatter(x, data.batch.unsqueeze(1), dim=0, reduce='sum')
-        else:
-            return torch.sum(x, dim=0)
+        return x
     
     def configure_optimizers(self) -> Union[List[torch.optim.Optimizer], List[torch.optim.lr_scheduler._LRScheduler]]:
         """
