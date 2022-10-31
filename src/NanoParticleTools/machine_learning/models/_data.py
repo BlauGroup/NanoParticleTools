@@ -12,6 +12,7 @@ from monty.json import MontyDecoder
 import os
 import pytorch_lightning as pl
 from NanoParticleTools.inputs.nanoparticle import NanoParticleConstraint, SphericalConstraint
+from NanoParticleTools.inputs.nanoparticle import Dopant
 from scipy.ndimage import gaussian_filter1d
 import hashlib
 from monty.serialization import MontyEncoder
