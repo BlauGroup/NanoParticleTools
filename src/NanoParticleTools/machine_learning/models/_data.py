@@ -346,7 +346,9 @@ class NPMCDataset(Dataset):
 
     def download(self):
         required_fields = self.feature_processor.required_fields + self.label_processor.required_fields
-        
+        if 'input' not in required_fields:
+            required_fields.append('input')
+
         if self._check_exists() and not self.overwrite:
             return
 
