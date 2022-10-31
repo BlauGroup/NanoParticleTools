@@ -72,7 +72,14 @@ class GraphFeatureProcessor(DataProcessor):
         distance_matrix = torch.abs(xy - yx)
         edge_index = torch.vstack(torch.where(distance_matrix <= self.cutoff_distance))
         edge_attr = distance_matrix[edge_index[0], edge_index[1]]
-        
+
+        volume = self.volume(torch.arange(0, constraints[-1].radius, self.resolution))
+        if self.log_vol:
+            volume = torch.log10(volume)
+
+        source, target = edge_index
+        edge_attr = torch.stack([edge_attr, volume[source], volume[target], radius[source], radius[target]]).moveaxis(0, 1)
+
         return {'edge_index': edge_index, 
                 'edge_attr': edge_attr}
 
