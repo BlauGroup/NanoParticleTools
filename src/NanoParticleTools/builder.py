@@ -78,12 +78,6 @@ class UCNPBuilder(Builder):
         avg_dndt = self.average_dndt(items)
         avg_doc["output"]["summary"] = avg_dndt
         
-        # Compute the spectrum
-        dopants = [Dopant(key, val) for key, val in avg_doc["overall_dopant_concentration"].items()]
-        x, y = self.get_spectrum(avg_dndt, dopants)
-        avg_doc["output"]["spectrum_x"] = x
-        avg_doc["output"]["spectrum_y"] = y
-        
         # TODO: Average the populations
         return avg_doc
     
@@ -92,31 +86,6 @@ class UCNPBuilder(Builder):
     
     def prechunk(self):
         pass
-    
-    def get_spectrum(self, 
-                     avg_dndt, 
-                     dopants, 
-                     lower_bound = -1000, 
-                     upper_bound = 1000, 
-                     step = 1):
-        
-        x = np.arange(-1000, 1000, step)
-        y = np.zeros(x.shape)
-        for interaction in [_d for _d in avg_dndt if _d[8] == "Rad"]:
-            # print(interaction)
-            species_id = interaction[2]
-            left_state_1 = interaction[4]
-            right_state_1 = interaction[6]
-            ei = dopants[species_id].energy_levels[left_state_1]
-            ef = dopants[species_id].energy_levels[right_state_1]
-
-            de = ef.energy-ei.energy
-            wavelength = (299792458*6.62607004e-34)/(de*1.60218e-19/8065.44)*1e9
-            # print(left_state_1, right_state_1, wavelength)
-            if wavelength > lower_bound and wavelength < upper_bound:
-                index = int(np.floor(wavelength+1000)/step)
-                y[index]+=interaction[10]
-        return x, y
     
     def average_dndt(self, docs):
         """

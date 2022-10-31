@@ -69,67 +69,157 @@ class DataProcessor():
     def is_graph(self):
         pass
     
-
-class LabelProcessor(DataProcessor):
+class EnergyLabelProcessor(DataProcessor):
+    """
+    This Label processor returns a spectrum that is binned uniformly with respect to energy (I(E))
+    """
     def __init__(self, 
                  spectrum_range: Union[Tuple, List] = (-1000, 0),
                  output_size: Optional[int] = 500,
-                 log: Optional[bool] = False,
-                 normalize: Optional[bool] = False,
+                 log_constant: Optional[float] = 1e-3,
                  gaussian_filter: Optional[float] = 0,
                  **kwargs):
         """
         :param spectrum_range: Range over which the spectrum should be cropped
         :param output_size: Number of bins in the resultant spectra. This quantity will be used as the # of output does in the NN
-        :param log: Apply the log function to the data. This will scale data which spans multiple orders of magnitude.
+        :param log_constant: When applying the log function, we use the form log_10(I+b). 
+            Since the intensity is always positive, this function is easily invertible. min_log_val sets the minimum value of the label after applying the log.
+            To make sure the values aren't clipped, it is recommended that the smallest b is chosen at least 1 order of magnitude lower than 1/(# avg'd documents).
+            Example: With 16 documents averaged, the lowest (non-zero) observation is 0.0625(1/16), therefore choose 0.001 as the log. 
         :param normalize: Normalize the integrated area of the spectrum to 1
         """
-        
-        super().__init__(fields=['output.spectrum_x', 'output.spectrum_y'], **kwargs)
+        super().__init__(fields=['output.spectrum_x', 'output.spectrum_y', 'output.summary', 'overall_dopant_concentration'], **kwargs)
         
         self.spectrum_range = spectrum_range
         self.output_size = output_size
-        self.log = log
-        self.normalize = normalize
+        self.log_constant = log_constant
         self.gaussian_filter = gaussian_filter
-    
-    @property
-    def x(self) -> np.array:
-        """
-        Returns the x bins for the processed data.
-
-        Typically used to plot the spectrum
-        """
-        _x = np.linspace(*self.spectrum_range, self.output_size+1)
+            
+    def process_doc(self, 
+                doc: dict) -> torch.Tensor:
+        overall_dopant_concentration = self.get_item_from_doc(doc, 'overall_dopant_concentration')
+        dopants = [Dopant(key, val) for key, val in overall_dopant_concentration.items()]
+        avg_dndt = self.get_item_from_doc(doc, 'output.summary')
         
-        return (_x[:-1]+_x[1:])/2
+        _x = torch.linspace(*self.spectrum_range, self.output_size+1)[:-1]
+        x = (_x[:-1]+_x[1:])/2 # middle point of each bin
+        spectrum = torch.zeros(x.shape)
+        step = x[1]-x[0]
+        
+        for interaction in [_d for _d in avg_dndt if _d[8] == "Rad"]:
+            # print(interaction)
+            species_id = interaction[2]
+            left_state_1 = interaction[4]
+            right_state_1 = interaction[6]
+            ei = dopants[species_id].energy_levels[left_state_1]
+            ef = dopants[species_id].energy_levels[right_state_1]
+
+            de = ef.energy-ei.energy
+            if de > self.spectrum_range[0] and de < self.spectrum_range[1]:
+                index = int(np.floor(de-self.spectrum_range[0])/step)
+                spectrum[index]+=interaction[10]
+        
+        y = spectrum
+        if self.gaussian_filter > 0:
+            y = torch.tensor(gaussian_filter1d(y, self.gaussian_filter))
+        
+        idx_zero = int(np.floor(0-self.spectrum_range[0])/step)
+        
+        n_photons_absorbed = spectrum[idx_zero:].sum()
+        n_photons_emitted = spectrum[:idx_zero].sum()
+        
+        total_energy = spectrum * x
+        e_absorbed = total_energy[idx_zero:].sum()
+        e_absorbed = total_energy[:idx_zero].sum()
+        return {'x': x,
+                'y': y.float(),
+                'log_y': torch.log10(y + self.log_constant).float(),
+                'idx_zero': idx_zero,
+                'n_absorbed': n_photons_absorbed,
+                'n_emitted': n_photons_emitted,
+                'e_absorbed': e_absorbed,
+                'e_emitted': e_absorbed}
+    
+    def __str__(self):
+        return f"Energy Label Processor - {self.output_size} bins, x_min = {self.spectrum_range[0]}, x_max = {self.spectrum_range[1]}, log = {self.log}, normalize = {self.normalize}"
+    
+class EnergyLabelProcessor(DataProcessor):
+    """
+    This Label processor returns a spectrum that is binned uniformly with respect to wavelength I(\lambda{})
+    """
+    def __init__(self, 
+                 spectrum_range: Union[Tuple, List] = (-1000, 0),
+                 output_size: Optional[int] = 500,
+                 log_constant: Optional[float] = 1e-3,
+                 gaussian_filter: Optional[float] = None,
+                 **kwargs):
+        """
+        :param spectrum_range: Range over which the spectrum should be cropped
+        :param output_size: Number of bins in the resultant spectra. This quantity will be used as the # of output does in the NN
+        :param log_constant: When applying the log function, we use the form log_10(I+b). 
+            Since the intensity is always positive, this function is easily invertible. min_log_val sets the minimum value of the label after applying the log.
+            To make sure the values aren't clipped, it is recommended that the smallest b is chosen at least 1 order of magnitude lower than 1/(# avg'd documents).
+            Example: With 16 documents averaged, the lowest (non-zero) observation is 0.0625(1/16), therefore choose 0.001 as the log. 
+        :param normalize: Normalize the integrated area of the spectrum to 1
+        """
+        if gaussian_filter is None:
+            gaussian_filter = 0
+        
+        super().__init__(fields=['output.spectrum_x', 'output.spectrum_y', 'output.summary', 'overall_dopant_concentration'], **kwargs)
+        
+        self.spectrum_range = spectrum_range
+        self.output_size = output_size
+        self.log_constant = log_constant
+        self.gaussian_filter = gaussian_filter
 
     def process_doc(self, 
                 doc: dict) -> torch.Tensor:
-        spectrum_x = torch.tensor(self.get_item_from_doc(doc, 'output.spectrum_x'))
-        spectrum_y = torch.tensor(self.get_item_from_doc(doc, 'output.spectrum_y'))
+        overall_dopant_concentration = self.get_item_from_doc(doc, 'overall_dopant_concentration')
+        dopants = [Dopant(key, val) for key, val in overall_dopant_concentration.items()]
+        avg_dndt = self.get_item_from_doc(doc, 'output.summary')
+        
+        _x = torch.linspace(*self.spectrum_range, self.output_size+1)
+        x = (_x[:-1]+_x[1:])/2 # middle point of each bin
+        spectrum = torch.zeros(x.shape)
+        step = x[1]-x[0]
+        
+        for interaction in [_d for _d in avg_dndt if _d[8] == "Rad"]:
+            # print(interaction)
+            species_id = interaction[2]
+            left_state_1 = interaction[4]
+            right_state_1 = interaction[6]
+            ei = dopants[species_id].energy_levels[left_state_1]
+            ef = dopants[species_id].energy_levels[right_state_1]
 
-        min_i = torch.argmin(torch.abs(torch.subtract(spectrum_x, self.spectrum_range[0])))
-        max_i = torch.argmin(torch.abs(torch.subtract(spectrum_x, self.spectrum_range[1])))
-        if self.spectrum_range[1] > spectrum_x[-1]:
-            max_i = len(spectrum_x)
+            de = ef.energy-ei.energy
+            wavelength = (299792458*6.62607004e-34)/(de*1.60218e-19/8065.44)*1e9
+            if wavelength >= self.spectrum_range[0] and wavelength <= self.spectrum_range[1]:
+                index = int(np.floor(wavelength-self.spectrum_range[0])/step)
+                spectrum[index]+=interaction[10]
         
-        x = spectrum_x[min_i:max_i]
-        y = spectrum_y[min_i:max_i]
-        
-        spectrum = torch.sum(torch.reshape(y, (self.output_size, -1)), axis=1)
+        y = spectrum
         if self.gaussian_filter > 0:
-            spectrum = torch.tensor(gaussian_filter1d(spectrum, self.gaussian_filter))
-        if self.log:
-            spectrum = torch.log10(spectrum + 1)
-        if self.normalize:
-            spectrum = spectrum/torch.sum(spectrum)
+            y = torch.tensor(gaussian_filter1d(y, self.gaussian_filter))
         
-        return {'y': spectrum.float()}
+        idx_zero = int(np.floor(0-self.spectrum_range[0])/step)
+        
+        n_photons_absorbed = spectrum[idx_zero:].sum()
+        n_photons_emitted = spectrum[:idx_zero].sum()
+        
+        total_energy = spectrum * x
+        e_absorbed = total_energy[idx_zero:].sum()
+        e_absorbed = total_energy[:idx_zero].sum()
+        return {'x': x,
+                'y': y.float(),
+                'log_y': torch.log10(y + self.log_constant).float(),
+                'idx_zero': idx_zero,
+                'n_absorbed': n_photons_absorbed,
+                'n_emitted': n_photons_emitted,
+                'e_absorbed': e_absorbed,
+                'e_emitted': e_absorbed}
     
     def __str__(self):
-        return f"Label Processor - {self.output_size} bins, x_min = {self.spectrum_range[0]}, x_max = {self.spectrum_range[1]}, log = {self.log}, normalize = {self.normalize}"
-        
+        return f"Wavelength Label Processor - {self.output_size} bins, x_min = {self.spectrum_range[0]}, x_max = {self.spectrum_range[1]}, log = {self.log}, normalize = {self.normalize}"
 
 class NPMCDataset(Dataset):
     """
