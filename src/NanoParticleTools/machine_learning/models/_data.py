@@ -537,7 +537,7 @@ class NPMCDataModule(pl.LightningDataModule):
     def val_dataloader(self) -> DataLoader:
         if self.feature_processor.is_graph:
             # The data is graph structured
-            return pyg_DataLoader(self.npmc_train, self.batch_size, shuffle=False, num_workers=self.loader_workers)
+            return pyg_DataLoader(self.npmc_val, self.batch_size, shuffle=False, num_workers=self.loader_workers)
         else:
             # The data is in an image representation
             return DataLoader(self.npmc_val, self.batch_size, collate_fn=self.collate, shuffle=False, num_workers=self.loader_workers)
@@ -545,7 +545,7 @@ class NPMCDataModule(pl.LightningDataModule):
     def test_dataloader(self) -> DataLoader:
         if self.feature_processor.is_graph:
             # The data is graph structured
-            return pyg_DataLoader(self.npmc_train, self.batch_size, shuffle=True, num_workers=self.loader_workers)
+            return pyg_DataLoader(self.npmc_test, self.batch_size, shuffle=True, num_workers=self.loader_workers)
         else:
             # The data is in an image representation
             return DataLoader(self.npmc_test, self.batch_size, collate_fn=self.collate, shuffle=False, num_workers=self.loader_workers)
