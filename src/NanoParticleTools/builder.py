@@ -1,9 +1,10 @@
 from maggma.core import Builder
 from maggma.core import Store
+from maggma.utils import grouper
 from typing import Iterator, List, Dict, Optional, Iterable
 from bson import uuid
 import numpy as np
-from NanoParticleTools.species_data.species import Dopant
+import random
 
 class UCNPBuilder(Builder):
     """
@@ -26,12 +27,11 @@ class UCNPBuilder(Builder):
         
         super().__init__(sources=source, targets=target, chunk_size=chunk_size, **kwargs)
     
-    
-    def get_grouped_docs(self):
+    def get_grouped_docs(self) -> List[Dict]:
         group_keys = ["data.n_dopants", "data.n_dopant_sites", "data.formula", "data.nanostructure_size", "data.formula_by_constraint", "data.excitation_power", "data.excitation_wavelength"]
         return self.source.groupby(keys=group_keys, criteria=self.docs_filter, properties=["_id"])
     
-    def get_items(self):
+    def get_items(self) -> List[Dict]:
         """
         Here we group the documents
         """
@@ -45,7 +45,8 @@ class UCNPBuilder(Builder):
             if len(docs_to_avg) > 0:
                 yield docs_to_avg
     
-    def process_item(self, items):
+    def process_item(self, 
+                     items: List[Dict]) -> Dict:
         self.logger.info(f"Got {len(items)} to process")
         # Create/Populate a new document for the average
         avg_doc = {"uuid": uuid.uuid4(),
@@ -81,13 +82,25 @@ class UCNPBuilder(Builder):
         # TODO: Average the populations
         return avg_doc
     
-    def update_targets(self, items: List[Dict]):
+    def update_targets(self, 
+                       items: List[Dict]) -> None:
         self.target.update(items, key=["uuid"])
     
-    def prechunk(self):
-        pass
+    def prechunk(self, 
+                 number_splits: int) -> Iterator[Dict]:
+        grouped_ids = [[doc["_id"] for doc in item[1]] for item in self.get_grouped_docs()]
+
+        # Shuffle the documents in case the shorter ones (which will process faster) are all at the start
+        random.shuffle(grouped_ids)
+
+        N = int(np.ceil(len(grouped_ids) / number_splits))
+        for split in grouper(grouped_ids, N):
+            yield {
+                "grouped_ids": list(split)
+            }
     
-    def average_dndt(self, docs):
+    def average_dndt(self, 
+                     docs: List[Dict]) -> Dict:
         """
         Compute the average of the dndts
         
