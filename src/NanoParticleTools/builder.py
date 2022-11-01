@@ -36,10 +36,12 @@ class UCNPBuilder(Builder):
         """
         Here we group the documents
         """
-        grouped_ids = self.grouped_ids
+        
         if self.grouped_ids is None:
             # If it isn"t already passed (either by the prechunk or manually), get a list of grouped documents
             grouped_ids = [[doc["_id"] for doc in item[1]] for item in self.get_grouped_docs()]
+        else:
+            grouped_ids = self.grouped_ids
             
         for ids in grouped_ids:
             docs_to_avg = list(self.source.query({"_id": {"$in": ids}}))
