@@ -26,6 +26,7 @@ class UCNPBuilder(Builder):
         self.kwargs = kwargs
         
         super().__init__(sources=source, targets=target, chunk_size=chunk_size, **kwargs)
+        self.connect()
     
     def get_grouped_docs(self) -> List[Dict]:
         group_keys = ["data.n_dopants", "data.n_dopant_sites", "data.formula", "data.nanostructure_size", "data.formula_by_constraint", "data.excitation_power", "data.excitation_wavelength"]
