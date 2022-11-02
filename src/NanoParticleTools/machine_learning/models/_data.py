@@ -76,7 +76,7 @@ class EnergyLabelProcessor(DataProcessor):
     """
     def __init__(self, 
                  spectrum_range: Union[Tuple, List] = (-1000, 0),
-                 output_size: Optional[int] = 500,
+                 output_size: Optional[int] = 600,
                  log_constant: Optional[float] = 1e-3,
                  gaussian_filter: Optional[float] = 0,
                  **kwargs):
@@ -89,7 +89,7 @@ class EnergyLabelProcessor(DataProcessor):
             Example: With 16 documents averaged, the lowest (non-zero) observation is 0.0625(1/16), therefore choose 0.001 as the log. 
         :param normalize: Normalize the integrated area of the spectrum to 1
         """
-        super().__init__(fields=['output.spectrum_x', 'output.spectrum_y', 'output.summary', 'overall_dopant_concentration'], **kwargs)
+        super().__init__(fields=['output.energy_spectrum_x', 'output.energy_spectrum_y'], **kwargs)
         
         self.spectrum_range = spectrum_range
         self.output_size = output_size
@@ -98,59 +98,72 @@ class EnergyLabelProcessor(DataProcessor):
             
     def process_doc(self, 
                 doc: dict) -> torch.Tensor:
-        overall_dopant_concentration = self.get_item_from_doc(doc, 'overall_dopant_concentration')
-        dopants = [Dopant(key, val) for key, val in overall_dopant_concentration.items()]
-        avg_dndt = self.get_item_from_doc(doc, 'output.summary')
-        
-        _x = torch.linspace(*self.spectrum_range, self.output_size+1)[:-1]
-        x = (_x[:-1]+_x[1:])/2 # middle point of each bin
-        spectrum = torch.zeros(x.shape)
+        x = torch.tensor(self.get_item_from_doc(doc, 'output.energy_spectrum_x'))
+        spectrum = torch.tensor(self.get_item_from_doc(doc, 'output.energy_spectrum_y'))
         step = x[1]-x[0]
-        
-        for interaction in [_d for _d in avg_dndt if _d[8] == "Rad"]:
-            # print(interaction)
-            species_id = interaction[2]
-            left_state_1 = interaction[4]
-            right_state_1 = interaction[6]
-            ei = dopants[species_id].energy_levels[left_state_1]
-            ef = dopants[species_id].energy_levels[right_state_1]
 
-            de = ef.energy-ei.energy
-            if de > self.spectrum_range[0] and de < self.spectrum_range[1]:
-                index = int(np.floor(de-self.spectrum_range[0])/step)
-                spectrum[index]+=interaction[10]
-        
+        if x.shape[0] != self.output_size:
+            if x.shape[0] >= self.output_size:
+                warnings.warn('Desired spectrum resolution is coarser than found in the document. \
+                               Spectrum will be rebinned approximately. It is recommended to rebuild the collection to match the desired resolution')
+                # We need to rebin the distribution
+                multiplier = int(torch.lcm(torch.tensor(x.size(0)), torch.tensor(self.output_size))/x.shape[0])
+                
+                _spectrum = spectrum.expand(multiplier, -1).moveaxis(0, 1).reshape(self.output_size, -1).sum(dim=-1) 
+                _spectrum = _spectrum * x.size(0) / (multiplier * self.output_size) # ensure integral is constant
+
+                ## Get the edges of the spectra
+                lower_bound = x[0] - (step/2)
+                upper_bound = x[-1] + (step/2)
+
+                ## Construct the new array
+                _x = torch.linspace(lower_bound, upper_bound, self.output_size)
+                
+                # Replace the old spectrum with the new
+                x = _x
+                spectrum = _spectrum
+            else:
+                raise RuntimeError("Spectrum in document is different than desired resolution and cannot be rebinned. Please rebuild the collection")
+            
+        # Assign to a different variable, so we can modify 
+        # the spectrum while keeping a reference to the original
         y = spectrum
         if self.gaussian_filter > 0:
             y = torch.tensor(gaussian_filter1d(y, self.gaussian_filter))
         
+        # Keep track of where the spectrum changes from
+        # emission to absorption.
         idx_zero = int(np.floor(0-self.spectrum_range[0])/step)
         
-        n_photons_absorbed = spectrum[idx_zero:].sum()
-        n_photons_emitted = spectrum[:idx_zero].sum()
+        # Count the total number of photons, we can add this to the loss
+        n_photons_absorbed = torch.sum(spectrum[idx_zero:])
+        n_photons_emitted = torch.sum(spectrum[:idx_zero])
         
+        # Integrate the energy absorbed vs emitted.
+        # This can be added to the loss to enforce conservation of energy
         total_energy = spectrum * x
-        e_absorbed = total_energy[idx_zero:].sum()
-        e_absorbed = total_energy[:idx_zero].sum()
-        return {'x': x,
+        e_absorbed = torch.sum(total_energy[idx_zero:])
+        e_emitted = torch.sum(total_energy[:idx_zero])
+
+        return {'spectra_x': x,
                 'y': y.float(),
                 'log_y': torch.log10(y + self.log_constant).float(),
                 'idx_zero': idx_zero,
                 'n_absorbed': n_photons_absorbed,
                 'n_emitted': n_photons_emitted,
                 'e_absorbed': e_absorbed,
-                'e_emitted': e_absorbed}
+                'e_emitted': e_emitted}
     
     def __str__(self):
-        return f"Energy Label Processor - {self.output_size} bins, x_min = {self.spectrum_range[0]}, x_max = {self.spectrum_range[1]}, log = {self.log}, normalize = {self.normalize}"
+        return f"Energy Label Processor - {self.output_size} bins, x_min = {self.spectrum_range[0]}, x_max = {self.spectrum_range[1]}, log_constant = {self.log_constant}"
     
-class EnergyLabelProcessor(DataProcessor):
+class WavelengthLabelProcessor(DataProcessor):
     """
     This Label processor returns a spectrum that is binned uniformly with respect to wavelength I(\lambda{})
     """
     def __init__(self, 
                  spectrum_range: Union[Tuple, List] = (-1000, 0),
-                 output_size: Optional[int] = 500,
+                 output_size: Optional[int] = 600,
                  log_constant: Optional[float] = 1e-3,
                  gaussian_filter: Optional[float] = None,
                  **kwargs):
@@ -166,7 +179,7 @@ class EnergyLabelProcessor(DataProcessor):
         if gaussian_filter is None:
             gaussian_filter = 0
         
-        super().__init__(fields=['output.spectrum_x', 'output.spectrum_y', 'output.summary', 'overall_dopant_concentration'], **kwargs)
+        super().__init__(fields=['output.wavelength_spectrum_x', 'output.wavelength_spectrum_y', 'output.summary', 'overall_dopant_concentration'], **kwargs)
         
         self.spectrum_range = spectrum_range
         self.output_size = output_size
@@ -175,52 +188,64 @@ class EnergyLabelProcessor(DataProcessor):
 
     def process_doc(self, 
                 doc: dict) -> torch.Tensor:
-        overall_dopant_concentration = self.get_item_from_doc(doc, 'overall_dopant_concentration')
-        dopants = [Dopant(key, val) for key, val in overall_dopant_concentration.items()]
-        avg_dndt = self.get_item_from_doc(doc, 'output.summary')
-        
-        _x = torch.linspace(*self.spectrum_range, self.output_size+1)
-        x = (_x[:-1]+_x[1:])/2 # middle point of each bin
-        spectrum = torch.zeros(x.shape)
+        x = torch.tensor(self.get_item_from_doc(doc, 'output.wavelength_spectrum_x'))
+        spectrum = torch.tensor(self.get_item_from_doc(doc, 'output.wavelength_spectrum_y'))
         step = x[1]-x[0]
-        
-        for interaction in [_d for _d in avg_dndt if _d[8] == "Rad"]:
-            # print(interaction)
-            species_id = interaction[2]
-            left_state_1 = interaction[4]
-            right_state_1 = interaction[6]
-            ei = dopants[species_id].energy_levels[left_state_1]
-            ef = dopants[species_id].energy_levels[right_state_1]
 
-            de = ef.energy-ei.energy
-            wavelength = (299792458*6.62607004e-34)/(de*1.60218e-19/8065.44)*1e9
-            if wavelength >= self.spectrum_range[0] and wavelength <= self.spectrum_range[1]:
-                index = int(np.floor(wavelength-self.spectrum_range[0])/step)
-                spectrum[index]+=interaction[10]
-        
+        if x.shape[0] != self.output_size:
+            if x.shape[0] >= self.output_size:
+                warnings.warn('Desired spectrum resolution is coarser than found in the document. \
+                               Spectrum will be rebinned approximately. It is recommended to rebuild the collection to match the desired resolution')
+                # We need to rebin the distribution
+                multiplier = int(torch.lcm(torch.tensor(x.size(0)), torch.tensor(self.output_size))/x.shape[0])
+                
+                _spectrum = spectrum.expand(multiplier, -1).moveaxis(0, 1).reshape(self.output_size, -1).sum(dim=-1) 
+                _spectrum = _spectrum * x.size(0) / (multiplier * self.output_size) # ensure integral is constant
+
+                ## Get the edges of the spectra
+                lower_bound = x[0] - (step/2)
+                upper_bound = x[-1] + (step/2)
+
+                ## Construct the new array
+                _x = torch.linspace(lower_bound, upper_bound, self.output_size)
+                
+                # Replace the old spectrum with the new
+                x = _x
+                spectrum = _spectrum
+            else:
+                raise RuntimeError("Spectrum in document is different than desired resolution and cannot be rebinned. Please rebuild the collection")
+            
+        # Assign to a different variable, so we can modify 
+        # the spectrum while keeping a reference to the original
         y = spectrum
         if self.gaussian_filter > 0:
             y = torch.tensor(gaussian_filter1d(y, self.gaussian_filter))
         
+        # Keep track of where the spectrum changes from
+        # emission to absorption.
         idx_zero = int(np.floor(0-self.spectrum_range[0])/step)
         
-        n_photons_absorbed = spectrum[idx_zero:].sum()
-        n_photons_emitted = spectrum[:idx_zero].sum()
+        # Count the total number of photons, we can add this to the loss
+        n_photons_absorbed = torch.sum(spectrum[idx_zero:])
+        n_photons_emitted = torch.sum(spectrum[:idx_zero])
         
+        # Integrate the energy absorbed vs emitted.
+        # This can be added to the loss to enforce conservation of energy
         total_energy = spectrum * x
-        e_absorbed = total_energy[idx_zero:].sum()
-        e_absorbed = total_energy[:idx_zero].sum()
-        return {'x': x,
+        e_absorbed = torch.sum(total_energy[idx_zero:])
+        e_emitted = torch.sum(total_energy[:idx_zero])
+
+        return {'spectra_x': x,
                 'y': y.float(),
                 'log_y': torch.log10(y + self.log_constant).float(),
                 'idx_zero': idx_zero,
                 'n_absorbed': n_photons_absorbed,
                 'n_emitted': n_photons_emitted,
                 'e_absorbed': e_absorbed,
-                'e_emitted': e_absorbed}
+                'e_emitted': e_emitted}
     
     def __str__(self):
-        return f"Wavelength Label Processor - {self.output_size} bins, x_min = {self.spectrum_range[0]}, x_max = {self.spectrum_range[1]}, log = {self.log}, normalize = {self.normalize}"
+        return f"Wavelength Label Processor - {self.output_size} bins, x_min = {self.spectrum_range[0]}, x_max = {self.spectrum_range[1]}, log_constant = {self.log_constant}"
 
 class NPMCDataset(Dataset):
     """
@@ -480,7 +505,8 @@ class NPMCDataModule(pl.LightningDataModule):
                            doc_filter=self.training_doc_filter,
                            download=True,
                            overwrite=False,
-                           dataset_size=self.training_size)
+                           dataset_size=self.training_size,
+                           use_cache=True)
 
     def get_testing_dataset(self):
         if self.testing_data_store is not None:
@@ -491,7 +517,8 @@ class NPMCDataModule(pl.LightningDataModule):
                             doc_filter=self.testing_doc_filter,
                             download=True,
                             overwrite=False,
-                            dataset_size=self.testing_size)
+                            dataset_size=self.testing_size,
+                            use_cache=True)
         return None
 
     def prepare_data(self) -> None:
