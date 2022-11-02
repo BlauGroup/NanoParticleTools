@@ -508,7 +508,7 @@ class NPMCDataModule(pl.LightningDataModule):
                            download=True,
                            overwrite=False,
                            dataset_size=self.training_size,
-                           use_cache=True)
+                           use_cache=False)
 
     def get_testing_dataset(self):
         if self.testing_data_store is not None:
@@ -520,7 +520,7 @@ class NPMCDataModule(pl.LightningDataModule):
                             download=True,
                             overwrite=False,
                             dataset_size=self.testing_size,
-                            use_cache=True)
+                            use_cache=False)
         return None
 
     def prepare_data(self) -> None:
