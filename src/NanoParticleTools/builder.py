@@ -82,6 +82,7 @@ class UCNPBuilder(Builder):
                    "excitation_wavelength": items[0]["data"]["excitation_wavelength"],                  
                    "dopant_composition": items[0]["data"]["dopant_composition"],                  
                    "input": items[0]["data"]["input"],
+                   "num_averaged": len(items)
                    }
         
         avg_doc["output"] = {}
