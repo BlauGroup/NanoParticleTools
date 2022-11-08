@@ -2,6 +2,7 @@ from ._data import *
 from ..util.learning_rate import get_sequential
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.callbacks import LearningRateMonitor, StochasticWeightAveraging, ModelCheckpoint
+from NanoParticleTools.machine_learning.util.callbacks import LossAugmentCallback
 from pytorch_lightning.loggers import WandbLogger
 
 import wandb
@@ -14,7 +15,7 @@ from maggma.stores.mongolike import MongoStore
 from typing import Optional, Union
 
 from ._model import SpectrumModelBase
-from ._data import LabelProcessor, DataProcessor, NPMCDataModule
+from ._data import EnergyLabelProcessor, DataProcessor, NPMCDataModule
 from ..util.reporters import TrialTerminationReporter
 from ...inputs.nanoparticle import SphericalConstraint
 from ...util.visualization import plot_nanoparticle
@@ -37,7 +38,9 @@ def train_spectrum_model(config: dict,
                          wandb_save_dir: Optional[str] = os.environ['HOME'],
                          tune = False,
                          lr_scheduler=get_sequential,
-                         data_module: Optional[NPMCDataModule] = None):
+                         data_module: Optional[NPMCDataModule] = None,
+                         n_points_avg: Optional[int] = None, 
+                         batch_size: Optional[int] = 16):
     """
     
     :param config: a config dictionary for the model
@@ -48,21 +51,13 @@ def train_spectrum_model(config: dict,
     :param wandb_save_dir: Directory to save wandb files to
     :param tune: whether or not this is a tune experiment. (To make sure that TuneReportCallback is added)
     """
-    if label_processor is None:
-        label_processor = LabelProcessor(fields = ['output.spectrum_x', 'output.spectrum_y'], 
-                                        spectrum_range = (-1000, 1000), 
-                                        output_size = config['n_output_nodes'], 
-                                        log = True,
-                                        normalize = False)
-    
     if data_module is None:
         if os.path.exists('npmc_data.json'):
-            data_module = NPMCDataModule(feature_processor=feature_processor, label_processor=label_processor, data_dir='npmc_data.json', batch_size=16)
+            data_module = NPMCDataModule(feature_processor=feature_processor, label_processor=label_processor, data_dir='npmc_data.json', batch_size=batch_size)
         else:
             data_store = MongoStore.from_launchpad_file(LAUNCHPAD_LOC, 'avg_npmc_20220708')
-            data_module = NPMCDataModule(feature_processor=feature_processor, label_processor=label_processor, data_store=data_store, batch_size=16)
-    
-    data_module.setup()
+            data_module = NPMCDataModule(feature_processor=feature_processor, label_processor=label_processor, data_store=data_store, batch_size=batch_size)
+
 
     # Make the model
     model = model_cls(lr_scheduler=lr_scheduler,
@@ -71,7 +66,11 @@ def train_spectrum_model(config: dict,
     
     # Prime the module by passing in one datapoint.
     # This is a precaution in case the model uses lazy parameters. This will prevent errors with respect to lack of weight initialization 
-    y_hat = model(data_module.npmc_train[0])
+    try:
+        y_hat = model(data_module.npmc_train[0])
+    except:
+        data_module.prepare_data()
+        data_module.setup()
 
     # Make logger
     wandb_logger = WandbLogger(name=wandb_name,
@@ -83,12 +82,14 @@ def train_spectrum_model(config: dict,
     # Configure callbacks
     callbacks = []
     callbacks.append(LearningRateMonitor(logging_interval='step'))
-    # callbacks.append(EarlyStopping(monitor='val_loss', patience=50))
+    callbacks.append(LossAugmentCallback(aug_loss_epoch=1000))
+    # callbacks.append(EarlyStopping(monitor='val_loss', patience=100))
     # callbacks.append(StochasticWeightAveraging(swa_lrs=1e-3))
     if tune:
-        callbacks.append(TuneReportCallback({"loss": "val_loss"}, on="validation_end"))
-    checkpoint_callback = ModelCheckpoint(save_top_k=2, monitor="val_loss", save_last=True)
+        callbacks.append(TuneReportCallback({"loss": "val_loss_without_totals"}, on="validation_end"))
+    checkpoint_callback = ModelCheckpoint(save_top_k=2, monitor="val_loss_without_totals", save_last=True)
     callbacks.append(checkpoint_callback)
+    
 
     # Run the training
     if num_gpus > 0:
@@ -112,6 +113,7 @@ def train_spectrum_model(config: dict,
     
     # Calculate the testing loss
     trainer.test(dataloaders=data_module.test_dataloader(), ckpt_path='best')
+    trainer.validate(dataloaders=data_module.val_dataloader())
 
     columns = ['name', 'nanoparticle', 'spectrum', 'zoomed_spectrum', 'MSE loss', 'L1 loss', 'Smooth L1 loss', 'npmc_qy', 'pred_qy']
     save_data = []
@@ -119,16 +121,18 @@ def train_spectrum_model(config: dict,
 
     # Load the best model
     model = model_cls.load_from_checkpoint(checkpoint_callback.best_model_path)
-    for i in rng.choice(range(len(data_module.npmc_test)), 10, replace=False):
+    model.eval()
+
+    for i in rng.choice(range(len(data_module.npmc_test)), 20, replace=False):
         data = data_module.npmc_test[i]
         y_hat, loss = model._evaluate_step(data)
         
-        npmc_spectrum = np.power(10, data.y.numpy())-1
-        pred_spectrum = np.power(10, y_hat.detach().numpy())-1
+        npmc_spectrum = data.y
+        pred_spectrum = np.power(10, y_hat.detach().numpy())
 
         fig = plt.figure(dpi=150)
-        plt.plot(data_module.label_processor.x, npmc_spectrum, label='NPMC', alpha=1)
-        plt.plot(data_module.label_processor.x, pred_spectrum, label='NN', alpha=0.5)
+        plt.plot(data.spectra_x, npmc_spectrum, label='NPMC', alpha=1)
+        plt.plot(data.spectra_x, pred_spectrum, label='NN', alpha=0.5)
         plt.xlabel('Wavelength (nm)', fontsize=18)
         plt.ylabel('Relative Intensity (a.u.)', fontsize=18)
         plt.xticks(fontsize=14)
@@ -149,18 +153,20 @@ def train_spectrum_model(config: dict,
         
         nanoparticle = plot_nanoparticle(data.constraints, data.dopant_specifications, as_np_array=True)
         
-        npmc_qy = np.sum(npmc_spectrum[:int(npmc_spectrum.size/2)]) / np.sum(npmc_spectrum[int(npmc_spectrum.size/2):]) 
-        pred_qy = np.sum(pred_spectrum[:int(pred_spectrum.size/2)]) / np.sum(pred_spectrum[int(pred_spectrum.size/2):])
+        npmc_qy = npmc_spectrum[:data.idx_zero].sum() / npmc_spectrum[data.idx_zero:].sum()
+        pred_qy = pred_spectrum[:data.idx_zero].sum() / pred_spectrum[data.idx_zero:].sum()
         
         save_data.append([wandb_logger.experiment.name, 
                      wandb.Image(nanoparticle),
                      wandb.Image(full_fig_data), 
                      wandb.Image(fig_data), 
                      loss, 
-                     F.l1_loss(y_hat, data.y),
-                     F.smooth_l1_loss(y_hat, data.y),
+                     F.l1_loss(y_hat, data.log_y),
+                     F.smooth_l1_loss(y_hat, data.log_y),
                      npmc_qy,
                      pred_qy])
+        plt.close(fig)
+        plt.close(nanoparticle)
         # trainer.logger.experiment.log({'spectrum': fig})
     wandb_logger.log_table(key='sample_table', columns=columns, data=save_data)
     # Finalize the wandb logging
@@ -172,7 +178,7 @@ def train_spectrum_model(config: dict,
 def tune_npmc_asha(config: dict, 
                    model_cls: SpectrumModelBase,
                    feature_processor: DataProcessor,
-                   label_processor: Optional[LabelProcessor] = None,
+                   label_processor: Optional[EnergyLabelProcessor] = None,
                    num_samples: Optional[int] = 10, 
                    num_epochs: Optional[int] = 1000, 
                    wandb_project: Optional[str] = None,
