@@ -26,6 +26,174 @@ from matplotlib import pyplot as plt
 import numpy as np
 from fireworks.fw_config import LAUNCHPAD_LOC
 from torch.nn import functional as F
+from joblib import Parallel, delayed
+from threading import Lock
+
+
+class NPMCTrainer():
+    def __init__(self,
+                 data_module,
+                 model_cls,
+                 wandb_entity: Optional[str] = None, 
+                 wandb_project: Optional[str] = 'default_project',
+                 wandb_save_dir: Optional[str] = os.environ['HOME'],
+                 gpu: Optional[bool] = False,
+                 n_available_devices: Optional[int] = 4,
+                 augment_loss: Optional[int] = None):
+        self.data_module = data_module
+        self.model_cls = model_cls
+        self.augment_loss = augment_loss
+
+        self.wandb_entity = wandb_entity
+        self.wandb_project = wandb_project
+        self.wandb_save_dir = wandb_save_dir
+        self.n_available_devices = n_available_devices
+        self.gpu = gpu
+
+        self.free_devices = set(range(n_available_devices))
+        self.lock = Lock()
+
+    def acquire_device(self):
+        with self.lock:
+            id = self.free_devices.pop()
+        return id
+    
+    def release_device(self, id):
+        with self.lock:
+            self.free_devices.add(id)
+
+    def train_one_model(self, 
+                        model_config: dict,
+                        num_epochs: Optional[int] = 10, 
+                        wandb_name: Optional[str] = None,
+                        tune = False,
+                        lr_scheduler=get_sequential):
+
+        # get a free gpu from the list
+        device_id = self.acquire_device()
+        trainer_device_config = {}
+        if self.gpu:
+            trainer_device_config['accelerator'] = 'gpu'
+            trainer_device_config['devices'] = [device_id]
+        else:
+            trainer_device_config['accelerator'] = 'auto'
+
+        # Make the model
+        model = self.model_cls(lr_scheduler=lr_scheduler,
+                          optimizer_type='adam',
+                          **model_config)
+
+        # Make WandB logger
+        wandb_logger = WandbLogger(name=wandb_name,
+                                   entity=self.wandb_entity, 
+                                   project=self.wandb_project, 
+                                   save_dir=self.wandb_save_dir,
+                                   log_model=True)
+
+        # Configure callbacks
+        callbacks = []
+        callbacks.append(LearningRateMonitor(logging_interval='step'))
+
+        if self.augment_loss:
+            callbacks.append(LossAugmentCallback(aug_loss_epoch=self.augment_loss))
+        # callbacks.append(EarlyStopping(monitor='val_loss', patience=100))
+        # callbacks.append(StochasticWeightAveraging(swa_lrs=1e-3))
+        if tune:
+            callbacks.append(TuneReportCallback({"loss": "val_loss_without_totals"}, on="validation_end"))
+        checkpoint_callback = ModelCheckpoint(save_top_k=5, monitor="val_loss_without_totals", save_last=True)
+        callbacks.append(checkpoint_callback)
+
+        # Make the trainer
+        trainer = pl.Trainer(max_epochs=num_epochs, 
+                             enable_progress_bar=False, 
+                             logger=wandb_logger, 
+                             callbacks=callbacks,
+                             **trainer_device_config)
+
+        trainer.fit(model=model, datamodule=self.data_module)
+        
+        # Calculate the testing loss
+        trainer.test(dataloaders=self.data_module.test_dataloader(), ckpt_path='best')
+        trainer.validate(dataloaders=self.data_module.val_dataloader(), ckpt_path='best')
+
+        # Load the best model
+        model = self.model_cls.load_from_checkpoint(checkpoint_callback.best_model_path)
+        model.eval()
+
+        # Get sample nanoparticle predictions within the test set
+        columns = ['nanoparticle', 'spectrum', 'zoomed_spectrum', 'loss', 'loss_with_totals', 'npmc_qy', 'pred_qy']
+        save_data = []
+        rng = np.random.default_rng(seed = 10)
+        for i in rng.choice(range(len(self.data_module.npmc_test)), 20, replace=False):
+            data = self.data_module.npmc_test[i]
+            save_data.append(self.get_logged_data(trainer.model, data))
+
+        wandb_logger.log_table(key='sample_table', columns=columns, data=save_data)
+        wandb.finish()
+
+        # Indicate that the current gpu is now available
+        self.release_device(device_id)
+    
+    def get_logged_data(self, model, data):
+        y_hat, loss_without_totals, loss_with_totals = model._evaluate_step(data)
+        
+        npmc_spectrum = data.y
+        pred_spectrum = np.power(10, y_hat.detach().numpy())
+
+        fig = plt.figure(dpi=150)
+        plt.plot(data.spectra_x, npmc_spectrum, label='NPMC', alpha=1)
+        plt.plot(data.spectra_x, pred_spectrum, label='NN', alpha=0.5)
+        plt.xlabel('Wavelength (nm)', fontsize=18)
+        plt.ylabel('Relative Intensity (a.u.)', fontsize=18)
+        plt.xticks(fontsize=14)
+        plt.yticks(fontsize=14)
+        plt.legend()
+        plt.tight_layout()
+        
+        fig.canvas.draw()
+        full_fig_data = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+        full_fig_data = full_fig_data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+        
+        
+        plt.ylim(0, 1e4)
+        plt.tight_layout()
+        fig.canvas.draw()
+        fig_data = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+        fig_data = fig_data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+        
+        nanoparticle = plot_nanoparticle(data.constraints, data.dopant_specifications, as_np_array=True)
+        
+        npmc_qy = npmc_spectrum[:data.idx_zero].sum() / npmc_spectrum[data.idx_zero:].sum()
+        pred_qy = pred_spectrum[:data.idx_zero].sum() / pred_spectrum[data.idx_zero:].sum()
+        
+        plt.close(fig)
+        
+        return [wandb.Image(nanoparticle),
+                wandb.Image(full_fig_data), 
+                wandb.Image(fig_data), 
+                loss_without_totals, 
+                loss_with_totals,
+                npmc_qy,
+                pred_qy]
+
+    def train_many_models(self, 
+                          model_configs: List[dict],
+                          num_epochs: Optional[int] = 10, 
+                          wandb_name: Optional[str] = None,
+                          tune = False,
+                          lr_scheduler=get_sequential):
+        training_runs = []
+        for model_config in model_configs:
+            _run_config = {
+                'model_config': model_config, 
+                'num_epochs': num_epochs,
+                'wandb_name': wandb_name,
+                'tune': tune,
+                'lr_scheduler': lr_scheduler
+            }
+            training_runs.append(_run_config)
+        
+        Parallel(n_jobs=self.n_available_gpus)(delayed(train_spectrum_model)(run_config) for run_config in training_runs)
 
 def train_spectrum_model(config: dict, 
                          model_cls: SpectrumModelBase,
