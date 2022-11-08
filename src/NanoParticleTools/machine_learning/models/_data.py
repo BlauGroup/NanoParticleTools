@@ -133,7 +133,7 @@ class EnergyLabelProcessor(DataProcessor):
         
         # Keep track of where the spectrum changes from
         # emission to absorption.
-        idx_zero = int(np.floor(0-self.spectrum_range[0])/step)
+        idx_zero = torch.tensor(int(np.floor(0-self.spectrum_range[0])/step))
         
         # Count the total number of photons, we can add this to the loss
         n_photons_absorbed = torch.sum(spectrum[idx_zero:])
@@ -224,7 +224,7 @@ class WavelengthLabelProcessor(DataProcessor):
         
         # Keep track of where the spectrum changes from
         # emission to absorption.
-        idx_zero = int(np.floor(0-self.spectrum_range[0])/step)
+        idx_zero = torch.tensor(int(np.floor(0-self.spectrum_range[0])/step))
         
         # Count the total number of photons, we can add this to the loss
         n_photons_absorbed = torch.sum(spectrum[idx_zero:])
@@ -551,10 +551,16 @@ class NPMCDataModule(pl.LightningDataModule):
         if len(data_list) == 0:
             return data_list[0]
         
-        x = torch.stack([data.x for data in data_list])
-        y = torch.stack([data.y for data in data_list])
+        _data = {}
+        for key in data_list[0].keys:
+            if torch.is_tensor(getattr(data_list[0], key)):
+                _data[key] = torch.stack([getattr(data, key) for data in data_list])
+            else:
+                _data[key] = [getattr(data, key) for data in data_list]
 
-        return Data(x=x, y=y)
+        _data['batch'] = torch.arange(len(data_list))
+
+        return Data(**_data)
 
     def train_dataloader(self) -> DataLoader:
         if self.feature_processor.is_graph:

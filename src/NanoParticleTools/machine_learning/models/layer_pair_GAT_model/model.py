@@ -5,6 +5,7 @@ from torch_geometric import nn as pyg_nn
 import pytorch_lightning as pl
 
 from .._model import SpectrumModelBase
+from ..mlp_model.model import MLPSpectrumModel
 from typing import Optional, Callable
 from torch_scatter.scatter import scatter
 
@@ -13,7 +14,7 @@ NODE_DISTANCE_INDEX = 1
 NODE_COMPOSITION_INDEX = 2
 NODE_VOLUME_INDEX = 4
 
-class GATSpectrumModel(SpectrumModelBase):
+class GATSpectrumModel(MLPSpectrumModel):
     def __init__(self, 
                  in_feature_dim: int,
                  out_feature_dim: Optional[int] = None,
@@ -156,13 +157,3 @@ class GATSpectrumModel(SpectrumModelBase):
             else:
                 output = torch.sum(x, dim=0)
         return output
-    
-    def _evaluate_step(self, 
-                       data):
-        y_hat = self(data)
-        try:
-            y = data.y.view(data.num_graphs, -1)
-        except:
-            y = data.y
-        loss = self.loss_function(y_hat, y)
-        return y_hat, loss

@@ -7,11 +7,53 @@ from typing import Callable, Optional, Union, List
 import numpy as np
 from .._model import SpectrumModelBase
 
-class SpectrumModel(SpectrumModelBase):
+class MLPSpectrumModel(SpectrumModelBase):
     def __init__(self, 
+                 n_input_nodes: int,
+                 n_output_nodes: Optional[int] = 20,
+                 dopants: Union[list, dict] = ['Yb', 'Er', 'Nd'],
+                 nn_layers: Optional[List[int]] = [128],
+                 dropout_probability: float = 0, 
                  **kwargs):
         super().__init__(**kwargs)
+
+        self.dropout_probability = dropout_probability
+
+        if isinstance(dopants, list):
+            self.dopant_map = {key:i for i, key in enumerate(dopants)}
+        elif isinstance(dopants, dict):
+            self.dopant_map = dopants
+        else:
+            raise ValueError('Expected dopants to be of type list or dict')
+        
+        self.dopants = dopants
+
+        self.n_input_nodes = n_input_nodes
+        self.n_output_nodes = n_output_nodes
+        self.n_layers = len(nn_layers)
+        self.nn_layers = nn_layers
+
+        # Build the Feed Forward Neural Network Architecture
+        current_n_nodes = self.n_input_nodes
+        layers = []
+        for i, n_nodes in enumerate(self.nn_layers):
+            layers.extend(self._get_layer(current_n_nodes, n_nodes))
+            current_n_nodes = n_nodes
+        layers.append(nn.Linear(current_n_nodes, self.n_output_nodes))
+        # Add a final softplus to constrain outputs to be always positive
+        layers.append(nn.ReLU())
+        self.nn = nn.Sequential(*layers)
+
+        self.save_hyperparameters()
     
+    def _get_layer(self, n_input_nodes, n_output_nodes):
+        _layers = []
+        _layers.append(nn.Linear(n_input_nodes, n_output_nodes))
+        _layers.append(nn.ReLU())
+        if self.dropout_probability > 0:
+            _layers.append(nn.Dropout(self.dropout_probability))       
+        return _layers
+
     def describe(self):
         """
         Output a name that captures the hyperparameters used
@@ -42,22 +84,3 @@ class SpectrumModel(SpectrumModelBase):
 
         out = self.nn(x)
         return out
-    
-    def configure_optimizers(self) -> Union[List[torch.optim.Optimizer], List[torch.optim.lr_scheduler._LRScheduler]]:
-        """
-        """ 
-        # Default to the adam optimizer               
-        if self.optimizer_type.lower() == 'sgd':
-            optimizer = torch.optim.SGD(self.parameters(), lr=self.learning_rate, weight_decay=self.l2_regularization_weight)
-        else:
-            optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.l2_regularization_weight)
-
-        if self.lr_scheduler is not None:
-            lr_scheduler = self.lr_scheduler(optimizer)
-        return [optimizer], [lr_scheduler]
-
-    def _evaluate_step(self, 
-                       data):
-        y_hat = self(data)
-        loss = self.loss_function(y_hat, data.y)
-        return y_hat, loss

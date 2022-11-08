@@ -5,10 +5,11 @@ from torch_geometric import nn as pyg_nn
 import pytorch_lightning as pl
 
 from .._model import SpectrumModelBase
+from ..mlp_model.model import MLPSpectrumModel
 from typing import Optional, Callable
 from torch_scatter.scatter import scatter
 
-class GATSpectrumModel(SpectrumModelBase):
+class GATSpectrumModel(MLPSpectrumModel):
     def __init__(self, 
                  in_feature_dim: int,
                  edge_dim: int,
@@ -22,6 +23,10 @@ class GATSpectrumModel(SpectrumModelBase):
                  sum_attention_output: Optional[bool] = False,
                  embedding_dictionary_size: Optional[int] = 3,
                  **kwargs):
+        
+        if 'n_input_nodes' in kwargs:
+            del kwargs['n_input_nodes']
+
         super().__init__(n_input_nodes = in_feature_dim, **kwargs)
 
         embedding_dim = in_feature_dim
@@ -107,13 +112,3 @@ class GATSpectrumModel(SpectrumModelBase):
             else:
                 output = torch.sum(x, dim=0)
         return output
-    
-    def _evaluate_step(self, 
-                       data):
-        y_hat = self(data)
-        try:
-            y = data.y.view(data.num_graphs, -1)
-        except:
-            y = data.y
-        loss = self.loss_function(y_hat, y)
-        return y_hat, loss

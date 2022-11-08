@@ -5,9 +5,9 @@ import pytorch_lightning as pl
 import torch.nn.functional as F
 from typing import Callable, Optional, Union, List
 import numpy as np
-from .._model import SpectrumModelBase
+from ..mlp_model.model import MLPSpectrumModel
 
-class TransformerSpectrumModel(SpectrumModelBase):
+class TransformerSpectrumModel(MLPSpectrumModel):
     def __init__(self,
                  embedding_dimension: Optional[int] = 12,
                  n_heads: Optional[int] = 4,
@@ -18,6 +18,7 @@ class TransformerSpectrumModel(SpectrumModelBase):
                  **kwargs):
         if 'n_input_nodes' in kwargs:
             del kwargs['n_input_nodes']
+
         super().__init__(n_input_nodes=embedding_dimension, **kwargs)
         
         self.embedding_dimension = embedding_dimension
@@ -33,17 +34,8 @@ class TransformerSpectrumModel(SpectrumModelBase):
         single_encoder_layer = nn.TransformerEncoderLayer(embedding_dimension, n_heads, batch_first=True, dropout=transformer_dropout)
         self.encoder = nn.TransformerEncoder(single_encoder_layer, n_encoders)
         
-    def _evaluate_step(self, 
-                       data):
-        y_hat = self(data)
-        loss = self.loss_function(y_hat, data.y)
-        return y_hat, loss 
-    
     def forward(self, data):
         types, volumes, compositions = data.x[:, 0].long(), data.x[:, 1], data.x[:, 2]
-        # types = types.to(self.device)
-        # volumes = volumes.to(self.device)
-        # compositions = compositions.to(self.device)
 
         # Perform the look-up to create the embedding vectors
         embedding = self.embedding(types)
@@ -74,7 +66,7 @@ class TransformerSpectrumModel(SpectrumModelBase):
             output = torch.sum(x, dim=-2)
         return output
 
-class SpectrumAttentionModel(SpectrumModelBase):
+class SpectrumAttentionModel(MLPSpectrumModel):
     def __init__(self,
                  embedding_dimension: Optional[int] = 12,
                  n_heads: Optional[int] = 4,
@@ -87,6 +79,9 @@ class SpectrumAttentionModel(SpectrumModelBase):
         :param embedding_dimension: size of embedding vector
         :param n_heads: Number of heads to use in the Multiheaded Attention step
         """
+        if 'n_input_nodes' in kwargs:
+            del kwargs['n_input_nodes']
+            
         super().__init__(n_input_nodes=embedding_dimension, **kwargs)
 
         self.embedding_dropout = embedding_dropout
@@ -101,10 +96,8 @@ class SpectrumAttentionModel(SpectrumModelBase):
 
         self.save_hyperparameters()
 
-    def forward(self, types, volumes, compositions):
-        types = types.to(self.device)
-        volumes = volumes.to(self.device)
-        compositions = compositions.to(self.device)
+    def forward(self, data):
+        types, volumes, compositions = data.x[:, 0].long(), data.x[:, 1], data.x[:, 2]
 
         # Perform the look-up to create the embedding vectors
         embedding = self.embedding(types)
@@ -133,11 +126,4 @@ class SpectrumAttentionModel(SpectrumModelBase):
             x = self.nn(masked_attn_output)
             output = torch.sum(x, dim=-2)
         return output
-
-    def _evaluate_step(self, 
-                       batch):
-        (types, volumes, compositions), y = batch
-        y_hat = self(types, volumes, compositions)
-        loss = self.loss_function(y_hat, y)
-        return y_hat, loss
-
+        

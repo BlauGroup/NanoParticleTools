@@ -10,7 +10,6 @@ class TransformerFeatureProcessor(DataProcessor):
     VOLUME_INDEX = 2
 
     def __init__(self,
-                 fields = ['formula_by_constraint', 'dopant_concentration', 'input.constraints'],
                  max_layers: int = 4,
                  possible_elements: List[str] = ['Yb', 'Er', 'Nd'],
                  volume_scale_factor = 1e-6,
@@ -19,7 +18,7 @@ class TransformerFeatureProcessor(DataProcessor):
         :param max_layers: 
         :param possible_elements:
         """
-        super().__init__(fields=fields, **kwargs)
+        super().__init__(fields=['formula_by_constraint', 'dopant_concentration', 'input.constraints'], **kwargs)
         
         self.max_layers = max_layers
         self.possible_elements = possible_elements
