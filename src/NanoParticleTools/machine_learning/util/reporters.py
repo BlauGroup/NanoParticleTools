@@ -1,5 +1,5 @@
 from ray.tune import CLIReporter
-from ray.tune.trial import Trial
+from ray.tune.experiment.trial import Trial
 
 class ExperimentTerminationReporter(CLIReporter):
     """
