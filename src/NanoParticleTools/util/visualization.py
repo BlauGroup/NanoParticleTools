@@ -38,6 +38,9 @@ def plot_nanoparticle(constraints, dopant_specifications, dpi = 150, as_np_array
         # Now we can save it to a numpy array.
         data = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
         data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+
+        # Close the figure to remove it from the buffer
+        plt.close(fig)
         return data
     else:
         return fig
