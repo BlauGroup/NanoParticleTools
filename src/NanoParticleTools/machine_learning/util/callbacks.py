@@ -1,5 +1,7 @@
 from pytorch_lightning.callbacks import Callback
- 
+import pytorch_lightning as pl
+from typing import Optional
+
 class LogPredictionsCallback(Callback):
     
     def on_validation_batch_end(
@@ -25,5 +27,14 @@ class LogPredictionsCallback(Callback):
             data = [[wandb.Image(x_i), y_i, y_pred] for x_i, y_i, y_pred in list(zip(x[:n], y[:n], outputs[:n]))]
             wandb_logger.log_table(key='sample_table', columns=columns, data=data)
 
+class LossAugmentCallback(Callback):
+    def __init__(self, aug_loss_epoch: Optional[int] = 100):
+        self.aug_loss_epoch =aug_loss_epoch
+        return super().__init__()
+
+    def on_train_epoch_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+        if trainer.current_epoch >= self.aug_loss_epoch:
+            pl_module.augment_loss=True
+        return super().on_epoch_start(trainer, pl_module)
 
 log_predictions_callback = LogPredictionsCallback()
