@@ -39,7 +39,7 @@ class SpectrumModelBase(pl.LightningModule):
         if self.optimizer_type.lower() == 'sgd':
             optimizer = torch.optim.SGD(self.parameters(), lr=self.learning_rate, weight_decay=self.l2_regularization_weight)
         elif self.optimizer_type.lower() == 'adam':
-            optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.l2_regularization_weight, amsgrad=True)
+            optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.l2_regularization_weight)
         else:
             # Default to amsgrad
             optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.l2_regularization_weight, amsgrad=True)
