@@ -48,7 +48,14 @@ class SpectrumModelBase(pl.LightningModule):
             lr_scheduler = self.lr_scheduler(optimizer)
         else:
             lr_scheduler = None
-        return [optimizer], [lr_scheduler]
+
+        if isinstance(lr_scheduler, ReduceLROnPlateau):
+            return [optimizer], [{"scheduler": lr_scheduler,
+                                "monitor": "val_loss",
+                                "frequency": 1, 
+                                "strict": True}]
+        else:
+            return [optimizer], [lr_scheduler]
     
     def _evaluate_step(self, 
                        data):
