@@ -3,7 +3,7 @@ from torch import nn
 import pytorch_lightning as pl
 import torch.nn.functional as F
 from typing import Callable, Optional, Union, List
-
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 class SpectrumModelBase(pl.LightningModule):
     def __init__(self,
