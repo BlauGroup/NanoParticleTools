@@ -19,7 +19,7 @@ class InteractionConv(MessagePassing):
 
         self.interaction_block = InteractionBlock(sigma)
         # self.message_mlp = nn.Linear(2*input_dim+sigma.size(0), output_dim)
-        self.message_mlp = nn.Sequential(nn.Linear(2*input_dim+1, 128), nn.ReLU(), nn.Dropout(0.25), nn.Linear(128, output_dim))
+        self.message_mlp = nn.Sequential(nn.Linear(2*input_dim+sigma.size(0), 128), nn.ReLU(), nn.Dropout(0.25), nn.Linear(128, output_dim))
         
         # We use this NN to reduce the dimension of sigma to compute the attention weights
         # self.alpha_mlp = nn.Linear(sigma.size(0), 1)
