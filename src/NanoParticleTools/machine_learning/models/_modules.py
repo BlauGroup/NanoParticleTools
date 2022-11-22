@@ -13,7 +13,7 @@ class InteractionConv(MessagePassing):
                  sigma: Optional[Union[int, List[int]]] = None,
                  **kwargs):
         if sigma is None:
-            sigma = torch.tensor([6, 15, 100, 1000, 10000])
+            sigma = torch.tensor([6, 15, 100, 1000, 10000]).double()
         super().__init__(node_dim=0, aggr='add',**kwargs)
         
 
@@ -76,9 +76,8 @@ class InteractionBlock(torch.nn.Module):
     def __init__(self, sigma=1):
         super().__init__()
         if not torch.is_tensor(sigma):
-            self.sigma = torch.tensor(sigma).double()
-        else:
-            self.sigma = sigma
+            sigma = torch.tensor(sigma).double()
+        self.sigma = nn.Parameter(sigma)
         
     def forward(self, ri0, rif, rj0, rjf):
         # Match the shapes
