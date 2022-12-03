@@ -1,7 +1,6 @@
 from ....inputs.nanoparticle import NanoParticleConstraint, SphericalConstraint
 from .._data import DataProcessor
 from typing import List, Union, Tuple, Optional
-from NanoParticleTools.machine_learning.models._modules import integrated_gaussian_interaction
 from functools import lru_cache
 import torch
 

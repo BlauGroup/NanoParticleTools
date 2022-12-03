@@ -13,17 +13,16 @@ class InteractionConv(MessagePassing):
                  sigma: Optional[Union[int, List[int]]] = None,
                  **kwargs):
         if sigma is None:
-            sigma = torch.tensor([6, 15, 100, 1000, 10000]).double()
+            sigma = torch.tensor([6, 15, 100, 1000]).double()
         super().__init__(node_dim=0, aggr='add',**kwargs)
         
-
         self.interaction_block = InteractionBlock(sigma)
         # self.message_mlp = nn.Linear(2*input_dim+sigma.size(0), output_dim)
         self.message_mlp = nn.Sequential(nn.Linear(2*input_dim+sigma.size(0), 128), nn.ReLU(), nn.Dropout(0.25), nn.Linear(128, output_dim))
         
         # We use this NN to reduce the dimension of sigma to compute the attention weights
         # self.alpha_mlp = nn.Linear(sigma.size(0), 1)
-        self.message_mlp = nn.Sequential(nn.Linear(sigma.size(0), 128), nn.ReLU(), nn.Dropout(0.25), nn.Linear(128, 1))
+        self.alpha_mlp = nn.Sequential(nn.Linear(sigma.size(0), 128), nn.ReLU(), nn.Dropout(0.25), nn.Linear(128, 1))
     
     def forward(self, 
                 x: Union[Tensor, PairTensor], 
