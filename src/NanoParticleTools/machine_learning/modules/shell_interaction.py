@@ -40,7 +40,7 @@ def cauchy(s, gamma):
 
 def numeric_shell_interaction(sh_1, sh_2, npoints, sigma, spherical_tensor, interaction='gaussian'):
     # We generate points on the sphere according to the fibonacci scheme.    
-    sphere_points = fibonacci_sphere(npoints)
+    sphere_points = fibonacci_sphere(npoints).to(sh_1.device())
     
     # We assume that all the points are evenly distributed on the surface by this method
     # In the case which the number of points is large enough, this crude approximation is not bad
