@@ -63,45 +63,17 @@ class SpectrumModelBase(pl.LightningModule):
         
         if data.batch is not None:
             y = data.log_y.reshape(-1, self.n_output_nodes)
-            # x = data.spectra_x.reshape(-1, self.n_output_nodes)
-            idx_zero = data.idx_zero.flatten()[0]
         else:
             y = data.log_y
-            # x = data.spectra_x
-            idx_zero = data.idx_zero
         loss = self.loss_function(y_hat, y)
         
-        # exponentiate to get the spectrum
-        spectrum_hat = torch.pow(10, y_hat) 
-        
-        # Compute the augmented loss
-        augmented_loss = loss.clone()
-        # Add a loss term corresponding to total absorbed and emitted photons
-        n_photons_absorbed = spectrum_hat[..., idx_zero:].sum(dim=-1)
-        augmented_loss += self.loss_function(torch.log(n_photons_absorbed), torch.log(data.n_absorbed))
-
-        n_photons_emitted = spectrum_hat[..., :idx_zero].sum(dim=-1)
-        augmented_loss += self.loss_function(torch.log(n_photons_emitted), torch.log(data.n_emitted))
-
-        # Add a loss term corresponding to quantum yield
-        # qy_hat = n_photons_absorbed/n_photons_emitted
-        # qy = data.n_emitted/data.n_absorbed
-        # loss += self.loss_function(qy, qy_hat)
-        
-        # Add a term to enforce total energy emitted < total energy absorbed
-        # total_energy = torch.mul(spectrum_hat, x)
-        # e_absorbed = total_energy[..., idx_zero:].sum(dim=-1)
-        # e_emitted = torch.abs(total_energy[..., :idx_zero].sum(dim=-1))
-        # print(torch.log(torch.nn.functional.relu(e_emitted - e_absorbed)))
-        # loss += 10 * torch.nn.functional.relu(torch.log(e_absorbed - e_emitted), 0).sum()
-        
-        return y_hat, loss, augmented_loss
+        return y_hat, loss
     
     def _step(self, 
               loss_prefix, 
               batch, 
               batch_idx):
-        _, loss_without_totals, loss_with_totals = self._evaluate_step(batch)
+        _, loss = self._evaluate_step(batch)
 
         # Determine the batch size
         if hasattr(batch, 'batch'):
@@ -109,17 +81,7 @@ class SpectrumModelBase(pl.LightningModule):
         else:
             batch_size = 1
 
-        # Log the losses with and without the total dNdt of absorption and emission
-        self.log(f'{loss_prefix}_loss_with_totals', loss_with_totals, batch_size=batch_size)
-        self.log(f'{loss_prefix}_loss_without_totals', loss_without_totals, batch_size=batch_size)
-
-        # Determine which loss will be used in training
-        if self.augment_loss:
-            loss = loss_with_totals
-        else:
-            loss = loss_without_totals
-
-        # Log the actual training loss
+        # Log the loss
         self.log(f'{loss_prefix}_loss', loss, batch_size=batch_size)
 
         return loss
@@ -142,5 +104,5 @@ class SpectrumModelBase(pl.LightningModule):
     def predict_step(self, 
                      batch, 
                      batch_idx):
-        pred, _, _ = self._evaluate_step(batch)
+        pred, _ = self._evaluate_step(batch)
         return pred

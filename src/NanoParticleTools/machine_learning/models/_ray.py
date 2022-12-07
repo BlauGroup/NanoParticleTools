@@ -1,5 +1,5 @@
-from ._data import *
-from ..util.learning_rate import get_sequential
+from NanoParticleTools.machine_learning.models._data import *
+from NanoParticleTools.machine_learning.util.learning_rate import get_sequential
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.callbacks import LearningRateMonitor, StochasticWeightAveraging, ModelCheckpoint
 from NanoParticleTools.machine_learning.util.callbacks import LossAugmentCallback
@@ -14,11 +14,7 @@ from ray.tune.schedulers import ASHAScheduler
 from maggma.stores.mongolike import MongoStore
 from typing import Optional, Union
 
-from ._model import SpectrumModelBase
-from ._data import EnergyLabelProcessor, DataProcessor, NPMCDataModule
-from ..util.reporters import TrialTerminationReporter
-from ...inputs.nanoparticle import SphericalConstraint
-from ...util.visualization import plot_nanoparticle
+from NanoParticleTools.util.visualization import plot_nanoparticle
 
 from ray.tune.integration.pytorch_lightning import TuneReportCallback
 import datetime
@@ -119,7 +115,7 @@ class NPMCTrainer():
         Parallel(n_jobs=self.n_available_gpus)(delayed(train_spectrum_model)(run_config) for run_config in training_runs)
 
 def get_logged_data(model, data):
-    y_hat, loss_without_totals, loss_with_totals = model._evaluate_step(data)
+    y_hat, loss = model._evaluate_step(data)
     
     npmc_spectrum = data.y
     pred_spectrum = np.power(10, y_hat.detach().numpy())
@@ -155,8 +151,7 @@ def get_logged_data(model, data):
     return [wandb.Image(nanoparticle),
             wandb.Image(full_fig_data), 
             wandb.Image(fig_data), 
-            loss_without_totals, 
-            loss_with_totals,
+            loss, 
             npmc_qy,
             pred_qy]
 
@@ -208,8 +203,8 @@ def train_spectrum_model(config,
         if swa:
             callbacks.append(StochasticWeightAveraging(swa_lrs=1e-3))
         if ray_tune:
-            callbacks.append(TuneReportCallback({"loss": "val_loss_without_totals"}, on="validation_end"))
-        checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="val_loss_without_totals", save_last=True)
+            callbacks.append(TuneReportCallback({"loss": "val_loss"}, on="validation_end"))
+        checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="val_loss", save_last=True)
         callbacks.append(checkpoint_callback)
 
         # Make the trainer
@@ -230,7 +225,7 @@ def train_spectrum_model(config,
         model.eval()
 
         # Get sample nanoparticle predictions within the test set
-        columns = ['nanoparticle', 'spectrum', 'zoomed_spectrum', 'loss', 'loss_with_totals', 'npmc_qy', 'pred_qy']
+        columns = ['nanoparticle', 'spectrum', 'zoomed_spectrum', 'loss', 'npmc_qy', 'pred_qy']
         save_data = []
         rng = np.random.default_rng(seed = 10)
         for i in rng.choice(range(len(data_module.npmc_test)), 20, replace=False):
@@ -285,10 +280,10 @@ def tune_npmc(model_cls,
         from ray.tune.schedulers import HyperBandForBOHB
         from ray.tune.suggest.bohb import TuneBOHB
 
-        algo = TuneBOHB(metric="val_loss_without_totals", mode="min")
+        algo = TuneBOHB(metric="val_loss", mode="min")
         scheduler = HyperBandForBOHB(
             time_attr="training_iteration",
-            metric="val_loss_without_totals",
+            metric="val_loss",
             mode="min",
             max_t=100
         )
@@ -303,7 +298,7 @@ def tune_npmc(model_cls,
     else:
         # Default to asha
         scheduler = ASHAScheduler(
-            metric='val_loss_without_totals',
+            metric='val_loss',
             mode='min',
             max_t=num_epochs,
             grace_period=100,
