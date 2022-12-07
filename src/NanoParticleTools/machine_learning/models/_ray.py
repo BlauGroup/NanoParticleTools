@@ -298,7 +298,7 @@ def tune_npmc(model_cls,
     else:
         # Default to asha
         scheduler = ASHAScheduler(
-            metric='val_loss',
+            metric='loss',
             mode='min',
             max_t=num_epochs,
             grace_period=100,
