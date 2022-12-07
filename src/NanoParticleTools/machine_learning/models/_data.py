@@ -304,6 +304,7 @@ class NPMCDataset(Dataset):
             self.docs = self._load_data()
 
         self.cached_data = [False for _ in self.docs]
+        self.item_cache = [None for _ in self.docs]
 
     def _load_data(self):
         with open(os.path.join(self.raw_folder, 'data.json'), 'r') as f:
@@ -423,16 +424,14 @@ class NPMCDataset(Dataset):
         if self.use_cache:
             # Check if this index is cached
             if self.cached_data[idx]:
-                # fetch from file
-                data = torch.load(os.path.join(self.processed_folder, str(idx), 'data.pt'))
+                # Retrieve cached item from memory
+                data = self.item_cache[idx]
             else:
                 # generate the point
                 data = self.process_single_doc(idx)
 
-                # now cache it to file
-                os.makedirs(os.path.join(self.processed_folder, str(idx)), exist_ok=True)
-                torch.save(data, os.path.join(self.processed_folder, str(idx), 'data.pt'))
                 self.cached_data[idx] = True
+                self.item_cache[idx] = data
         else:
             data = self.process_single_doc(idx)
         return data
