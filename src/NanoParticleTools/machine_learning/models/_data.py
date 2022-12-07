@@ -456,10 +456,10 @@ class NPMCDataModule(pl.LightningDataModule):
                  batch_size: Optional[int] = 16, 
                  validation_split: Optional[float] = 0.15,
                  test_split: Optional[float] = 0.15,
-                 random_split_seed = 0,
                  training_size: Optional[int] = None,
                  testing_size: Optional[int] = None,
-                 loader_workers: Optional[int] = 0):
+                 loader_workers: Optional[int] = 0,
+                 use_cache: Optional[bool] = False):
         """
         If a 
 
@@ -472,9 +472,12 @@ class NPMCDataModule(pl.LightningDataModule):
         :param batch_size: 
         :param validation_split: 
         :param test_split: 
-        :param random_split_seed: Use a seed for the random splitting, to ensure reproducibility
         """
         super().__init__()
+
+        # We want to prepare the data on each node. That way each has access to the original data
+        self.prepare_data_per_node = True
+
         if testing_data_store:
             test_split = 0
 
@@ -489,61 +492,75 @@ class NPMCDataModule(pl.LightningDataModule):
         self.batch_size = batch_size
         self.validation_split = validation_split
         self.test_split = test_split
-        self.random_split_seed = random_split_seed
         self.training_size = training_size
         self.testing_size = testing_size
         self.loader_workers = loader_workers
+        self.use_cache = use_cache
 
-        self.training_dataset = None
-        self.testing_dataset = None
         self.save_hyperparameters()
     
-    def get_training_dataset(self):
+    def get_training_dataset(self, download=False):
         return NPMCDataset(root=self.training_data_dir,
                            feature_processor = self.feature_processor,
                            label_processor = self.label_processor,
                            data_store=self.training_data_store,
                            doc_filter=self.training_doc_filter,
-                           download=True,
+                           download=download,
                            overwrite=False,
                            dataset_size=self.training_size,
-                           use_cache=False)
+                           use_cache=self.use_cache)
 
-    def get_testing_dataset(self):
+    def get_testing_dataset(self, download=False):
         if self.testing_data_store is not None:
             return NPMCDataset(root=self.testing_data_dir,
                             feature_processor = self.feature_processor,
                             label_processor = self.label_processor,
                             data_store=self.testing_data_store,
                             doc_filter=self.testing_doc_filter,
-                            download=True,
+                            download=download,
                             overwrite=False,
                             dataset_size=self.testing_size,
-                            use_cache=False)
+                            use_cache=self.use_cache)
         return None
 
     def prepare_data(self) -> None:
+        """
+        We only want to download the data in this method.
+        Since this function is only called once in the main process, assigning state variables 
+        here will result in only the main process having access to those states (data).
+        i.e. don't do: 
+        ```
         self.training_dataset = self.get_training_dataset()
         self.testing_dataset = self.get_testing_dataset()
+        ```
+        """
+        
+        self.get_training_dataset(download=True)
+        self.get_testing_dataset(download=True)
 
     def setup(self, 
               stage: Optional[str] = None):
 
-        if self.testing_dataset:
-            # Split the training data in to a test and validation set
-            validation_size = int(len(self.training_dataset) * self.validation_split)
-            train_size = len(self.training_dataset) - validation_size
-            self.npmc_train, self.npmc_val = torch.utils.data.random_split(self.training_dataset, 
-                                                                           [train_size, validation_size],
-                                                                           generator = torch.Generator().manual_seed(self.random_split_seed))
-            self.npmc_test = self.testing_dataset
+        training_dataset = self.get_training_dataset(download=False)
+        
+        if self.testing_data_store is not None:
+            # We have a separate testing data set, defined by its own store
+            testing_dataset = self.get_testing_dataset(download=False)
+            validation_size = int(len(training_dataset) * self.validation_split)
+            train_size = len(training_dataset) - validation_size
+            
+            self.npmc_train, self.npmc_val = torch.utils.data.random_split(training_dataset, 
+                                                                           [train_size, validation_size])
+            self.npmc_test = testing_dataset
         else:
-            test_size = int(len(self.training_dataset) * self.test_split)
-            validation_size = int(len(self.training_dataset) * self.validation_split)
-            train_size = len(self.training_dataset) - validation_size - test_size
-            self.npmc_train, self.npmc_val, self.npmc_test = torch.utils.data.random_split(self.training_dataset, 
-                                                                                        [train_size, validation_size, test_size],
-                                                                                        generator = torch.Generator().manual_seed(self.random_split_seed))
+            # We don't have a testing dataset explicitly defined. We will split the training dataset
+            # into the training, validation, and testing dataset
+            test_size = int(len(training_dataset) * self.test_split)
+            validation_size = int(len(training_dataset) * self.validation_split)
+            train_size = len(training_dataset) - validation_size - test_size
+
+            self.npmc_train, self.npmc_val, self.npmc_test = torch.utils.data.random_split(training_dataset, 
+                                                                                           [train_size, validation_size, test_size])
     
     @staticmethod
     def collate(data_list: List[Data]):
@@ -564,26 +581,26 @@ class NPMCDataModule(pl.LightningDataModule):
     def train_dataloader(self) -> DataLoader:
         if self.feature_processor.is_graph:
             # The data is graph structured
-            return pyg_DataLoader(self.npmc_train, self.batch_size, shuffle=True, num_workers=self.loader_workers)
+            return pyg_DataLoader(self.npmc_train, batch_size=self.batch_size, shuffle=True, num_workers=self.loader_workers)
         else:
             # The data is in an image representation
-            return DataLoader(self.npmc_train, self.batch_size, collate_fn=self.collate, shuffle=True, num_workers=self.loader_workers)
+            return DataLoader(self.npmc_train, batch_size=self.batch_size, collate_fn=self.collate, shuffle=True, num_workers=self.loader_workers)
     
     def val_dataloader(self) -> DataLoader:
         if self.feature_processor.is_graph:
             # The data is graph structured
-            return pyg_DataLoader(self.npmc_val, self.batch_size, shuffle=False, num_workers=self.loader_workers)
+            return pyg_DataLoader(self.npmc_val, batch_size=self.batch_size, shuffle=False, num_workers=self.loader_workers)
         else:
             # The data is in an image representation
-            return DataLoader(self.npmc_val, self.batch_size, collate_fn=self.collate, shuffle=False, num_workers=self.loader_workers)
+            return DataLoader(self.npmc_val, batch_size=self.batch_size, collate_fn=self.collate, shuffle=False, num_workers=self.loader_workers)
 
     def test_dataloader(self) -> DataLoader:
         if self.feature_processor.is_graph:
             # The data is graph structured
-            return pyg_DataLoader(self.npmc_test, self.batch_size, shuffle=True, num_workers=self.loader_workers)
+            return pyg_DataLoader(self.npmc_test, batch_size=self.batch_size, shuffle=True, num_workers=self.loader_workers)
         else:
             # The data is in an image representation
-            return DataLoader(self.npmc_test, self.batch_size, collate_fn=self.collate, shuffle=False, num_workers=self.loader_workers)
+            return DataLoader(self.npmc_test, batch_size=self.batch_size, collate_fn=self.collate, shuffle=False, num_workers=self.loader_workers)
 
 
 class UCNPAugmenter():
