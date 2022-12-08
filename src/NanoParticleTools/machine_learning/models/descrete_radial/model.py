@@ -9,70 +9,72 @@ from .._model import SpectrumModelBase
 
 class CNNModel(SpectrumModelBase):
     def __init__(self, 
-                 n_output_nodes=400, 
+                 n_output_nodes=600, 
                  dropout_probability: float = 0, 
                  dimension: Optional[int] = 2,
                  activation_module: Optional[torch.nn.Module] = nn.ReLU, 
+                 conv_params: Optional[List[List]] = None,
+                 nn_layers: Optional[List[int]] = [128],
                  **kwargs):
         
         assert dimension > 0 and dimension <= 3
         if dimension == 1:
-            conv_module = nn.LazyConv1d
+            conv_module = nn.Conv1d
             pool_module = nn.MaxPool1d
         elif dimension == 2:
-            conv_module = nn.LazyConv1d
-            pool_module = nn.MaxPool1d
+            conv_module = nn.Conv2d
+            pool_module = nn.MaxPool2d
         elif dimension == 3:
-            conv_module = nn.LazyConv1d
-            pool_module = nn.MaxPool1d
+            conv_module = nn.Conv3d
+            pool_module = nn.MaxPool3d
+
+        if conv_params is None:
+            conv_params = [(128, 19, 4), (32, 11, 4), (64, 5, 2), (64, 3, 1), (64, 3, 1)]
 
         super().__init__(**kwargs)
         
         self.img_dimension = dimension
         self.dropout_probability = dropout_probability
         self.activation_module = activation_module
+        self.n_conv = len(conv_params)
+        self.channels = [l[0] for l in conv_params]
+        self.kernel_sizes = [l[1] for l in conv_params]
+        self.strides = [l[2] for l in conv_params]
         
+        # Build the CNN
         modules = []
-        modules.append(conv_module(out_channels=128, kernel_size=19, padding=9, stride=4))
-        modules.append(activation_module())
-        modules.append(pool_module(kernel_size=3, padding=1, stride=2))
-        
-        modules.append(conv_module(out_channels=32, kernel_size=11, padding=5, stride=4))
-        modules.append(activation_module())
-        modules.append(pool_module(kernel_size=3, padding=1, stride=2))
-        
-        modules.append(conv_module(out_channels=64, kernel_size=5, padding=2, stride=2))
-        modules.append(activation_module())
-        modules.append(pool_module(kernel_size=3, padding=1, stride=1))
-        
-        modules.append(conv_module(out_channels=64, kernel_size=3, padding=1, stride=1))
-        modules.append(activation_module())
-        modules.append(pool_module(kernel_size=3, padding=1, stride=2))
-        
-        modules.append(conv_module(out_channels=64, kernel_size=3, padding=1, stride=1))
-        modules.append(activation_module())
-        modules.append(pool_module(kernel_size=3, padding=1, stride=2))
-        
+        in_channels = 3 # There are 3 dopants in our initial image
+        for _conv_params in conv_params:
+            modules.append(conv_module(in_channels = in_channels, out_channels=_conv_params[0], kernel_size=_conv_params[1], padding=int((_conv_params[1]-1)/2), stride=_conv_params[2]))
+            modules.append(activation_module())
+            modules.append(pool_module(kernel_size=3, padding=1, stride=2))
+            in_channels = _conv_params[0]
+        # Flatten before putting the outputinto the FCNN
         modules.append(nn.Flatten())
-        modules.append(nn.Dropout(dropout_probability))
-        modules.append(nn.LazyLinear(128))
-        modules.append(activation_module())
-        modules.append(nn.Dropout(dropout_probability))
+
+        for i, n_nodes in enumerate(nn_layers):
+            if self.dropout_probability > 0:
+                modules.append(nn.Dropout(dropout_probability))
+            modules.append(nn.LazyLinear(n_nodes))
+            modules.append(activation_module())
+
+        if self.dropout_probability > 0:
+            modules.append(nn.Dropout(dropout_probability))
         modules.append(nn.LazyLinear(n_output_nodes))
-        modules.append(activation_module())
+        modules.append(nn.ReLU())
+
         self.nn = nn.Sequential(*modules)
         
         self.save_hyperparameters()
 
-    def forward(self, data):
-        x = data.x
+    def forward(self, x):
         
-        if len(data.x.shape) == self.img_dimension + 1:
+        if len(x.shape) == self.img_dimension + 1:
             x = x.unsqueeze(dim=0)
              
         x = self.nn(x)
         
-        if len(data.x.shape)  == self.img_dimension + 1:
+        if len(x.shape)  == self.img_dimension + 1:
             x = x.squeeze(dim=0)
         return x
 
