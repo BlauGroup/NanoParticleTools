@@ -59,7 +59,7 @@ class SpectrumModelBase(pl.LightningModule):
     
     def _evaluate_step(self, 
                        data):
-        y_hat = self(data)
+        y_hat = self(**data.to_dict())
         
         if data.batch is not None:
             y = data.log_y.reshape(-1, self.n_output_nodes)

@@ -40,6 +40,7 @@ class CNNModel(SpectrumModelBase):
         self.channels = [l[0] for l in conv_params]
         self.kernel_sizes = [l[1] for l in conv_params]
         self.strides = [l[2] for l in conv_params]
+        self.n_output_nodes = n_output_nodes
         
         # Build the CNN
         modules = []
@@ -67,7 +68,7 @@ class CNNModel(SpectrumModelBase):
         
         self.save_hyperparameters()
 
-    def forward(self, x):
+    def forward(self, x, **kwargs):
         
         if len(x.shape) == self.img_dimension + 1:
             x = x.unsqueeze(dim=0)
