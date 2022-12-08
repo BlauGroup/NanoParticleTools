@@ -204,8 +204,9 @@ def train_spectrum_model(config,
             callbacks.append(StochasticWeightAveraging(swa_lrs=1e-3))
         if ray_tune:
             callbacks.append(TuneReportCallback({"loss": "val_loss"}, on="validation_end"))
-        checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="val_loss", save_last=True)
-        callbacks.append(checkpoint_callback)
+        if save_checkpoints:
+            checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="val_loss", save_last=True)
+            callbacks.append(checkpoint_callback)
 
         # Make the trainer
         trainer = pl.Trainer(max_epochs=num_epochs, 
@@ -271,8 +272,9 @@ def tune_npmc(model_cls,
                                                     num_epochs = num_epochs,
                                                     augment_loss = False,
                                                     ray_tune = True,
-                                                    early_stop = False,
+                                                    early_stop = True,
                                                     swa = False,
+                                                    save_checkpoints = False,
                                                     trainer_device_config = trainer_device_config,
                                                     wandb_config = default_wandb_config)
 
