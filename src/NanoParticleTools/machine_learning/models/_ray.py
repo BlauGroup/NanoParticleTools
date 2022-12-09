@@ -164,8 +164,9 @@ def train_spectrum_model(config,
                          ray_tune: Optional[bool] = False,
                          early_stop: Optional[bool] = False,
                          swa: Optional[bool] = False,
+                         save_checkpoints: Optional[bool] = True,
                          wandb_config: Optional[dict] = None,
-                         trainer_device_config: Optional[dict] = None,
+                         trainer_device_config: Optional[dict] = None
                          ):
         """
         params
