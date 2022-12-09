@@ -291,17 +291,20 @@ class NPMCDataset(Dataset):
         self.docs = self._load_data()
 
         if self.dataset_size is None:
-            with self.data_store:
-                if len(self.docs) != self.data_store.count():
-                    warnings.warn("Length of dataset is not of the desired length. Automatically setting 'overwrite=True' to redownload the data")
-                    self.overwrite = True
-                    self.download()
-                    self.docs = self._load_data()
+            self.data_store.connect()
+            if len(self.docs) != self.data_store.count():
+                warnings.warn("Length of dataset is not of the desired length. Automatically setting 'overwrite=True' to redownload the data")
+                self.overwrite = True
+                self.download()
+                self.docs = self._load_data()
+            self.data_store.close()
         elif len(self.docs) != self.dataset_size:
             warnings.warn("Length of dataset is not of the desired length. Automatically setting 'overwrite=True' to redownload the data")
+            self.data_store.connect()
             self.overwrite = True
             self.download()
             self.docs = self._load_data()
+            self.data_store.close()
 
         self.cached_data = [False for _ in self.docs]
         self.item_cache = [None for _ in self.docs]
