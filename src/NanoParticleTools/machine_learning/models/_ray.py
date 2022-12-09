@@ -197,8 +197,9 @@ def train_spectrum_model(config,
         callbacks = []
         callbacks.append(LearningRateMonitor(logging_interval='step'))
 
-        if augment_loss:
-            callbacks.append(LossAugmentCallback(aug_loss_epoch=augment_loss))
+        # Disable augment loss for now. It seems to not help
+        # if augment_loss:
+        #     callbacks.append(LossAugmentCallback(aug_loss_epoch=augment_loss))
         if early_stop:            
             callbacks.append(EarlyStopping(monitor='val_loss', patience=200))
         if swa:
