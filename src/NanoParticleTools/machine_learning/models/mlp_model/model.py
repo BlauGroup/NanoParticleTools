@@ -40,7 +40,7 @@ class MLPSpectrumModel(SpectrumModelBase):
             layers.extend(self._get_layer(current_n_nodes, n_nodes))
             current_n_nodes = n_nodes
         layers.append(nn.Linear(current_n_nodes, self.n_output_nodes))
-        # Add a final softplus to constrain outputs to be always positive
+        # Add a final ReLU to constrain outputs to be always positive
         layers.append(nn.ReLU())
         self.nn = nn.Sequential(*layers)
 

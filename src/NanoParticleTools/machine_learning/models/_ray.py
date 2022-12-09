@@ -301,7 +301,7 @@ def tune_npmc(model_cls,
     else:
         # Default to asha
         scheduler = ASHAScheduler(
-            metric='loss',
+            metric='loss', # This metric refers to the one we have mapped to in the TuneReportCallback
             mode='min',
             max_t=num_epochs,
             grace_period=100,
