@@ -34,8 +34,8 @@ class TransformerSpectrumModel(MLPSpectrumModel):
         single_encoder_layer = nn.TransformerEncoderLayer(embedding_dimension, n_heads, batch_first=True, dropout=transformer_dropout)
         self.encoder = nn.TransformerEncoder(single_encoder_layer, n_encoders)
         
-    def forward(self, data):
-        types, volumes, compositions = data.x[:, 0].long(), data.x[:, 1], data.x[:, 2]
+    def forward(self, x, **kwargs):
+        types, volumes, compositions = x[:, 0].long(), x[:, 1], x[:, 2]
 
         # Perform the look-up to create the embedding vectors
         embedding = self.embedding(types)

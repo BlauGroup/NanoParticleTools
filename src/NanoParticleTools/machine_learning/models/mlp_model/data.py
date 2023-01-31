@@ -1,5 +1,6 @@
 from .._data import DataProcessor
 from typing import List
+from torch_geometric.data.data import Data
 
 import numpy as np
 import torch
@@ -46,6 +47,10 @@ class FeatureProcessor(DataProcessor):
     @property
     def is_graph(self):
         return False
+
+    @property
+    def data_cls(self):
+        return Data
 
 
 class VolumeFeatureProcessor(DataProcessor):
@@ -100,3 +105,7 @@ class VolumeFeatureProcessor(DataProcessor):
     @property
     def is_graph(self):
         return False
+
+    @property
+    def data_cls(self):
+        return Data

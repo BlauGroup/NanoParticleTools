@@ -10,7 +10,7 @@ from .._model import SpectrumModelBase
 class MLPSpectrumModel(SpectrumModelBase):
     def __init__(self, 
                  n_input_nodes: int,
-                 n_output_nodes: Optional[int] = 20,
+                 n_output_nodes: Optional[int] = 600,
                  dopants: Union[list, dict] = ['Yb', 'Er', 'Nd'],
                  nn_layers: Optional[List[int]] = [128],
                  dropout_probability: float = 0, 
@@ -79,8 +79,6 @@ class MLPSpectrumModel(SpectrumModelBase):
         
         return '_'.join(descriptors)
 
-    def forward(self, data):
-        x = data.x
-
+    def forward(self, x, **kwargs):
         out = self.nn(x)
         return out

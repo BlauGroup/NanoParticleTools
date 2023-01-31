@@ -9,7 +9,92 @@ from ..mlp_model.model import MLPSpectrumModel
 from typing import Optional, Callable
 from torch_scatter.scatter import scatter
 
-class GATSpectrumModel(MLPSpectrumModel):
+class GATSpectrumModel(SpectrumModelBase):
+    def __init__(self,
+                 n_dopants: int,
+                 embed_dim: int,
+                 n_output_nodes = 600, 
+                 mlp_layers = [128, 256],
+                 dropout_probability: float = 0, 
+                 activation_module = nn.SiLU,
+                 readout_operation = 'mean',
+                 **kwargs):
+        
+        if 'n_input_nodes' in kwargs:
+            del kwargs['n_input_nodes']
+    
+        super().__init__(n_input_nodes = 2*embed_dim, **kwargs)
+        
+        self.n_dopants = n_dopants
+        self.embed_dim = embed_dim
+        self.n_output_nodes = n_output_nodes
+        self.embeder = nn.Embedding(n_dopants, embed_dim)
+        self.conv1 = pyg_nn.GATv2Conv(embed_dim+1, embed_dim, edge_dim=4, add_self_loops=False, heads=1, concat=False)
+        self.conv2 = pyg_nn.GATv2Conv(2*embed_dim, embed_dim, edge_dim=4, add_self_loops=False, heads=1, concat=False)
+        
+        # Build the mlp layers
+        if readout_operation.lower() == 'set2set':
+            mlp_sizes = [2*2*embed_dim]+mlp_layers+[n_output_nodes]
+        else:
+            mlp_sizes = [2*embed_dim]+mlp_layers+[n_output_nodes]
+        
+        mlp_modules = []
+        for i, _ in enumerate(mlp_sizes):
+            if i == len(mlp_sizes)-1:
+                 break
+            mlp_modules.append(nn.Dropout())
+            mlp_modules.append(nn.Linear(*mlp_sizes[i:i+2]))
+            mlp_modules.append(activation_module(inplace=True))
+        mlp_modules = mlp_modules[:-1] # Exclude the last activation, since this will inhibit learning
+        self.nn = torch.nn.Sequential(*mlp_modules)
+        
+        if readout_operation.lower() == 'attn':
+            # Use attention based Aggregation
+            gate_nn = nn.Sequential(*[nn.Linear(2*embed_dim, 1), nn.Softmax(-2)])
+            out_nn = nn.Linear(2*embed_dim, 2*embed_dim)
+            pyg_nn.AttentionalAggregation(gate_nn = gate_nn, nn=out_nn)
+
+            readout = pyg_nn.AttentionalAggregation(gate_nn = gate_nn, nn=out_nn)
+        elif readout_operation.lower() == 'set2set':
+            # Use the Set2Set aggregation method to pool the graph into a single global feature vector
+            readout = pyg_nn.aggr.Set2Set(2*embed_dim, processing_steps=7)
+        elif readout_operation.lower() == 'sum':
+            # Use Sum Aggregation 
+            readout = pyg_nn.aggr.SumAggregation()
+        elif readout_operation.lower() == 'mean':
+            # Use Mean Aggregation 
+            readout = pyg_nn.aggr.MeanAggregation()
+        else:
+            # TODO: Default to node prediction, then sum
+            raise ValueError("readout not specified")
+            
+        self.readout = readout
+        
+        self.save_hyperparameters()
+
+    def forward(self, x, types, edge_index, edge_attr, batch, **kwargs):
+        embedding = self.embeder(types)
+        out = torch.concat((embedding, x.unsqueeze(-1)), dim=-1)
+        
+        out = self.conv1(out, edge_index, edge_attr)
+        out = torch.concat((embedding, out), dim=-1)
+        out = self.conv2(out, edge_index, edge_attr)
+        out = torch.concat((embedding, out), dim=-1)
+        
+        # Flatten the embeddings
+        # out = out.reshape(out.size(0), -1)
+        
+#         # Node level readout
+#         out = self.nn(out)
+        
+        # Global Readout
+        out = self.readout(out, batch)
+        out = self.nn(out)
+        
+        return out.squeeze()
+        # return out
+
+class GATEdgeSpectrumModel(MLPSpectrumModel):
     def __init__(self, 
                  in_feature_dim: int,
                  edge_dim: int,

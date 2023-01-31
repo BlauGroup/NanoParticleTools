@@ -61,19 +61,15 @@ class SpectrumModelBase(pl.LightningModule):
                        data):
         y_hat = self(**data.to_dict())
         
-        if data.batch is not None:
-            y = data.log_y.reshape(-1, self.n_output_nodes)
-        else:
-            y = data.log_y
-        loss = self.loss_function(y_hat, y)
+        loss = self.loss_function(y_hat, data.log_y)
         
         return y_hat, loss
     
     def _step(self, 
               loss_prefix, 
-              batch, 
-              batch_idx):
-        _, loss = self._evaluate_step(batch)
+              batch = None, 
+              batch_idx = None):
+        y_hat, loss = self._evaluate_step(batch)
 
         # Determine the batch size
         if hasattr(batch, 'batch'):
@@ -82,27 +78,42 @@ class SpectrumModelBase(pl.LightningModule):
             batch_size = 1
 
         # Log the loss
-        self.log(f'{loss_prefix}_loss', loss, batch_size=batch_size)
+        metric_dict = {f'{loss_prefix}_loss': loss}
+        if loss_prefix != 'train':
+            # For the validation and test sets, log additional metrics
+            metric_dict[f'{loss_prefix}_mse'] = F.mse_loss(y_hat, batch.log_y)
+            metric_dict[f'{loss_prefix}_mae'] = F.l1_loss(y_hat, batch.log_y)
+            metric_dict[f'{loss_prefix}_huber'] = F.huber_loss(y_hat, batch.log_y)
+            metric_dict[f'{loss_prefix}_hinge'] = F.hinge_embedding_loss(y_hat, batch.log_y)
+            metric_dict[f'{loss_prefix}_cos_sim'] = F.cosine_similarity(y_hat, batch.log_y, 1).mean(0)
+            # These seem to match up with the mse loss, so we don't waste time computing them
+            # metric_dict[f'{loss_prefix}_p1'] = F.pairwise_distance(y_hat, batch.log_y, p=1).mean(0)
+            # metric_dict[f'{loss_prefix}_p2'] = F.pairwise_distance(y_hat, batch.log_y, p=2).mean(0)
+            # metric_dict[f'{loss_prefix}_p3'] = F.pairwise_distance(y_hat, batch.log_y, p=3).mean(0)
 
-        return loss
+        self.log_dict(metric_dict, batch_size=batch_size)
+        return loss, metric_dict
 
     def training_step(self, 
-                      batch, 
-                      batch_idx):
-        return self._step('train', batch, batch_idx)
+                      batch = None, 
+                      batch_idx = None):
+        loss, _ = self._step('train', batch, batch_idx)
+        return loss
         
     def validation_step(self, 
-                        batch, 
-                        batch_idx):
-        return self._step('val', batch, batch_idx)
+                        batch = None, 
+                        batch_idx = None):
+        loss, _ = self._step('val', batch, batch_idx)
+        return loss
         
     def test_step(self, 
-                  batch, 
-                  batch_idx):
-        return self._step('test', batch, batch_idx)
+                  batch = None, 
+                  batch_idx = None):
+        loss, _ = self._step('test', batch, batch_idx)
+        return loss
         
     def predict_step(self, 
-                     batch, 
-                     batch_idx):
+                     batch = None, 
+                     batch_idx = None):
         pred, _ = self._evaluate_step(batch)
         return pred

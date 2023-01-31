@@ -3,6 +3,7 @@ from .._data import DataProcessor
 from typing import List, Union, Tuple, Optional
 from functools import lru_cache
 import torch
+from torch_geometric.data.data import Data
 
 class GraphFeatureProcessor(DataProcessor):
     def __init__(self,
@@ -28,23 +29,21 @@ class GraphFeatureProcessor(DataProcessor):
         
         node_features = []
 
+        types = []
+        x = []
+        radii = []
+        volumes = []
         for constraint_i, dopant_concentration, el, _ in dopant_specifications:
-            _dopant_feature = [self.dopants_dict[el], 
-                               dopant_concentration*10]
-            
+            types.append(self.dopants_dict[el])
+            x.append(dopant_concentration)
             # Add the spatial and volume information to the feature
-            r_inner, r_outer = self.get_radii(constraint_i, constraints)
-            volume = self.get_volume(r_outer) - self.get_volume(r_inner)
-            _dopant_feature.extend([r_outer-r_inner, volume/1e6, r_inner, r_outer, (r_inner + r_outer)/2])
-            # _dopant_feature.extend(dopant_feature_dict[el])
-            
-            node_features.append(_dopant_feature)
-        
+            radius = self.get_radii(constraint_i, constraints)
+            radii.append(radius)
+            volumes.append(self.get_volume(radius[0]) - self.get_volume(radius[1]))
         node_features = torch.tensor(node_features, dtype=torch.float)
-        return {'x': node_features}
+        return {'x': torch.tensor(x), 'types': torch.tensor(types), 'radii': torch.tensor(radii), 'volumes': torch.tensor(volumes)}
     
     def get_edge_features(self, constraints, dopant_specifications) -> torch.Tensor:
-        
         # Build all the edge connections. Treat this as fully connected, where each edge has a feature of distance
         edge_attributes = []
         edge_connections = []
@@ -53,31 +52,13 @@ class GraphFeatureProcessor(DataProcessor):
 
             for j, (constraint_j, dopant_concentration, el, _) in enumerate(dopant_specifications):
                 r_inner_j, r_outer_j = self.get_radii(constraint_j, constraints)
-                if self.single_edge_attr:
-                    _edge_feature = [(r_outer_j + r_inner_j)/2 - (r_outer_i + r_inner_i)/2]
-                else:
-                    _edge_feature = [r_outer_j - r_outer_i,
-                                     (r_outer_j + r_inner_j)/2 - (r_outer_i + r_inner_i)/2,
-                                     r_inner_j - r_inner_i]
-                if j < i: 
-                    # Since this is an undirected graph, we don't need the backwards elements.
-                    # We keep the i==j elements, so there is self-interaction
-                    continue
-                elif i == j:
-                    edge_connections.append([i, j])
-                    edge_attributes.append(_edge_feature)
-                else:
-                    # i > j
-                    edge_connections.append([i, j])
-                    edge_attributes.append(_edge_feature)
-                    
-                    # The graph is undirected, so j->i should be == to i->j
-                    edge_connections.append([j, i])
-                    edge_attributes.append(_edge_feature)
+                _edge_attr = torch.tensor([r_inner_i, r_outer_i, r_inner_j, r_outer_j])
+                
+                edge_attributes.append(_edge_attr)
+                edge_connections.append([i, j])
         
         edge_index = torch.tensor(edge_connections, dtype=torch.long).t().contiguous()
-        # We add a value to the edge_attr before applying 1/edge_attr to prevent division by 0
-        edge_attr = 1/(self.edge_attr_bias+torch.tensor(edge_attributes, dtype=torch.float))
+        edge_attr = torch.vstack(edge_attributes)
         return {'edge_index': edge_index,
                 'edge_attr': edge_attr}
         
@@ -105,6 +86,10 @@ class GraphFeatureProcessor(DataProcessor):
     @property
     def is_graph(self):
         return True
+
+    @property
+    def data_cls(self):
+        return Data
 
 class GraphInteractionFeatureProcessor(DataProcessor):
     def __init__(self,
@@ -138,7 +123,6 @@ class GraphInteractionFeatureProcessor(DataProcessor):
         return {'x': concentrations}
     
     def get_edge_features(self, constraints, dopant_specifications) -> torch.Tensor:
-        interaction_sigma = torch.tensor(self.interaction_sigma, dtype=torch.float32)
         # Build all the edge connections. Treat this as fully connected, where each edge has a feature of distance
         edge_attributes = []
         edge_connections = []
@@ -152,7 +136,6 @@ class GraphInteractionFeatureProcessor(DataProcessor):
                 edge_connections.append([constraint_i, constraint_j])
         
         edge_index = torch.tensor(edge_connections, dtype=torch.long).t().contiguous()
-        # We add a value to the edge_attr before applying 1/edge_attr to prevent division by 0
         edge_attr = torch.vstack(edge_attributes)
         return {'edge_index': edge_index,
                 'edge_attr': edge_attr}
@@ -181,6 +164,10 @@ class GraphInteractionFeatureProcessor(DataProcessor):
     @property
     def is_graph(self):
         return True
+
+    @property
+    def data_cls(self):
+        return Data
 
 # class GraphInteractionFeatureProcessor(DataProcessor):
 #     def __init__(self,

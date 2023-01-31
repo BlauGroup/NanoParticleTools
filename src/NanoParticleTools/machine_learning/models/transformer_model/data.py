@@ -1,6 +1,7 @@
 from .._data import DataProcessor
 import torch
 from typing import List
+from torch_geometric.data.data import Data
 
 
 class TransformerFeatureProcessor(DataProcessor):
@@ -59,3 +60,8 @@ class TransformerFeatureProcessor(DataProcessor):
     @property
     def is_graph(self):
         return False
+
+    
+    @property
+    def data_cls(self):
+        return Data

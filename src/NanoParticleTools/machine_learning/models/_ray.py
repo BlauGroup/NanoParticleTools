@@ -46,17 +46,17 @@ class NPMCTrainer():
         self.n_available_devices = n_available_devices
         self.gpu = gpu
 
-        self.free_devices = set(range(n_available_devices))
+        self.free_devices = list(range(n_available_devices))
         self.lock = Lock()
 
     def acquire_device(self):
         with self.lock:
-            id = self.free_devices.pop()
-        return id
+            _id = self.free_devices.pop()
+        return _id
     
-    def release_device(self, id):
+    def release_device(self, _id):
         with self.lock:
-            self.free_devices.add(id)
+            self.free_devices.append(_id)
 
     def train_one_model(self, 
                         model_config: dict,
@@ -87,6 +87,7 @@ class NPMCTrainer():
                                      ray_tune=False, 
                                      early_stop=False, 
                                      swa=False,  
+                                     save_checkpoints = True,
                                      wandb_config=wandb_config, 
                                      trainer_device_config=trainer_device_config)
 
@@ -112,17 +113,18 @@ class NPMCTrainer():
             }
             training_runs.append(_run_config)
         
-        Parallel(n_jobs=self.n_available_gpus)(delayed(train_spectrum_model)(run_config) for run_config in training_runs)
+        Parallel(n_jobs=self.n_available_devices)(delayed(self.train_one_model)(run_config) for run_config in training_runs)
 
 def get_logged_data(model, data):
     y_hat, loss = model._evaluate_step(data)
     
-    npmc_spectrum = data.y
-    pred_spectrum = np.power(10, y_hat.detach().numpy())
+    spectra_x = data.spectra_x.squeeze()
+    npmc_spectrum = data.y.squeeze()
+    pred_spectrum = np.power(10, y_hat.detach().numpy()).squeeze()
 
     fig = plt.figure(dpi=150)
-    plt.plot(data.spectra_x, npmc_spectrum, label='NPMC', alpha=1)
-    plt.plot(data.spectra_x, pred_spectrum, label='NN', alpha=0.5)
+    plt.plot(spectra_x, npmc_spectrum, label='NPMC', alpha=1)
+    plt.plot(spectra_x, pred_spectrum, label='NN', alpha=0.5)
     plt.xlabel('Wavelength (nm)', fontsize=18)
     plt.ylabel('Relative Intensity (a.u.)', fontsize=18)
     plt.xticks(fontsize=14)
