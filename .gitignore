@@ -3,3 +3,4 @@ scratch
 *.ipynb*
 *.idea
 *.egg-info
+.vscode/

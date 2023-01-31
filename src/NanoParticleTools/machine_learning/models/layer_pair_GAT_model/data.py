@@ -5,6 +5,7 @@ from typing import List, Tuple, Optional
 from itertools import combinations_with_replacement
 from functools import lru_cache
 import torch
+from torch_geometric.data.data import Data
 
 class GraphFeatureProcessor(DataProcessor):
     def __init__(self,
@@ -101,3 +102,7 @@ class GraphFeatureProcessor(DataProcessor):
     @property
     def is_graph(self):
         return True
+
+    @property
+    def data_cls(self):
+        return Data

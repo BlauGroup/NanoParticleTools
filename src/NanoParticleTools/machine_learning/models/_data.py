@@ -16,7 +16,7 @@ from NanoParticleTools.inputs.nanoparticle import Dopant
 from scipy.ndimage import gaussian_filter1d
 import hashlib
 from monty.serialization import MontyEncoder
-from torch_geometric.data import Data
+from torch_geometric.data import Data, HeteroData
 import warnings
 
 class DataProcessor():
@@ -69,6 +69,10 @@ class DataProcessor():
     @property
     def is_graph(self):
         pass
+
+    @property
+    def data_cls(self):
+        return Data
     
 class EnergyLabelProcessor(DataProcessor):
     """
@@ -145,9 +149,9 @@ class EnergyLabelProcessor(DataProcessor):
         e_absorbed = torch.sum(total_energy[idx_zero:])
         e_emitted = torch.sum(total_energy[:idx_zero])
 
-        return {'spectra_x': x,
-                'y': y.float(),
-                'log_y': torch.log10(y + self.log_constant).float(),
+        return {'spectra_x': x.unsqueeze(0),
+                'y': y.float().unsqueeze(0),
+                'log_y': torch.log10(y + self.log_constant).float().unsqueeze(0),
                 'log_const': self.log_constant,
                 'idx_zero': idx_zero,
                 'n_absorbed': n_photons_absorbed,
@@ -236,9 +240,9 @@ class WavelengthLabelProcessor(DataProcessor):
         e_absorbed = torch.sum(total_energy[idx_zero:])
         e_emitted = torch.sum(total_energy[:idx_zero])
 
-        return {'spectra_x': x,
-                'y': y.float(),
-                'log_y': torch.log10(y + self.log_constant).float(),
+        return {'spectra_x': x.unsqueeze(0),
+                'y': y.float().unsqueeze(0),
+                'log_y': torch.log10(y + self.log_constant).float().unsqueeze(0),
                 'log_const': self.log_constant,
                 'idx_zero': idx_zero,
                 'n_absorbed': n_photons_absorbed,
@@ -290,7 +294,9 @@ class NPMCDataset(Dataset):
 
         self.docs = self._load_data()
 
-        if self.dataset_size is None:
+        if self.dataset_size == -1:
+            warnings.warn("dataset_size set to -1, no check was performed on the currently downloaded dataset. It may be out of date")
+        elif self.dataset_size is None:
             self.data_store.connect()
             if len(self.docs) != self.data_store.count():
                 warnings.warn("Length of dataset is not of the desired length. Automatically setting 'overwrite=True' to redownload the data")
@@ -377,7 +383,7 @@ class NPMCDataset(Dataset):
             json.dump(_d, f)
 
     def download(self):
-        required_fields = self.feature_processor.required_fields + self.label_processor.required_fields
+        required_fields = self.feature_processor.required_fields + self.label_processor.required_fields + ['metadata']
         if 'input' not in required_fields:
             required_fields.append('input')
 
@@ -414,7 +420,12 @@ class NPMCDataset(Dataset):
 
         _d['constraints'] = doc['input']['constraints']
         _d['dopant_specifications'] = doc['input']['dopant_specifications']
-        return Data(**_d)
+        if 'metadata' in doc:
+            _d['metadata'] = doc['metadata']
+        if issubclass(self.feature_processor.data_cls, HeteroData):
+            return self.feature_processor.data_cls(_d)
+        else:
+            return self.feature_processor.data_cls(**_d)
 
     @classmethod
     def collate_fn(cls):
@@ -435,16 +446,15 @@ class NPMCDataset(Dataset):
 
                 self.cached_data[idx] = True
                 self.item_cache[idx] = data
+                self.docs[idx] = None # We have cached the output of this document, so we can free up the memory
         else:
             data = self.process_single_doc(idx)
         return data
-
     
     def get_random(self):
         _idx = np.random.choice(range(len(self)))
         
         return self[_idx]
-
 
 class NPMCDataModule(pl.LightningDataModule):
     def __init__(self,
@@ -500,6 +510,10 @@ class NPMCDataModule(pl.LightningDataModule):
         self.loader_workers = loader_workers
         self.use_cache = use_cache
 
+        # Initialize class variables that we will use later
+        self.spectra_mean = None
+        self.spectra_std = None
+
         self.save_hyperparameters()
     
     def get_training_dataset(self, download=False):
@@ -516,14 +530,14 @@ class NPMCDataModule(pl.LightningDataModule):
     def get_testing_dataset(self, download=False):
         if self.testing_data_store is not None:
             return NPMCDataset(root=self.testing_data_dir,
-                            feature_processor = self.feature_processor,
-                            label_processor = self.label_processor,
-                            data_store=self.testing_data_store,
-                            doc_filter=self.testing_doc_filter,
-                            download=download,
-                            overwrite=False,
-                            dataset_size=self.testing_size,
-                            use_cache=self.use_cache)
+                               feature_processor = self.feature_processor,
+                               label_processor = self.label_processor,
+                               data_store=self.testing_data_store,
+                               doc_filter=self.testing_doc_filter,
+                               download=download,
+                               overwrite=False,
+                               dataset_size=self.testing_size,
+                               use_cache=self.use_cache)
         return None
 
     def prepare_data(self) -> None:
@@ -564,6 +578,14 @@ class NPMCDataModule(pl.LightningDataModule):
 
             self.npmc_train, self.npmc_val, self.npmc_test = torch.utils.data.random_split(training_dataset, 
                                                                                            [train_size, validation_size, test_size])
+        
+        spectra = []
+        # Leave out test data, since we aren't supposed to have knowledge of that in our model
+        for data in self.npmc_train + self.npmc_test:
+            spectra.append(data.log_y)
+        spectra = torch.cat(spectra, dim=0)
+        self.spectra_mean = spectra.mean(0)
+        self.spectra_std = spectra.std(0)
     
     @staticmethod
     def collate(data_list: List[Data]):
@@ -600,7 +622,7 @@ class NPMCDataModule(pl.LightningDataModule):
     def test_dataloader(self) -> DataLoader:
         if self.feature_processor.is_graph:
             # The data is graph structured
-            return pyg_DataLoader(self.npmc_test, batch_size=self.batch_size, shuffle=True, num_workers=self.loader_workers)
+            return pyg_DataLoader(self.npmc_test, batch_size=self.batch_size, shuffle=False, num_workers=self.loader_workers)
         else:
             # The data is in an image representation
             return DataLoader(self.npmc_test, batch_size=self.batch_size, collate_fn=self.collate, shuffle=False, num_workers=self.loader_workers)

@@ -4,6 +4,7 @@ from .._data import DataProcessor
 from typing import List, Union, Tuple, Optional
 import torch
 import itertools
+from torch_geometric.data.data import Data
 
 class GraphFeatureProcessor(DataProcessor):
     def __init__(self,
@@ -125,6 +126,10 @@ class GraphFeatureProcessor(DataProcessor):
     @property
     def is_graph(self):
         return True
+
+    @property
+    def data_cls(self):
+        return Data
 
     def __str__(self) -> str:
         return f"Discrete Graph Feature Processor - resolution = {self.resolution}A"
