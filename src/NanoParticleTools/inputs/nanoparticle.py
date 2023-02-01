@@ -242,6 +242,29 @@ class DopedNanoparticle(MSONable):
         self.seed = seed
         self.dopant_specification = dopant_specification
 
+        # Check to ensure that the dopant specifications
+        # are valid ( 0 <= x <= 1)
+        # Bin the dopant concentration
+        conc_by_layer_and_species = {}
+        for i, x, _, replace_el in dopant_specification:
+            try:
+                conc_by_layer_and_species[i][replace_el] += x
+            except KeyError:
+                try:
+                    conc_by_layer_and_species[i][replace_el] = x
+                except KeyError:
+                    conc_by_layer_and_species[i] = {replace_el: x}
+
+        # Check if all concentrations are valid
+        for layer_idx in conc_by_layer_and_species:
+            for replace_el in conc_by_layer_and_species[layer_idx]:
+                assert conc_by_layer_and_species[layer_idx][replace_el] <= 1, (
+                    f"Dopant concentration in constraint {layer_idx}"
+                    f" on {replace_el} sites exceeds 100%")
+                assert conc_by_layer_and_species[layer_idx][replace_el] >= 0, (
+                    f"Dopant concentration in constraint {layer_idx}"
+                    f" on {replace_el} sites is negative")
+
         self._sites = None
         # Move to dopant area
         self.dopant_indices = [[] for _ in self.constraints]
@@ -267,7 +290,7 @@ class DopedNanoparticle(MSONable):
         for i, constraint in enumerate(self.constraints):
             _struct = constraint.host_structure.copy()
 
-            # Identify the minimum scaling matrix required to fit 
+            # Identify the minimum scaling matrix required to fit
             # the bounding box
             # TODO: verify that this works on all lattice types
             perp_vec = np.cross(_struct.lattice.matrix[1],
@@ -356,6 +379,11 @@ class DopedNanoparticle(MSONable):
         n_host_sites = len(possible_dopant_sites) + len(
             self.dopant_indices[constraint_index])
         n_dopants = np.round(n_host_sites * dopant_concentration)
+
+        # In some cases, where # of another dopant is rounded up, we may
+        # have a rounding error
+        # Therefore, we must limit these dopants to len(possible_dopant_sites)
+        n_dopants = min(n_dopants, len(possible_dopant_sites))
 
         # Randomly pick sites to place dopants
         dopant_sites = rng.choice(possible_dopant_sites,
