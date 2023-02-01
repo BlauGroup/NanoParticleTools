@@ -1,14 +1,24 @@
-from typing import Optional, Sequence, Union, Tuple, List
+from typing import (
+    Optional,
+    Sequence,
+    Union,
+    Tuple,
+    List,
+    Dict
+)
+from abc import ABC, abstractmethod
 
 import numpy as np
 from pymatgen.core import (
     Structure,
     Site,
     Lattice,
-    Molecule)
+    Molecule
+)
 from monty.json import MSONable
+from e3nn import io
+import torch
 from NanoParticleTools.species_data.species import Dopant
-from abc import ABC, abstractmethod
 
 
 class NanoParticleConstraint(ABC, MSONable):
@@ -19,7 +29,7 @@ class NanoParticleConstraint(ABC, MSONable):
     A constraint must implement the bounding_box and sites_in_bounds functions.
 
     Args:
-        host_structure (Structure, None): Structure of the host. 
+        host_structure (Structure, None): Structure of the host.
             Defaults to the structure of NaYF4.
     """
 
@@ -38,12 +48,12 @@ class NanoParticleConstraint(ABC, MSONable):
         Useful in determining the size of supercell required.
 
         TODO: Need to check if this box definition and accomanying function
-            in the lattice generation works correctly for cubic constraints 
+            in the lattice generation works correctly for cubic constraints
             and constraints not centered at the origin.
         Returns:
             List[float]: The box dimensions in the form [x_max, y_max, z_max]
         """
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def sites_in_bounds(self,
@@ -56,7 +66,7 @@ class NanoParticleConstraint(ABC, MSONable):
 
         Args:
             site_coords (np.array, List): coordinates of all possible sites
-            center (np.array, List): center of box, so that sites may 
+            center (np.array, List): center of box, so that sites may
                 be translated
 
         Returns:
@@ -64,7 +74,17 @@ class NanoParticleConstraint(ABC, MSONable):
                 whether or not the i-th site_coord provided is within the
                 bounds of the constraint.
         """
-        pass
+        raise NotImplementedError
+
+    @abstractmethod
+    def __str__(self) -> str:
+        """
+        Returns a string representation of the constraint
+        """
+        raise NotImplementedError
+
+    def __repr__(self):
+        return self.__str__()
 
 
 class SphericalConstraint(NanoParticleConstraint):
@@ -96,7 +116,7 @@ class SphericalConstraint(NanoParticleConstraint):
 
     def sites_in_bounds(self,
                         site_coords: Union[np.array, List],
-                        center: List[float] = [0, 0, 0]) -> np.array:
+                        center: List[float] = None) -> np.array:
         """
         Checks a list of coordinates to check if they are within the bounds
         of the constraint. This is how we check if a site is part of the
@@ -112,18 +132,37 @@ class SphericalConstraint(NanoParticleConstraint):
                 whether or not the i-th site_coord provided is within the
                 bounds of the constraint.
         """
+        if center is None:
+            center = [0, 0, 0]
+
         distances_from_center = np.linalg.norm(np.subtract(
             site_coords, center),
                                                axis=1)
         return distances_from_center <= self.radius
 
+    def __str__(self) -> str:
+        return f"SphericalConstraint(radius={self.radius})"
+
 
 class PrismConstraint(NanoParticleConstraint):
+    """
+    Defines a Prism constraint that would be used to construct a rectangular
+    prism nanoparticle or core/shell
 
-    def __init__(self, a, b, c, host_structure: Optional[Structure] = None):
-        self.a = a
-        self.b = b
-        self.c = c
+    Args:
+        a (float, int): Radius of this constraint volume
+        b (float, int): Radius of this constraint volume
+        c (float, int): Radius of this constraint volume
+        host_structure (Structure, None): Structure of the host
+    """
+    def __init__(self,
+                 a: Union[float, int],
+                 b: Union[float, int],
+                 c: Union[float, int],
+                 host_structure: Optional[Structure] = None):
+        self.box_a = a
+        self.box_b = b
+        self.box_c = c
         super().__init__(host_structure)
 
     def bounding_box(self):
@@ -136,9 +175,11 @@ class PrismConstraint(NanoParticleConstraint):
         Returns:
             List[float]: The box dimensions in the form [x_max, y_max, z_max]
         """
-        return [self.a, self.b, self.c]
+        return [self.box_a, self.box_b, self.box_c]
 
-    def sites_in_bounds(self, site_coords, center=[0, 0, 0]):
+    def sites_in_bounds(self,
+                        site_coords: Union[np.array, List],
+                        center: List[float] = None) -> np.array:
         """
         Checks a list of coordinates to check if they are within the bounds
         of the constraint. This is how we check if a site is part of the
@@ -154,14 +195,20 @@ class PrismConstraint(NanoParticleConstraint):
                 whether or not the i-th site_coord provided is within the
                 bounds of the constraint.
         """
+        if center is None:
+            center = [0, 0, 0]
+
         centered_coords = np.subtract(site_coords, center)
         abs_coords = np.abs(centered_coords)
-        within_a = abs_coords[:, 0] <= self.a / 2
-        within_b = abs_coords[:, 1] <= self.b / 2
-        within_c = abs_coords[:, 2] <= self.c / 2
+        within_a = abs_coords[:, 0] <= self.box_a / 2
+        within_b = abs_coords[:, 1] <= self.box_b / 2
+        within_c = abs_coords[:, 2] <= self.box_c / 2
 
         return within_a & within_b & within_c
 
+    def __str__(self) -> str:
+        return (f"PrismConstraint(a={self.box_a}, "
+                f"b={self.box_b}, c={self.box_c})")
 
 class CubeConstraint(PrismConstraint):
     """
@@ -172,14 +219,14 @@ class CubeConstraint(PrismConstraint):
     def __init__(self, a, host_structure: Optional[Structure] = None):
         super().__init__(a, a, a, host_structure)
 
+    def __str__(self) -> str:
+        return f"CubeConstraint(a={self.box_a})"
 
 class SphericalHarmonicsConstraint(NanoParticleConstraint):
     """
     A constraint that defines a volume in 3D space according to a deformed
     spherical harmonic representation.
     """
-    from e3nn import o3, io
-    import torch
 
     def __init__(self,
                  sh_bounds: torch.Tensor,
@@ -207,12 +254,13 @@ class SphericalHarmonicsConstraint(NanoParticleConstraint):
         Returns:
             List[float]: The box dimensions in the form [x_max, y_max, z_max]
         """
-        # TODO: Implement this
         # Will need to figure out how to get the largest distance in
         # the 3 cartesian coordinates
-        pass
+        raise NotImplementedError
 
-    def sites_in_bounds(self, site_coords, center=[0, 0, 0]):
+    def sites_in_bounds(self,
+                        site_coords: Union[np.array, List],
+                        center: List[float] = None) -> np.array:
         """
         Checks a list of coordinates to check if they are within the bounds
         of the constraint. This is how we check if a site is part of the
@@ -228,42 +276,72 @@ class SphericalHarmonicsConstraint(NanoParticleConstraint):
                 whether or not the i-th site_coord provided is within the
                 bounds of the constraint.
         """
-        # TODO: Implement this
-        pass
+        if center is None:
+            center = [0, 0, 0]
+        raise NotImplementedError
 
+    def __str__(self) -> str:
+        raise NotImplementedError
 
 class DopedNanoparticle(MSONable):
+    """
+    A class that defines a nanoparticle with dopants.
 
+    Args:
+        constraints (Sequence[NanoParticleConstraint]): A list of constraints
+            that define the nanoparticle volume. The constraints should be
+            ordered from the innermost to the outermost.
+
+            Example:
+                constraints = [SphericalConstraint(20), CubicConstraint(20),
+                               SphericalConstraint(30)]
+        dopant_specification (Sequence[Tuple]): A list of tuples
+            that specify the constraint the dopant is to be added, their
+            concentration, their symbol, and which sites they occupy.
+
+            Example:
+                dopant_specification =
+                    [(0, 0.1, 'Yb', 'Y'), (1, 0.15, 'Nb', 'Na')]
+
+                This would add 10% Yb to the first constraint and 15% Nb to
+                the 2nd constraint. The Yb would occupy the Y sites and the
+                Nb would occupy the Na sites.
+
+        seed (Optional[int], None): The seed used to determine dopant
+            placement on the lattice. Defaults to 0.
+    """
     def __init__(self,
                  constraints: Sequence[NanoParticleConstraint],
                  dopant_specification: Sequence[Tuple],
                  seed: Optional[int] = 0):
         self.constraints = constraints
-        self.seed = seed
+        self.seed = seed if seed is not None else 0
         self.dopant_specification = dopant_specification
 
         # Check to ensure that the dopant specifications
         # are valid ( 0 <= x <= 1)
         # Bin the dopant concentration
         conc_by_layer_and_species = {}
-        for i, x, _, replace_el in dopant_specification:
+        for i, dopant_conc, _, replace_el in dopant_specification:
+            assert dopant_conc >= 0, (
+                'Dopant concentration cannot be negative')
             try:
-                conc_by_layer_and_species[i][replace_el] += x
+                conc_by_layer_and_species[i][replace_el] += dopant_conc
             except KeyError:
                 try:
-                    conc_by_layer_and_species[i][replace_el] = x
+                    conc_by_layer_and_species[i][replace_el] = dopant_conc
                 except KeyError:
-                    conc_by_layer_and_species[i] = {replace_el: x}
+                    conc_by_layer_and_species[i] = {replace_el: dopant_conc}
 
         # Check if all concentrations are valid
-        for layer_idx in conc_by_layer_and_species:
-            for replace_el in conc_by_layer_and_species[layer_idx]:
-                assert conc_by_layer_and_species[layer_idx][replace_el] <= 1, (
-                    f"Dopant concentration in constraint {layer_idx}"
-                    f" on {replace_el} sites exceeds 100%")
-                assert conc_by_layer_and_species[layer_idx][replace_el] >= 0, (
-                    f"Dopant concentration in constraint {layer_idx}"
-                    f" on {replace_el} sites is negative")
+        for layer_i, layer in conc_by_layer_and_species.items():
+            for replaced_el, total_replaced_conc in layer.items():
+                assert total_replaced_conc <= 1, (
+                    f"Dopant concentration in constraint {layer_i}"
+                    f" on {replaced_el} sites exceeds 100%")
+                assert total_replaced_conc >= 0, (
+                    f"Dopant concentration in constraint {layer_i}"
+                    f" on {replaced_el} sites is negative")
 
         self._sites = None
         # Move to dopant area
@@ -271,20 +349,42 @@ class DopedNanoparticle(MSONable):
         self._dopant_concentration = [{} for _ in self.constraints]
 
     @property
-    def has_structure(self):
+    def has_structure(self) -> bool:
+        """
+        Checks whether the nanoparticle structure has been generated.
+
+        Returns:
+            bool: True if the nanoparticle structure has been generated.
+        """
         if hasattr(self, '_sites'):
             return self._sites is not None
-        else:
-            return False
 
-    def as_dict(self):
+        return False
+
+    def as_dict(self) -> Dict:
+        """
+        Returns a dictionary representation of the nanoparticle. If the
+        structure was generated, delete the data that wasn't required by the
+        class definition.
+
+        Returns:
+            dict: Dictionary representation of the nanoparticle.
+        """
         if self.has_structure:
             # Delete generated data if it exists
             del self._sites, self.dopant_indices, self._dopant_concentration
         return super().as_dict()
 
     def generate(self):
+        """
+        Generates the nanoparticle structure.
 
+        This method does not return anything, but instead sets the attributes
+        of the nanoparticle corresponding to the structure.
+        The attributes are:
+            _sites: The sites of the full nanoparticle.
+            dopant_indices: The indices of _sites that are occupied by dopants
+        """
         # Construct nanoparticle
         nanoparticle_sites = []
         for i, constraint in enumerate(self.constraints):
@@ -353,13 +453,23 @@ class DopedNanoparticle(MSONable):
         self._apply_dopants()
 
     def _apply_dopants(self):
+        """
+        A helper function to apply dopants to the nanoparticle structure.
+        """
         rng = np.random.default_rng(self.seed)
         for spec in self.dopant_specification:
             self._apply_dopant(*spec, rng=rng)
 
-    def _apply_dopant(self, constraint_index: int, dopant_concentration: float,
-                      dopant_species: str, replaced_species: str,
+    def _apply_dopant(self,
+                      constraint_index: int,
+                      dopant_concentration: float,
+                      dopant_species: str,
+                      replaced_species: str,
                       rng: np.random.default_rng):
+        """
+        A helper function to apply a single dopant to the nanoparticle
+        structure.
+        """
         if dopant_species in Dopant.SURFACE_DOPANT_NAMES_TO_SYMBOLS:
             dopant_species = Dopant.SURFACE_DOPANT_NAMES_TO_SYMBOLS[
                 dopant_species]
@@ -399,7 +509,19 @@ class DopedNanoparticle(MSONable):
         # Keep track of sites with dopants
         self.dopant_indices[constraint_index].extend(dopant_sites)
 
-    def to_file(self, fmt="xyz", name="nanoparticle.xyz"):
+    def to_file(self,
+                fmt: str = "xyz",
+                name: str = "nanoparticle.xyz"):
+        """
+        Write the full nanoparticle structure to a file.
+
+        Args:
+            fmt (str, None): _description_. The format to write the structure
+                as. For more options, check the pymatgen Molecule.to()
+                function.
+                Defaults to "xyz".
+            name (str, None): _description_. Defaults to "nanoparticle.xyz".
+        """
         if self.has_structure is False:
             raise RuntimeError(
                 'Nanoparticle not generated.'
@@ -408,7 +530,20 @@ class DopedNanoparticle(MSONable):
         _np = Molecule.from_sites(self.sites)
         _ = _np.to(fmt, name)
 
-    def dopants_to_file(self, fmt="xyz", name="dopant_nanoparticle.xyz"):
+    def dopants_to_file(self,
+                        fmt: str = "xyz",
+                        name: str = "dopant_nanoparticle.xyz"):
+        """
+        Writes the nanoparticle structure of only the dopants to a file.
+
+        Args:
+            fmt (str, None): The format to write the structure as. For
+                more options, check the pymatgen Molecule.to() function.
+                Defaults to "xyz".
+            name (str, None): The name of the file.
+                Defaults to "dopant_nanoparticle.xyz".
+
+        """
         if self.has_structure is False:
             raise RuntimeError(
                 'Nanoparticle not generated.'
@@ -418,7 +553,13 @@ class DopedNanoparticle(MSONable):
         _ = _np.to(fmt, name)
 
     @property
-    def sites(self):
+    def sites(self) -> Sequence[Site]:
+        """
+        Gets a list of all the sites in the nanoparticle
+
+        Returns:
+            Sequence[Site]: List of all the sites in the nanoparticle
+        """
         if self.has_structure is False:
             raise RuntimeError(
                 'Nanoparticle not generated.'
@@ -428,6 +569,12 @@ class DopedNanoparticle(MSONable):
 
     @property
     def dopant_sites(self) -> Sequence[Site]:
+        """
+        Gets a list of all the dopant sites in the nanoparticle
+
+        Returns:
+            Sequence[Site]: List of all the dopant sites in the nanoparticle
+        """
         if self.has_structure is False:
             raise RuntimeError(
                 'Nanoparticle not generated.'
@@ -439,11 +586,25 @@ class DopedNanoparticle(MSONable):
                 _sites.append(sites[i])
         return _sites
 
-    @property
     def dopant_concentrations(self,
-                              constraint_index: Optional[Union[int,
-                                                               None]] = None,
-                              replaced_species: Optional[str] = 'Y'):
+                              constraint_index: Optional[int] = None,
+                              replaced_species: Optional[str] = 'Y') -> Dict:
+        """
+        Gets the dopant concentrations of all the dopants in the
+        `constraint_index`-th constraint occupying the
+        `replaced_species` sites.
+
+        Args:
+            constraint_index (int, None): Index of constraint. If None, return
+                the concentrations of the whole nanoparticle.
+                Defaults to None.
+            replaced_species (str, None): Replaced species symbol.
+                Defaults to 'Y'.
+
+        Returns:
+            Dict: Returns the a dictionary of the dopants and
+                their concentrations
+        """
         if self.has_structure is False:
             raise RuntimeError(
                 'Nanoparticle not generated.'
@@ -460,14 +621,21 @@ class DopedNanoparticle(MSONable):
             for dopant in self.dopant_sites:
                 try:
                     dopant_amount[str(dopant.specie)] += 1
-                except Exception:
+                except KeyError:
                     dopant_amount[str(dopant.specie)] = 1
 
-            return dict([(key, item / total_num_sites)
-                         for key, item in dopant_amount.items()])
+            return {key: (item / total_num_sites) for key, item in
+                    dopant_amount.items()}
+        return None
 
 
-def get_nayf4_structure():
+def get_nayf4_structure() -> Structure:
+    """
+    Get a Structure object for a single unit cell of NaYF4.
+
+    Returns:
+        Structure: Structure of NaYF4
+    """
     lattice = Lattice.hexagonal(a=6.067, c=7.103)
     species = [
         'Na', 'Na', 'Na', 'Y', 'Y', 'Y', 'F', 'F', 'F', 'F', 'F', 'F', 'F',
@@ -486,7 +654,13 @@ def get_nayf4_structure():
     return Structure(lattice, species=species, coords=positions)
 
 
-def get_wse2_structure():
+def get_wse2_structure() -> Structure:
+    """
+    Get a Structure object for a single unit cell of WSe2.
+
+    Returns:
+        Structure: Structure of WSe2
+    """
     lattice = Lattice.hexagonal(a=3.327, c=15.069)
     species = ['Se', 'Se', 'Se', 'Se', 'W', 'W']
     positions = [[0.3333, 0.6667, 0.6384], [0.3333, 0.6667, 0.8616],
