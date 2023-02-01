@@ -1,4 +1,4 @@
-from typing import Optional, Sequence, Tuple, Union
+from typing import Optional, Sequence, Tuple, Union, Dict
 
 from jobflow import Flow
 
@@ -11,9 +11,9 @@ def get_npmc_flow(constraints: Sequence[NanoParticleConstraint],
                   doping_seed: Optional[int] = 0,
                   output_dir: Optional[str] = '.',
                   initial_states: Optional[Union[Sequence[int], None]] = None,
-                  spectral_kinetics_args = {},
-                  initial_state_db_args = {},
-                  npmc_args = {},
+                  spectral_kinetics_args: Dict = {},
+                  initial_state_db_args: Dict = {},
+                  npmc_args: Dict = {},
                   override: Optional[bool] = False,
                   metadata: Optional[dict] = {},
                   population_record_interval: Optional[float] = 1e-5) -> Flow:

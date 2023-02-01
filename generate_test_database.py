@@ -86,22 +86,22 @@ import sqlite3
 import os
 
 species = {
-    'black' : {
-        'species_id' : 0,
-        'index_to_state' : [ 'empty', 'unexcited', 'excited' ],
-        'state_to_index' : {
-            'empty' : 0,
-            'unexcited' : 1,
-            'excited' : 2
+    'black': {
+        'species_id': 0,
+        'index_to_state': [ 'empty', 'unexcited', 'excited' ],
+        'state_to_index': {
+            'empty': 0,
+            'unexcited': 1,
+            'excited': 2
         }
     },
 
-    'red' : {
-        'species_id' : 1,
-        'index_to_state' : [ 'nothing', 'occupied' ],
-        'state_to_index' : {
-            'nothing' : 0,
-            'occupied' : 1
+    'red': {
+        'species_id': 1,
+        'index_to_state': [ 'nothing', 'occupied' ],
+        'state_to_index': {
+            'nothing': 0,
+            'occupied': 1
         }
     }
 }
@@ -119,11 +119,11 @@ for i in range(10):
                 site_species = 'red'
 
             site = {
-                'site_id' : index,
-                'x' : float(i),
-                'y' : float(j),
-                'z' : float(k),
-                'species' : site_species
+                'site_id': index,
+                'x': float(i),
+                'y': float(j),
+                'z': float(k),
+                'species': site_species
             }
 
             sites[index] = site
@@ -132,24 +132,24 @@ for i in range(10):
 
 
 one_site_interactions = {
-    'black' : [
+    'black': [
         {
-            'interaction_id' : 0,
-            'number_of_sites' : 1,
-            'left_state' : 'unexcited',
-            'right_state' : 'excited',
-            'rate' : 1.0
+            'interaction_id': 0,
+            'number_of_sites': 1,
+            'left_state': 'unexcited',
+            'right_state': 'excited',
+            'rate': 1.0
         }
     ],
 
-    'red' : []
+    'red': []
 }
 
 two_site_interactions = {
     ('black', 'black') : [
         {
-            'interaction_id' : 1,
-            'number_of_sites' : 2,
+            'interaction_id': 1,
+            'number_of_sites': 2,
             'left_state_1'   : 'excited',
             'left_state_2'   : 'empty',
             'right_state_1'  : 'empty',
@@ -158,8 +158,8 @@ two_site_interactions = {
         },
 
         {
-            'interaction_id' : 2,
-            'number_of_sites' : 2,
+            'interaction_id': 2,
+            'number_of_sites': 2,
             'left_state_1'   : 'empty',
             'left_state_2'   : 'excited',
             'right_state_1'  : 'unexcited',
@@ -171,8 +171,8 @@ two_site_interactions = {
 
     ('black', 'red') : [
         {
-            'interaction_id' : 3,
-            'number_of_sites' : 2,
+            'interaction_id': 3,
+            'number_of_sites': 2,
             'left_state_1'   : 'unexcited',
             'left_state_2'   : 'occupied',
             'right_state_1'  : 'excited',
@@ -180,8 +180,8 @@ two_site_interactions = {
             'rate'           : 1.0
         },
         {
-            'interaction_id' : 4,
-            'number_of_sites' : 2,
+            'interaction_id': 4,
+            'number_of_sites': 2,
             'left_state_1'   : 'excited',
             'left_state_2'   : 'nothing',
             'right_state_1'  : 'unexcited',
@@ -192,8 +192,8 @@ two_site_interactions = {
 
     ('red', 'black') : [
         {
-            'interaction_id' : 5,
-            'number_of_sites' : 2,
+            'interaction_id': 5,
+            'number_of_sites': 2,
             'left_state_1'   : 'occupied',
             'left_state_2'   : 'unexcited',
             'right_state_1'  : 'nothing',
@@ -201,8 +201,8 @@ two_site_interactions = {
             'rate'           : 1.0
         },
         {
-            'interaction_id' : 6,
-            'number_of_sites' : 2,
+            'interaction_id': 6,
+            'number_of_sites': 2,
             'left_state_1'   : 'nothing',
             'left_state_2'   : 'excited',
             'right_state_1'  : 'occupied',
@@ -213,8 +213,8 @@ two_site_interactions = {
 
     ('red', 'red') : [
         {
-            'interaction_id' : 7,
-            'number_of_sites' : 2,
+            'interaction_id': 7,
+            'number_of_sites': 2,
             'left_state_1'   : 'occupied',
             'left_state_2'   : 'nothing',
             'right_state_1'  : 'nothing',
@@ -222,8 +222,8 @@ two_site_interactions = {
             'rate'           : 1.0
         },
         {
-            'interaction_id' : 8,
-            'number_of_sites' : 2,
+            'interaction_id': 8,
+            'number_of_sites': 2,
             'left_state_1'   : 'nothing',
             'left_state_2'   : 'occupied',
             'right_state_1'  : 'occupied',
@@ -231,8 +231,8 @@ two_site_interactions = {
             'rate'           : 1.0
         },
         {
-            'interaction_id' : 9,
-            'number_of_sites' : 2,
+            'interaction_id': 9,
+            'number_of_sites': 2,
             'left_state_1'   : 'occupied',
             'left_state_2'   : 'occupied',
             'right_state_1'  : 'nothing',
@@ -242,6 +242,7 @@ two_site_interactions = {
     ]
 }
 
+
 create_species_table_sql = """
     CREATE TABLE species (
         species_id          INTEGER NOT NULL PRIMARY KEY,
@@ -249,9 +250,11 @@ create_species_table_sql = """
     );
 """
 
+
 insert_species_sql = """
     INSERT INTO species VALUES (?,?);
 """
+
 
 create_sites_table_sql = """
     CREATE TABLE sites (
@@ -262,6 +265,7 @@ create_sites_table_sql = """
         species_id          INTEGER NOT NULL
     );
 """
+
 
 insert_site_sql = """
     INSERT INTO sites VALUES (?,?,?,?,?);
@@ -283,9 +287,11 @@ create_interactions_table_sql = """
     );
 """
 
+
 insert_interaction_sql = """
     INSERT INTO interactions VALUES (?,?,?,?,?,?,?,?,?);
 """
+
 
 create_metadata_table_sql = """
     CREATE TABLE metadata (
@@ -295,11 +301,14 @@ create_metadata_table_sql = """
     );
 """
 
+
 insert_metadata_sql = """
     INSERT INTO metadata VALUES (?,?,?);
 """
 
+
 os.system('rm -rf ./scratch; mkdir scratch')
+
 
 def setup_nanoparticle_database():
     con = sqlite3.connect('./scratch/np.sqlite')
@@ -392,6 +401,7 @@ create_initial_state_table_sql = """
     );
 """
 
+
 create_trajectories_table_sql = """
     CREATE TABLE trajectories (
         seed               INTEGER NOT NULL,
@@ -403,9 +413,11 @@ create_trajectories_table_sql = """
 );
 """
 
+
 insert_initial_state_sql = """
     INSERT INTO initial_state VALUES (?,?);
 """
+
 
 create_factors_table_sql = """
     CREATE TABLE factors (
@@ -415,9 +427,11 @@ create_factors_table_sql = """
 );
 """
 
+
 insert_factors_sql = """
     INSERT INTO factors VALUES (?,?,?);
 """
+
 
 def setup_initial_state_database():
     con = sqlite3.connect('./scratch/initial_state.sqlite')

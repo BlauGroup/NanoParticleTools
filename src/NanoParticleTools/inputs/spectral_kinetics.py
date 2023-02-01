@@ -1,23 +1,53 @@
 import math
-from typing import Optional, List, Union, Sequence
+from typing import (
+    Optional,
+    List,
+    Union,
+    Sequence,
+    Tuple
+)
 
 import numpy as np
-from NanoParticleTools.inputs.constants import *
-from NanoParticleTools.inputs.photo_physics import *
+from NanoParticleTools.util.constants import (
+    h_CGS,
+    c_CGS
+    )
+    
+from NanoParticleTools.inputs.photo_physics import (
+    gaussian,
+    get_absorption_cross_section_from_line_strength,
+    get_transition_rate_from_line_strength,
+    get_critical_energy_gap,
+    get_MD_line_strength_from_icc,
+    magnetic_dipole_operation,
+    get_absorption_cross_section_from_MD_line_strength,
+    get_oscillator_strength_from_MD_line_strength,
+    get_rate_from_MD_line_strength,
+    gaussian_overlap_integral,
+    phonon_assisted_energy_transfer_constant,
+    energy_transfer_constant
+)
 from scipy.integrate import BDF, OdeSolver
 from functools import lru_cache
 from monty.json import MSONable
 
+
 class SpectralKinetics(MSONable):
     """
     REFERENCING THIS WORK & BIBLIOGRAPHY:
-         There are 2 different citations that can be used to reference this work. These articles describe the underlying equations behind this work.
+         There are 2 different citations that can be used to reference
+         this work. These articles describe the underlying equations
+         behind this work.
 
          (1)	Chan, E. M.; Gargas, D. J.; Schuck, P. J.; Milliron, D. J.
-                    Concentrating and Recycling Energy in Lanthanide Codopants for Efficient and Spectrally Pure Emission: the Case of NaYF4:Er3+/Tm3+ Upconverting Nanocrystals.
+                Concentrating and Recycling Energy in Lanthanide Codopants
+                for Efficient and Spectrally Pure Emission: the Case of
+                NaYF4:Er3+/Tm3+ Upconverting Nanocrystals.
                 J. Phys. Chem. B 2012, 116, 10561–10570.
 
-         (2)	Chan, E. M. Combinatorial Approaches for Developing Upconverting Nanomaterials: High-Throughput Screening, Modeling, and Applications.
+         (2)	Chan, E. M. Combinatorial Approaches for Developing 
+                Upconverting Nanomaterials: High-Throughput Screening, 
+                Modeling, and Applications.
                 Chem. Soc. Rev. 2015, 44, 1653–1679.
     """
 
@@ -46,17 +76,22 @@ class SpectralKinetics(MSONable):
         :param zero_phonon_rate: zero phonon relaxation rate at T=0, in 1/s
         :param mpr_alpha: in cm
         :param n_refract: index of refraction
-        :param vol_per_dopant_site: cm^3 for NaYF4, 1.5 is # possible sites for dopant ion
+        :param vol_per_dopant_site: cm^3 for NaYF4, 1.5 is # possible sites
+            for dopant ion
         :param min_dopant_distance: minimum distance between dopants (cm)
         :param time_step: time step in seconds
         :param num_steps: number of time steps per simulation
         :param max_error: default is 1e-6
-        :param energy_transfer_rate_threshold: lower limit for actually accounting for ET rate (s^-1)
-        :param radiative_rate_threshold: lower limit for actually accounting for radiative rate (s^-1)
+        :param energy_transfer_rate_threshold: lower limit for actually
+            accounting for ET rate (s^-1)
+        :param radiative_rate_threshold: lower limit for actually accounting
+            for radiative rate (s^-1)
         :param stokes_shift: wavenumbers
         :param initial_populations:
-        :param excitation_wavelength: the wavelength of the incident radiation in in nm
-        :param excitation_power: the incident power density in W/cm^2 (1 W/cm^2 = 1e7 erg/s/cm^2)
+        :param excitation_wavelength: the wavelength of the incident
+            radiation in in nm
+        :param excitation_power: the incident power density in W/cm^2
+            (1 W/cm^2 = 1e7 erg/s/cm^2)
         :param kwargs:
 
         #TODO: energy_transfer_mode
@@ -84,36 +119,73 @@ class SpectralKinetics(MSONable):
         self.dopants = dopants
 
     @property
-    def mpr_gamma(self):
-        return np.log(2) / self.phonon_energy  # in cm
+    def mpr_gamma(self) -> float:
+        """
+        Gamma constant for multi-phonon relaxation in cm.
+        Returns:
+            float: Gamma constant
+        """
+        return np.log(2) / self.phonon_energy
 
     @property
-    def mpr_beta(self):
-        return self.mpr_alpha - self.mpr_gamma  # in cm
+    def mpr_beta(self) -> float:
+        """_summary_
+        Beta constant for multi-phonon relaxation in cm.
+        Returns:
+            float: Beta constant
+        """
+        return self.mpr_alpha - self.mpr_gamma
 
     @property
-    def incident_wavenumber(self):
+    def incident_wavenumber(self) -> float:
+        """_summary_
+        Calculates the incident wavenumber in cm^-1.
+        Returns:
+            float: The incident wavenumber
+        """
         return 1e7 / self.excitation_wavelength  # in cm^-1
 
     @property
-    def incident_photon_flux(self):
-        return self.excitation_power * 1e7/ (h_CGS * c_CGS * self.incident_wavenumber)  # in photons/s/cm^2
+    def incident_photon_flux(self) -> float:
+        """
+        Calculates the incident photon flux in photons/s/cm^2.
+
+        Returns:
+            float: The incident photon flux.
+        """
+        return (self.excitation_power * 1e7 / 
+                (h_CGS * c_CGS * self.incident_wavenumber))
 
     @property
-    def total_n_levels(self):
+    def total_n_levels(self) -> int:
+        """
+        Total number of energy levels in the system.
+
+        Returns:
+            int: Total number of energy levels across all dopants.
+        """
         return sum([dopant.n_levels for dopant in self.dopants])
 
     @property
-    def species_concentrations(self):
-        return [dopant.molar_concentration / self.volume_per_dopant_site for dopant in self.dopants]
+    def species_concentrations(self) -> List[float]:
+        """
+        Gets the molar concentration of each dopant species in the system.
+
+        Returns:
+            List[float]: List of molar concentrations for each dopant species.
+        """
+        return [dopant.molar_concentration / self.volume_per_dopant_site
+                for dopant in self.dopants]
 
     def calculate_multi_phonon_rates(self,
-                           dopant):
+                                     dopant) -> Tuple[List[float], List[float]]:
         """
-        Calculates MultiPhonon Relaxation Rate for a given set of energy levels using Miyakawa-Dexter MPR theory
+        Calculates Multi-Phonon Relaxation (MPR) Rate for a given set of
+        energy levels using Miyakawa-Dexter MPR theory
 
         :param w_0phonon: zero gap rate (s^-1)
-        :param alpha: pre-exponential constant in Miyakawa-Dexter MPR theory.  Changes with matrix (cm)
+        :param alpha: pre-exponential constant in Miyakawa-Dexter MPR theory.
+            Changes with matrix (cm)
         :param stokes_shift:
         :param phonon_energy:
         :return:
