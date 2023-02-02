@@ -16,10 +16,13 @@ from pymatgen.core import (
     Molecule
 )
 from monty.json import MSONable
-from e3nn import io
 import torch
 from NanoParticleTools.species_data.species import Dopant
-
+try:
+    from e3nn import io
+    no_e3nn = True
+except (ImportError, ModuleNotFoundError):
+    no_e3nn = False
 
 class NanoParticleConstraint(ABC, MSONable):
     """
@@ -210,6 +213,7 @@ class PrismConstraint(NanoParticleConstraint):
         return (f"PrismConstraint(a={self.box_a}, "
                 f"b={self.box_b}, c={self.box_c})")
 
+
 class CubeConstraint(PrismConstraint):
     """
     Defines a cubic constraint that would be used to define a cubic volume.
@@ -221,6 +225,7 @@ class CubeConstraint(PrismConstraint):
 
     def __str__(self) -> str:
         return f"CubeConstraint(a={self.box_a})"
+
 
 class SphericalHarmonicsConstraint(NanoParticleConstraint):
     """
@@ -240,6 +245,10 @@ class SphericalHarmonicsConstraint(NanoParticleConstraint):
             host_structure (Optional[Structure], optional): _description_.
                 Defaults to None.
         """
+        if no_e3nn:
+            raise ImportError("e3nn is not installed. Please install e3nn "
+                              "to use SphericalHarmonicsConstraint"
+                              "Run 'pip install e3nn' to install the library.")
         self.sh_bounds = sh_bounds
         self.irreps = irreps
         super().__init__(host_structure)
@@ -282,6 +291,7 @@ class SphericalHarmonicsConstraint(NanoParticleConstraint):
 
     def __str__(self) -> str:
         raise NotImplementedError
+
 
 class DopedNanoparticle(MSONable):
     """
