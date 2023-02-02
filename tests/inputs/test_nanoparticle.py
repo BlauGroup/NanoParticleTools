@@ -86,7 +86,7 @@ def test_get_wse2_structure():
 
     assert ([str(el) for el in struct.species] == ['Se', 'Se', 'Se', 'Se', 'W', 'W'])
 
-    lattice = np.array([[3.327, 0.0,  0],
+    lattice = np.array([[3.327, 0.0, 0],
                         [-1.6635, 2.88126652, 0],
                         [0.0, 0.0, 15.069]])
     assert np.allclose(struct.lattice.matrix, lattice)
