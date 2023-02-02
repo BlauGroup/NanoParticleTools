@@ -16,15 +16,9 @@ from pymatgen.core import (
     Molecule
 )
 from monty.json import MSONable
+from e3nn import io
+import torch
 from NanoParticleTools.species_data.species import Dopant
-try:
-    from e3nn.io import SphericalTensor
-    from torch import Tensor
-    missing_ml_package = True
-except (ImportError, ModuleNotFoundError):
-    SphericalTensor = object
-    Tensor = object
-    missing_ml_package = False
 
 
 class NanoParticleConstraint(ABC, MSONable):
@@ -216,7 +210,6 @@ class PrismConstraint(NanoParticleConstraint):
         return (f"PrismConstraint(a={self.box_a}, "
                 f"b={self.box_b}, c={self.box_c})")
 
-
 class CubeConstraint(PrismConstraint):
     """
     Defines a cubic constraint that would be used to define a cubic volume.
@@ -229,7 +222,6 @@ class CubeConstraint(PrismConstraint):
     def __str__(self) -> str:
         return f"CubeConstraint(a={self.box_a})"
 
-
 class SphericalHarmonicsConstraint(NanoParticleConstraint):
     """
     A constraint that defines a volume in 3D space according to a deformed
@@ -237,8 +229,8 @@ class SphericalHarmonicsConstraint(NanoParticleConstraint):
     """
 
     def __init__(self,
-                 sh_bounds: Tensor,
-                 irreps: SphericalTensor,
+                 sh_bounds: torch.Tensor,
+                 irreps: io.SphericalTensor,
                  host_structure: Optional[Structure] = None):
         """
         For a spherical shell, trivially pass in a spherical harmonic with l=0
@@ -248,9 +240,6 @@ class SphericalHarmonicsConstraint(NanoParticleConstraint):
             host_structure (Optional[Structure], optional): _description_.
                 Defaults to None.
         """
-        if missing_ml_package:
-            raise ImportError("e3nn or torch is not installed. Please make sure both "
-                              "are installed to use SphericalHarmonicsConstraint")
         self.sh_bounds = sh_bounds
         self.irreps = irreps
         super().__init__(host_structure)
@@ -293,7 +282,6 @@ class SphericalHarmonicsConstraint(NanoParticleConstraint):
 
     def __str__(self) -> str:
         raise NotImplementedError
-
 
 class DopedNanoparticle(MSONable):
     """
