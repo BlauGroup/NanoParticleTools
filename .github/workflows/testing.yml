@@ -29,3 +29,5 @@ jobs:
       - name: Run tests
         run: |
           pytest --cov --cov-report=term-missing
+        shell:
+          bash
