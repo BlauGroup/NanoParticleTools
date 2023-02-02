@@ -1,6 +1,4 @@
-import csv
 import sqlite3
-import warnings
 from typing import Optional, Sequence, Union
 import subprocess
 from NanoParticleTools.inputs.nanoparticle import DopedNanoparticle
@@ -8,6 +6,8 @@ from NanoParticleTools.inputs.spectral_kinetics import SpectralKinetics
 from NanoParticleTools.inputs.util import get_all_interactions, get_sites, get_species
 import signal
 import time
+from monty.json import MSONable
+from functools import lru_cache
 
 create_species_table_sql = """
     CREATE TABLE species (
@@ -120,8 +120,6 @@ create_interupt_cutoff_sql = """
     );
 """
 
-from monty.json import MSONable
-from functools import lru_cache
 
 class NPMCInput(MSONable):
 
@@ -146,16 +144,14 @@ class NPMCInput(MSONable):
         else:
             return trajectory
 
-    def load_trajectories(self,
-                          database_file:str):
+    def load_trajectories(self, database_file: str):
         with sqlite3.connect(database_file) as con:
             cur = con.cursor()
 
             trajectories = {}
             for row in cur.execute(sql_get_trajectory):
                 seed = row[0]
-                # step = row[1] # This is not used, save some time/memory by keeping it commented
-                time = row[2]
+                _time = row[2]
                 site_id_1 = row[3]
                 site_id_2 = row[4]
                 interaction_id = row[5]
@@ -163,13 +159,15 @@ class NPMCInput(MSONable):
                 if seed not in trajectories:
                     trajectories[seed] = []
 
-                trajectories[seed].append([site_id_1, site_id_2, interaction_id, time])
+                trajectories[seed].append(
+                    [site_id_1, site_id_2, interaction_id, _time])
 
             self.trajectories = trajectories
 
-    def __init__(self, spectral_kinetics: SpectralKinetics,
+    def __init__(self,
+                 spectral_kinetics: SpectralKinetics,
                  nanoparticle: DopedNanoparticle,
-                 initial_states: Optional[Sequence[int]]=None):
+                 initial_states: Optional[Sequence[int]] = None):
 
         self.spectral_kinetics = spectral_kinetics
         self.nanoparticle = nanoparticle
@@ -186,7 +184,7 @@ class NPMCInput(MSONable):
     @property
     @lru_cache
     def sites(self):
-        if self.nanoparticle.has_structure == False:
+        if self.nanoparticle.has_structure is False:
             self.nanoparticle.generate()
         return get_sites(self.nanoparticle, self.spectral_kinetics)
 
@@ -195,20 +193,33 @@ class NPMCInput(MSONable):
     def species(self):
         return get_species(self.spectral_kinetics)
 
-    def generate_initial_state_database(self,
-                                        database_file: str,
-                                        one_site_interaction_factor: Optional[Union[float, int]] = 1,
-                                        two_site_interaction_factor: Optional[Union[float, int]] = 1,
-                                        interaction_radius_bound: Optional[Union[float, int]] = 3,
-                                        distance_factor_type: Optional[str] = 'inverse_cubic'):
+    def generate_initial_state_database(
+            self,
+            database_file: str,
+            one_site_interaction_factor: Optional[Union[float, int]] = 1,
+            two_site_interaction_factor: Optional[Union[float, int]] = 1,
+            interaction_radius_bound: Optional[Union[float, int]] = 3,
+            distance_factor_type: Optional[str] = 'inverse_cubic'):
         """
 
-        :param database_file: name of file to write database to
-        :param one_site_interaction_factor: Weighting for one site interactions. Can be used to boost their occurrence.
-        :param two_site_interaction_factor: Weighting for two site interactions. Can be used to boost their occurrence.
-        :param interaction_radius_bound: Maximum distance allowed for an ET interaction.
-        :param distance_factor_type: Accepted values are 'linear' and 'inverse_cubic'
-        :return:
+        Args:
+            database_file (str): name of file to write database to
+            one_site_interaction_factor (float, int, None): Weighting for one
+                site interactions. Can be used to boost their occurrence.
+
+                Defaults to 1.
+            two_site_interaction_factor (float, int, None): Weighting for two
+                site interactions. Can be used to boost their occurrence.
+
+                Defaults to 1.
+            interaction_radius_bound (float, int, None): Maximum distance allowed
+                for an ET interaction.
+
+                Defaults to 3.
+            distance_factor_type (Optional[str], optional): Accepted values are
+                'linear' and 'inverse_cubic'.
+
+                Defaults to 'inverse_cubic'.
         """
         # TODO: parameterize over initial state
         with sqlite3.connect(database_file) as con:
@@ -224,20 +235,18 @@ class NPMCInput(MSONable):
             for i in self.sites:
                 site_id = self.sites[i]['site_id']
                 state_id = self.initial_states[i]
-                cur.execute(insert_initial_state_sql,
-                            (site_id,
-                             state_id
-                             ))
+                cur.execute(insert_initial_state_sql, (site_id, state_id))
 
             con.commit()
 
-            cur.execute(insert_factors_sql,
-                        (one_site_interaction_factor, two_site_interaction_factor, interaction_radius_bound, distance_factor_type))
+            cur.execute(
+                insert_factors_sql,
+                (one_site_interaction_factor, two_site_interaction_factor,
+                 interaction_radius_bound, distance_factor_type))
 
             con.commit()
 
-    def generate_nano_particle_database(self,
-                                        database_file:str):
+    def generate_nano_particle_database(self, database_file: str):
         with sqlite3.connect(database_file) as con:
             cur = con.cursor()
 
@@ -250,47 +259,36 @@ class NPMCInput(MSONable):
             for i in self.species:
                 row = self.species[i]
                 cur.execute(insert_species_sql,
-                            (row['species_id'],
-                             row['degrees_of_freedom']))
+                            (row['species_id'], row['degrees_of_freedom']))
 
             con.commit()
 
             for i in self.sites:
                 row = self.sites[i]
                 cur.execute(insert_site_sql,
-                            (row['site_id'],
-                             row['x'],
-                             row['y'],
-                             row['z'],
+                            (row['site_id'], row['x'], row['y'], row['z'],
                              row['species_id']))
             con.commit()
 
             for i in self.interactions:
                 row = self.interactions[i]
                 cur.execute(insert_interaction_sql,
-                            (row['interaction_id'],
-                             row['number_of_sites'],
-                             row['species_id_1'],
-                             row['species_id_2'],
-                             row['left_state_1'],
-                             row['left_state_2'],
-                             row['right_state_1'],
-                             row['right_state_2'],
-                             row['rate'],
-                             row['interaction_type']))
+                            (row['interaction_id'], row['number_of_sites'],
+                             row['species_id_1'], row['species_id_2'],
+                             row['left_state_1'], row['left_state_2'],
+                             row['right_state_1'], row['right_state_2'],
+                             row['rate'], row['interaction_type']))
 
-            cur.execute(insert_metadata_sql,
-                        (len(self.species),
-                         len(self.sites),
-                         len(self.interactions)))
+            cur.execute(
+                insert_metadata_sql,
+                (len(self.species), len(self.sites), len(self.interactions)))
 
             con.commit()
 
-import os
+
 class NPMCRunner:
-    def __init__(self,
-                 np_db_path,
-                 initial_state_db_path):
+
+    def __init__(self, np_db_path, initial_state_db_path):
         self.np_database = np_db_path
         self.initial_state = initial_state_db_path
         signal.signal(signal.SIGINT, self.error_handler)
@@ -313,26 +311,33 @@ class NPMCRunner:
             log_file=''):
         """
 
-        :param np_database: a sqlite database containing the reaction network and metadata.
-        :param initial_state: a sqlite database containing initial state. The simulation
-            trajectories are also written into the database
+        :param np_database: a sqlite database containing the reaction network
+            and metadata.
+        :param initial_state: a sqlite database containing initial state.
+            The simulation trajectories are also written into the database
         :param num_sims: an integer specifying how many simulations to run
-        :param base_seed: seeds used are base_seed, base_seed+1, ..., base_seed+number_of_simulations-1
+        :param base_seed: seeds used are:
+            [base_seed, base_seed+1, ..., base_seed+number_of_simulations-1]
         :param thread_count: number of threads to use
         :param simulation_length:
         :return:
         """
-        run_args = [npmc_command,
-                    f'--nano_particle_database={self.np_database}',
-                    f'--initial_state_database={self.initial_state}',
-                    f'--number_of_simulations={str(num_sims)}',
-                    f'--base_seed={str(base_seed)}',
-                    f'--thread_count={str(thread_count)}']
+        run_args = [
+            npmc_command, f'--nano_particle_database={self.np_database}',
+            f'--initial_state_database={self.initial_state}',
+            f'--number_of_simulations={str(num_sims)}',
+            f'--base_seed={str(base_seed)}',
+            f'--thread_count={str(thread_count)}'
+        ]
         if simulation_length is not None:
             run_args.append(f'--step_cutoff={str(simulation_length)}')
         elif simulation_time is not None:
             run_args.append(f'--time_cutoff={str(simulation_time)}')
         print(f"Running NPMC using the command: \"{' '.join(run_args)}\"")
-        with open(log_file+"stdout", "a") as f_std, open(log_file+"stderr", "a", buffering=1) as f_err:
-            self.process = subprocess.Popen(run_args, stdout=f_std, stderr=f_err)
+        with open(log_file + "stdout",
+                  "a") as f_std, open(log_file + "stderr", "a",
+                                      buffering=1) as f_err:
+            self.process = subprocess.Popen(run_args,
+                                            stdout=f_std,
+                                            stderr=f_err)
         self.process.wait()

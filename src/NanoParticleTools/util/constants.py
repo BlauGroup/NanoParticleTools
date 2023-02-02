@@ -16,6 +16,6 @@ e_CGS = 0.000000000480320427
 m_e_CGS = 9.10938188E-28
 
 # magnetic moment of an electron in erg/Gauss
-BOHR_MAGNETON_CGS = e_CGS*(h_CGS/(2*pi))/(2*m_e_CGS*c_CGS)
+BOHR_MAGNETON_CGS = e_CGS * (h_CGS / (2 * pi)) / (2 * m_e_CGS * c_CGS)
 
 ANGULAR_MOMENTUM_SYMBOLS = "SPDFGHIKLMNOQRTUV"

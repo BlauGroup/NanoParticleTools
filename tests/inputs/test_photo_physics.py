@@ -20,4 +20,3 @@ def test_gaussian():
     assert gaussian(0, 0, 1) == pytest.approx(0.3989422804014327)
     assert np.allclose(gaussian(np.array([0, 5]), 1, 2),
                        np.array([0.17603266, 0.02699548]))
-

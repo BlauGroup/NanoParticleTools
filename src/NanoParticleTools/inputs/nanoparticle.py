@@ -348,6 +348,7 @@ class DopedNanoparticle(MSONable):
         self.dopant_indices = [[] for _ in self.constraints]
         self._dopant_concentration = [{} for _ in self.constraints]
 
+
     @property
     def has_structure(self) -> bool:
         """

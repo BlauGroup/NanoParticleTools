@@ -1,32 +1,16 @@
 import math
-from typing import (
-    Optional,
-    List,
-    Union,
-    Sequence,
-    Tuple
-)
+from typing import (Optional, List, Union, Sequence, Tuple)
 
 import numpy as np
-from NanoParticleTools.util.constants import (
-    h_CGS,
-    c_CGS
-    )
-    
+from NanoParticleTools.util.constants import (h_CGS, c_CGS)
+
 from NanoParticleTools.inputs.photo_physics import (
-    gaussian,
-    get_absorption_cross_section_from_line_strength,
-    get_transition_rate_from_line_strength,
-    get_critical_energy_gap,
+    gaussian, get_absorption_cross_section_from_line_strength,
+    get_transition_rate_from_line_strength, get_critical_energy_gap,
     get_MD_line_strength_from_icc,
-    magnetic_dipole_operation,
     get_absorption_cross_section_from_MD_line_strength,
-    get_oscillator_strength_from_MD_line_strength,
-    get_rate_from_MD_line_strength,
-    gaussian_overlap_integral,
-    phonon_assisted_energy_transfer_constant,
-    energy_transfer_constant
-)
+    get_rate_from_MD_line_strength, gaussian_overlap_integral,
+    phonon_assisted_energy_transfer_constant, energy_transfer_constant)
 from scipy.integrate import BDF, OdeSolver
 from functools import lru_cache
 from monty.json import MSONable
@@ -153,7 +137,7 @@ class SpectralKinetics(MSONable):
         Returns:
             float: The incident photon flux.
         """
-        return (self.excitation_power * 1e7 / 
+        return (self.excitation_power * 1e7 /
                 (h_CGS * c_CGS * self.incident_wavenumber))
 
     @property
@@ -174,11 +158,13 @@ class SpectralKinetics(MSONable):
         Returns:
             List[float]: List of molar concentrations for each dopant species.
         """
-        return [dopant.molar_concentration / self.volume_per_dopant_site
-                for dopant in self.dopants]
+        return [
+            dopant.molar_concentration / self.volume_per_dopant_site
+            for dopant in self.dopants
+        ]
 
-    def calculate_multi_phonon_rates(self,
-                                     dopant) -> Tuple[List[float], List[float]]:
+    def calculate_multi_phonon_rates(
+            self, dopant) -> Tuple[List[float], List[float]]:
         """
         Calculates Multi-Phonon Relaxation (MPR) Rate for a given set of
         energy levels using Miyakawa-Dexter MPR theory
@@ -192,22 +178,28 @@ class SpectralKinetics(MSONable):
         """
 
         # multiphonon relaxation rate from level i to level i-1
-        mpr_rates = [0] # level 0 cannot relax, thus it's rate is 0
+        mpr_rates = [0]  # level 0 cannot relax, thus it's rate is 0
         for i in range(1, dopant.n_levels):
-            energy_gap = max(abs(dopant.energy_levels[i].energy - dopant.energy_levels[i-1].energy) - self.stokes_shift, 0) - 2 * self.phonon_energy
+            energy_gap = max(
+                abs(dopant.energy_levels[i].energy -
+                    dopant.energy_levels[i - 1].energy) - self.stokes_shift,
+                0) - 2 * self.phonon_energy
 
             rate = self.zero_phonon_rate * np.exp(-self.mpr_alpha * energy_gap)
             mpr_rates.append(rate)
 
         mpa_rates = []
         for i in range(1, dopant.n_levels):
-            energy_gap = dopant.energy_levels[i].energy - dopant.energy_levels[i - 1].energy
+            energy_gap = dopant.energy_levels[i].energy - dopant.energy_levels[
+                i - 1].energy
             if energy_gap < 3 * self.phonon_energy:
                 rate = mpr_rates[i] * np.exp(-self.mpr_alpha * energy_gap)
                 mpa_rates.append(rate)
             else:
                 mpa_rates.append(0)
-        mpa_rates.append(0)  # Highest energy level cannot be further excited, therefore set its rate to 0
+        mpa_rates.append(
+            0
+        )  # Highest energy level cannot be further excited, therefore set its rate to 0
 
         return mpr_rates, mpa_rates
 
@@ -229,19 +221,24 @@ class SpectralKinetics(MSONable):
 
         # TODO: Confirm if this is the correct matrix
 
-        non_radiative_rates = np.zeros((self.total_n_levels + 2, self.total_n_levels + 2))
+        non_radiative_rates = np.zeros(
+            (self.total_n_levels + 2, self.total_n_levels + 2))
         first_index = 0
         for i, dopant in enumerate(self.dopants):
             rates = np.identity(len(mpr_rates[i])) * mpr_rates[i]
-            non_radiative_rates[first_index + 1:first_index + 1 + dopant.n_levels,
-            first_index:first_index + dopant.n_levels] += rates
+            non_radiative_rates[first_index + 1:first_index + 1 +
+                                dopant.n_levels, first_index:first_index +
+                                dopant.n_levels] += rates
 
             rates = np.identity(len(mpa_rates[i])) * mpa_rates[i]
-            non_radiative_rates[first_index + 1:first_index + 1 + dopant.n_levels,
-            first_index + 1 + 1:first_index + 1 + 1 + dopant.n_levels] += rates
+            non_radiative_rates[first_index + 1:first_index + 1 +
+                                dopant.n_levels,
+                                first_index + 1 + 1:first_index + 1 + 1 +
+                                dopant.n_levels] += rates
             first_index += dopant.n_levels
 
-        return non_radiative_rates[1:self.total_n_levels + 1, 1:self.total_n_levels + 1]
+        return non_radiative_rates[1:self.total_n_levels + 1,
+                                   1:self.total_n_levels + 1]
 
     @property
     @lru_cache
@@ -252,12 +249,15 @@ class SpectralKinetics(MSONable):
         """
         # TODO: make the combined rate matrix if necessary
 
-        combined_line_strength_matrix = np.zeros((self.total_n_levels, self.total_n_levels))
+        combined_line_strength_matrix = np.zeros(
+            (self.total_n_levels, self.total_n_levels))
         first_index = 0
         for dopant in self.dopants:
             _m = dopant.get_line_strength_matrix()
-            combined_line_strength_matrix[first_index:first_index + dopant.n_levels,
-            first_index:first_index + dopant.n_levels] = _m
+            combined_line_strength_matrix[first_index:first_index +
+                                          dopant.n_levels,
+                                          first_index:first_index +
+                                          dopant.n_levels] = _m
             first_index += dopant.n_levels
 
         return combined_line_strength_matrix
@@ -273,42 +273,49 @@ class SpectralKinetics(MSONable):
         energy_gaps = np.zeros((self.total_n_levels, self.total_n_levels))
         for dopant_index, dopant in enumerate(self.dopants):
             for i in range(dopant.n_levels):
-                combined_i = sum([dopant.n_levels for dopant in self.dopants[:dopant_index]]) + i
+                combined_i = sum([
+                    dopant.n_levels for dopant in self.dopants[:dopant_index]
+                ]) + i
                 for j in range(dopant.n_levels):
-                    combined_j = sum([dopant.n_levels for dopant in self.dopants[:dopant_index]]) + j
-                    energy_gap = dopant.energy_levels[j].energy - dopant.energy_levels[i].energy
+                    combined_j = sum([
+                        dopant.n_levels
+                        for dopant in self.dopants[:dopant_index]
+                    ]) + j
+                    energy_gap = dopant.energy_levels[
+                        j].energy - dopant.energy_levels[i].energy
                     energy_gaps[combined_i, combined_j] = energy_gap
 
                     if energy_gap < 0:
-                        rad_rates[combined_i][combined_j] = get_transition_rate_from_line_strength(energy_gap,
-                                                                                                   self.line_strength_matrix[
-                                                                                                       combined_i][
-                                                                                                       combined_j],
-                                                                                                   dopant.slj[i][2],
-                                                                                                   self.n_refract)
+                        rad_rates[combined_i][
+                            combined_j] = get_transition_rate_from_line_strength(
+                                energy_gap,
+                                self.line_strength_matrix[combined_i]
+                                [combined_j], dopant.slj[i][2], self.n_refract)
                     elif energy_gap > 0:
                         # Going up in energy, therefore calculate the photon absorption based on abs. cross section and incident flux
                         absfwhm = dopant.absFWHM[j]
-                        abs_sigma = absfwhm / (2 * np.sqrt(2 * np.log(2)))  # convert fwhm to width in gaussian equation
+                        abs_sigma = absfwhm / (
+                            2 * np.sqrt(2 * np.log(2))
+                        )  # convert fwhm to width in gaussian equation
 
-                        absorption_cross_section = get_absorption_cross_section_from_line_strength(energy_gap,
-                                                                                                   self.line_strength_matrix[
-                                                                                                       combined_i][
-                                                                                                       combined_j],
-                                                                                                   dopant.slj[i][2],
-                                                                                                   self.n_refract)
+                        absorption_cross_section = get_absorption_cross_section_from_line_strength(
+                            energy_gap,
+                            self.line_strength_matrix[combined_i][combined_j],
+                            dopant.slj[i][2], self.n_refract)
 
-                        critical_energy_gap = get_critical_energy_gap(self.mpr_alpha, absfwhm)
-                        if abs(energy_gap - self.incident_wavenumber) > critical_energy_gap:
-                            individual_absorption_cross_section = absorption_cross_section * gaussian(energy_gap,
-                                                                                                      energy_gap,
-                                                                                                      abs_sigma)
+                        critical_energy_gap = get_critical_energy_gap(
+                            self.mpr_alpha, absfwhm)
+                        if abs(energy_gap -
+                               self.incident_wavenumber) > critical_energy_gap:
+                            individual_absorption_cross_section = absorption_cross_section * gaussian(
+                                energy_gap, energy_gap, abs_sigma)
                             mpr_assisted_absorption_correction_factor = np.exp(
-                                -self.mpr_alpha * np.abs(energy_gap - self.incident_wavenumber))
+                                -self.mpr_alpha *
+                                np.abs(energy_gap - self.incident_wavenumber))
                         else:
-                            individual_absorption_cross_section = absorption_cross_section * gaussian(energy_gap,
-                                                                                                      self.incident_wavenumber,
-                                                                                                      abs_sigma)
+                            individual_absorption_cross_section = absorption_cross_section * gaussian(
+                                energy_gap, self.incident_wavenumber,
+                                abs_sigma)
                             mpr_assisted_absorption_correction_factor = 1
 
                         radiative_rate = self.incident_photon_flux * individual_absorption_cross_section * mpr_assisted_absorption_correction_factor
@@ -326,7 +333,8 @@ class SpectralKinetics(MSONable):
         creates the MDradRate matrix containing the MD line strength in cm^2 from intermediate coupling coefficient vectors
         :return:
         """
-        magnetic_dipole_radiative_rates = np.zeros((self.total_n_levels, self.total_n_levels))
+        magnetic_dipole_radiative_rates = np.zeros(
+            (self.total_n_levels, self.total_n_levels))
 
         for dopant_index, dopant in enumerate(self.dopants):
             if dopant.symbol in dopant.SURFACE_DOPANT_SYMBOLS_TO_NAMES:
@@ -338,56 +346,74 @@ class SpectralKinetics(MSONable):
             l_vector = dopant.eigenvector_sl[:, 1]
             for i in range(dopant.n_levels):
                 energy_i = dopant.energy_levels[i].energy
-                combined_i = sum([dopant.n_levels for dopant in self.dopants[:dopant_index]]) + i
+                combined_i = sum([
+                    dopant.n_levels for dopant in self.dopants[:dopant_index]
+                ]) + i
 
-                coeff_vector_i = dopant.intermediate_coupling_coefficients[i]  # May need to transpose
+                coeff_vector_i = dopant.intermediate_coupling_coefficients[
+                    i]  # May need to transpose
                 Ji = dopant.slj[i][2]
 
                 for j in range(dopant.n_levels):
                     energy_j = dopant.energy_levels[j].energy
                     energy_gap = energy_j - energy_i
-                    combined_j = sum([dopant.n_levels for dopant in self.dopants[:dopant_index]]) + j
+                    combined_j = sum([
+                        dopant.n_levels
+                        for dopant in self.dopants[:dopant_index]
+                    ]) + j
 
                     Jf = dopant.slj[j][2]
-                    coeff_vector_j = dopant.intermediate_coupling_coefficients[j]  # May need to transpose
+                    coeff_vector_j = dopant.intermediate_coupling_coefficients[
+                        j]  # May need to transpose
 
                     # TODO: port this function
-                    current_line_strength = get_MD_line_strength_from_icc(coeff_vector_i, coeff_vector_j, Ji, Jf,
-                                                                          s_vector, l_vector)
+                    current_line_strength = get_MD_line_strength_from_icc(
+                        coeff_vector_i, coeff_vector_j, Ji, Jf, s_vector,
+                        l_vector)
 
                     if current_line_strength is None:
-                        raise ValueError('Error, current_line_strength is not a valid number')
+                        raise ValueError(
+                            'Error, current_line_strength is not a valid number'
+                        )
 
                     if energy_gap < 0:
                         # spontaneous emission
-                        magnetic_dipole_radiative_rates[combined_i][combined_j] = get_rate_from_MD_line_strength(
-                            current_line_strength, energy_gap, Ji, self.n_refract)
+                        magnetic_dipole_radiative_rates[combined_i][
+                            combined_j] = get_rate_from_MD_line_strength(
+                                current_line_strength, energy_gap, Ji,
+                                self.n_refract)
                     elif energy_gap > 0:
                         # Going up in energy, calculate photon absorption based on abs. cross section and incident flux
                         absfwhm = dopant.absFWHM[j]
-                        abs_sigma = absfwhm / (2 * np.sqrt(2 * np.log(2)))  # convert fwhm to width in gaussian equation
+                        abs_sigma = absfwhm / (
+                            2 * np.sqrt(2 * np.log(2))
+                        )  # convert fwhm to width in gaussian equation
 
                         absorption_cross_section = get_absorption_cross_section_from_MD_line_strength(
-                            current_line_strength, energy_gap, Ji, self.n_refract)
-                        critical_energy_gap = get_critical_energy_gap(self.mpr_alpha, absfwhm)
-                        if np.abs(energy_gap - self.incident_wavenumber) > critical_energy_gap:
-                            individual_absorption_cross_section = absorption_cross_section * gaussian(energy_gap,
-                                                                                                      energy_gap,
-                                                                                                      abs_sigma)
+                            current_line_strength, energy_gap, Ji,
+                            self.n_refract)
+                        critical_energy_gap = get_critical_energy_gap(
+                            self.mpr_alpha, absfwhm)
+                        if np.abs(energy_gap - self.incident_wavenumber
+                                  ) > critical_energy_gap:
+                            individual_absorption_cross_section = absorption_cross_section * gaussian(
+                                energy_gap, energy_gap, abs_sigma)
                             mpr_assisted_absorption_correction_factor = np.exp(
-                                -self.mpr_alpha * np.abs(energy_gap - self.incident_wavenumber))
+                                -self.mpr_alpha *
+                                np.abs(energy_gap - self.incident_wavenumber))
                         else:
                             # energy mismatch < critical energy gap, therefore don't use any MPR assistance
-                            individual_absorption_cross_section = absorption_cross_section * gaussian(energy_gap,
-                                                                                                      self.incident_wavenumber,
-                                                                                                      abs_sigma)
+                            individual_absorption_cross_section = absorption_cross_section * gaussian(
+                                energy_gap, self.incident_wavenumber,
+                                abs_sigma)
                             mpr_assisted_absorption_correction_factor = 1
 
                         # TODO: Resolve comment: "FIXME -- this should probably be enabled since there is no MD absorption without it, but need to double check if it is correct"
                         # absorption_rate = individual_absorption_cross_section*self.incident_photon_flux * mpr_assisted_absorption_correction_factor
                         absorption_rate = 0
                         if absorption_rate > self.radiative_rate_threshold:
-                            magnetic_dipole_radiative_rates[combined_i][combined_j] = absorption_rate
+                            magnetic_dipole_radiative_rates[combined_i][
+                                combined_j] = absorption_rate
         return magnetic_dipole_radiative_rates
 
     @property
@@ -410,20 +436,27 @@ class SpectralKinetics(MSONable):
         for combined_di in range(self.total_n_levels):
             dopant_di_index = species_map[combined_di]
             dopant_di = self.dopants[dopant_di_index]
-            di = combined_di - sum([dopant.n_levels for dopant in self.dopants[:dopant_di_index]])
+            di = combined_di - sum(
+                [dopant.n_levels for dopant in self.dopants[:dopant_di_index]])
 
             Jdi = dopant_di.slj[di, 2]
             absfwhm = dopant_di.absFWHM[di]
-            critical_energy_gap = get_critical_energy_gap(self.mpr_beta, absfwhm)
+            critical_energy_gap = get_critical_energy_gap(
+                self.mpr_beta, absfwhm)
             donor_concentration = dopant_di.volume_concentration * 1e21  # convert from nm^-3 to cm^-3
-            combined_donor_ground_state_index = sum([dopant.n_levels for dopant in self.dopants[:dopant_di_index]])
+            combined_donor_ground_state_index = sum(
+                [dopant.n_levels for dopant in self.dopants[:dopant_di_index]])
 
             for combined_dj in range(self.total_n_levels):
                 dopant_dj_index = species_map[combined_dj]
                 dopant_dj = self.dopants[dopant_dj_index]
-                dj = combined_dj - sum([dopant.n_levels for dopant in self.dopants[:dopant_dj_index]])
+                dj = combined_dj - sum([
+                    dopant.n_levels
+                    for dopant in self.dopants[:dopant_dj_index]
+                ])
 
-                donor_energy_change = dopant_dj.energy_levels[dj].energy - dopant_di.energy_levels[di].energy
+                donor_energy_change = dopant_dj.energy_levels[
+                    dj].energy - dopant_di.energy_levels[di].energy
                 if donor_energy_change >= 0:
                     # donor transition dE should be negative
                     continue
@@ -431,14 +464,18 @@ class SpectralKinetics(MSONable):
                 # adjust for stokes shift
                 # donor_energy_change += self.stokesShift
 
-                donor_line_strength = self.line_strength_matrix[combined_di, combined_dj]
-                donor_to_ground_state_line_strength = self.line_strength_matrix[combined_di][
-                    combined_donor_ground_state_index]
+                donor_line_strength = self.line_strength_matrix[combined_di,
+                                                                combined_dj]
+                donor_to_ground_state_line_strength = self.line_strength_matrix[
+                    combined_di][combined_donor_ground_state_index]
 
                 for combined_ai in range(self.total_n_levels):
                     dopant_ai_index = species_map[combined_ai]
                     dopant_ai = self.dopants[dopant_ai_index]
-                    ai = combined_ai - sum([dopant.n_levels for dopant in self.dopants[:dopant_ai_index]])
+                    ai = combined_ai - sum([
+                        dopant.n_levels
+                        for dopant in self.dopants[:dopant_ai_index]
+                    ])
                     Jai = dopant_ai.slj[ai, 2]
 
                     acceptor_concentration = dopant_ai.volume_concentration * 1e21  # convert from nm^-3 to cm^-3
@@ -446,15 +483,20 @@ class SpectralKinetics(MSONable):
                     for combined_aj in range(self.total_n_levels):
                         dopant_aj_index = species_map[combined_aj]
                         dopant_aj = self.dopants[dopant_aj_index]
-                        aj = combined_aj - sum([dopant.n_levels for dopant in self.dopants[:dopant_aj_index]])
+                        aj = combined_aj - sum([
+                            dopant.n_levels
+                            for dopant in self.dopants[:dopant_aj_index]
+                        ])
                         Jaj = dopant_aj.slj[aj, 2]
-                        acceptor_energy_change = dopant_aj.energy_levels[aj].energy - dopant_ai.energy_levels[ai].energy
+                        acceptor_energy_change = dopant_aj.energy_levels[
+                            aj].energy - dopant_ai.energy_levels[ai].energy
 
                         if acceptor_energy_change <= 0:
                             # acceptor transition dE should be positive
                             continue
 
-                        acceptor_line_strength = self.line_strength_matrix[combined_ai, combined_aj]
+                        acceptor_line_strength = self.line_strength_matrix[
+                            combined_ai, combined_aj]
 
                         energy_gap = acceptor_energy_change + donor_energy_change
 
@@ -467,50 +509,57 @@ class SpectralKinetics(MSONable):
 
                         effective_energy_gap = energy_gap + self.stokes_shift
                         if effective_energy_gap > -critical_energy_gap:
-                            donor_acceptor_overlap_integral = gaussian_overlap_integral(np.abs(effective_energy_gap),
-                                                                                        max(dopant_di.absFWHM[di],
-                                                                                            dopant_aj.absFWHM[aj]))
-                            energy_transfer_rate = energy_transfer_constant(donor_line_strength, acceptor_line_strength,
-                                                                            donor_acceptor_overlap_integral,
-                                                                            self.n_refract, Jdi, Jai)
+                            donor_acceptor_overlap_integral = gaussian_overlap_integral(
+                                np.abs(effective_energy_gap),
+                                max(dopant_di.absFWHM[di],
+                                    dopant_aj.absFWHM[aj]))
+                            energy_transfer_rate = energy_transfer_constant(
+                                donor_line_strength, acceptor_line_strength,
+                                donor_acceptor_overlap_integral,
+                                self.n_refract, Jdi, Jai)
                         else:
-                            donor_acceptor_overlap_integral = gaussian_overlap_integral(0, max(dopant_di.absFWHM[di],
-                                                                                               dopant_aj.absFWHM[aj]))
-                            energy_transfer_rate = phonon_assisted_energy_transfer_constant(donor_line_strength,
-                                                                                            acceptor_line_strength,
-                                                                                            donor_acceptor_overlap_integral,
-                                                                                            self.n_refract, Jdi, Jai,
-                                                                                            abs(effective_energy_gap),
-                                                                                            self.mpr_beta)
+                            donor_acceptor_overlap_integral = gaussian_overlap_integral(
+                                0,
+                                max(dopant_di.absFWHM[di],
+                                    dopant_aj.absFWHM[aj]))
+                            energy_transfer_rate = phonon_assisted_energy_transfer_constant(
+                                donor_line_strength, acceptor_line_strength,
+                                donor_acceptor_overlap_integral,
+                                self.n_refract, Jdi, Jai,
+                                abs(effective_energy_gap), self.mpr_beta)
 
                         # TODO: Add SK_omitETtransitions to omit specific transitions
-                        if (
-                                energy_transfer_rate * donor_concentration * acceptor_concentration) > self.energy_transfer_rate_threshold:
-                            energy_transfers.append(
-                                [combined_di, combined_dj, combined_ai, combined_aj, energy_transfer_rate])
+                        if (energy_transfer_rate * donor_concentration *
+                                acceptor_concentration
+                            ) > self.energy_transfer_rate_threshold:
+                            energy_transfers.append([
+                                combined_di, combined_dj, combined_ai,
+                                combined_aj, energy_transfer_rate
+                            ])
 
         energy_transfer_rates = np.array(np.vstack(energy_transfers))
         return energy_transfer_rates
 
-    def make_migration_assisted_energy_transfer_rate_matrix(self) -> List[List[float]]:
+    def make_migration_assisted_energy_transfer_rate_matrix(
+            self) -> List[List[float]]:
         """
         :return:
         """
         # TODO: Is this needed? If so, port it
         pass
 
-    def run_kinetics(self,
-                     initial_populations: Optional[
-                         Union[Sequence[Sequence[float]], str]] = 'ground_state',
-                     t0: Optional[int] = 0,
-                     t_bound: Optional[int] = 1):
+    def run_kinetics(
+            self,
+            initial_populations: Optional[Union[Sequence[Sequence[float]],
+                                                str]] = 'ground_state',
+            t0: Optional[int] = 0,
+            t_bound: Optional[int] = 1):
         """
         SOLVES the differential equations without doing any of the setup or analysis of SK_SetUpAndDoKinetics
         ASSUMES that all of the proper values have already been stored in the global variables
 
         :return:
         """
-
         """
         SK_SetSimParams()
         SetDataFolder $SIM_CONFIG_FOLDER //leaves system in $SK_CALC_RATES_FOLDER
@@ -527,19 +576,26 @@ class SpectralKinetics(MSONable):
                 print('Using user input initial population')
             else:
                 raise ValueError(
-                    "Supplied Population is invalid. Expected length of {self.total_n_levels, received length of {len(initial_population)}")
+                    "Supplied Population is invalid. Expected length of {self.total_n_levels, received length of {len(initial_population)}"
+                )
         elif initial_populations == 'ground_state':
             for dopant in self.dopants:
                 dopant.set_initial_populations()
-            initial_populations = np.vstack([dopant.initial_populations for dopant in self.dopants])
+            initial_populations = np.vstack(
+                [dopant.initial_populations for dopant in self.dopants])
         else:
-            raise ValueError("Invalid argument supplied for: initial_populations")
+            raise ValueError(
+                "Invalid argument supplied for: initial_populations")
 
         population_time = np.zeros((self.num_steps, self.total_n_levels))
 
         # TODO: check how ode_solver works and how to retrieve values at each step
-        solver = self.ode_solver(fun=self.differential_kinetics, t0=t0, y0=initial_populations,
-                                 t_bound=t_bound, atol=self.ode_max_error, max_step=self.num_steps)
+        solver = self.ode_solver(fun=self.differential_kinetics,
+                                 t0=t0,
+                                 y0=initial_populations,
+                                 t_bound=t_bound,
+                                 atol=self.ode_max_error,
+                                 max_step=self.num_steps)
 
         return population_time
 
@@ -566,20 +622,26 @@ class SpectralKinetics(MSONable):
         # NRate
         for i in range(0, numspecies):
             for j in range(0, numspecies):
-                dNdt[i] -= N_pop[i] * self.non_radiative_rate_matrix[i][j]  # depletion
-                dNdt[j] += N_pop[i] * self.non_radiative_rate_matrix[i][j]  # accumulation
+                dNdt[i] -= N_pop[i] * self.non_radiative_rate_matrix[i][
+                    j]  # depletion
+                dNdt[j] += N_pop[i] * self.non_radiative_rate_matrix[i][
+                    j]  # accumulation
 
         # Electric Dipole Radiative Emission
         for i in range(0, numspecies):
             for j in range(0, numspecies):
-                dNdt[i] -= N_pop[i] * self.radiative_rate_matrix[i][j]  # depletion
-                dNdt[j] += N_pop[i] * self.radiative_rate_matrix[i][j]  # accumulation
+                dNdt[i] -= N_pop[i] * self.radiative_rate_matrix[i][
+                    j]  # depletion
+                dNdt[j] += N_pop[i] * self.radiative_rate_matrix[i][
+                    j]  # accumulation
 
         # Magnetic Dipole Radiative Emission
         for i in range(0, numspecies):
             for j in range(0, numspecies):
-                dNdt[i] -= N_pop[i] * self.magnetic_dipole_rate_matrix[i][j]  # depletion
-                dNdt[j] += N_pop[i] * self.magnetic_dipole_rate_matrix[i][j]  # accumulation
+                dNdt[i] -= N_pop[i] * self.magnetic_dipole_rate_matrix[i][
+                    j]  # depletion
+                dNdt[j] += N_pop[i] * self.magnetic_dipole_rate_matrix[i][
+                    j]  # accumulation
 
         # Energy Transfer
         num_energy_transfer_transitions = len(self.energy_transfer_rate_matrix)
@@ -593,9 +655,11 @@ class SpectralKinetics(MSONable):
 
             # FIXME not correct (Original Igor comment
             # changed W_ETrates[i] to W_ETrates[i][4], confirm with Emory
-            et_rate = 4 * math.pi / 3 * (self.energy_transfer_rate_matrix[i][4] * 1e42) * N_pop[ai] ** 1 * N_pop[
-                                                                                                               di] ** 1 * (
-                          self.minimum_dopant_distance ** (-3) * 1e-21 - (4 * math.pi / 3) * N_pop[ai])
+            et_rate = 4 * math.pi / 3 * (
+                self.energy_transfer_rate_matrix[i][4] *
+                1e42) * N_pop[ai]**1 * N_pop[di]**1 * (
+                    self.minimum_dopant_distance**(-3) * 1e-21 -
+                    (4 * math.pi / 3) * N_pop[ai])
 
             # last term doesn't really change things that much.
             # 1e42 = W_ETrates needs to be converted from cm^6/s to nm^6/s since N_pop is in nm^-3 and W_ET is in cm^6/s
