@@ -136,7 +136,7 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
 
                 try:
                     cur.execute('SELECT * from interupt_state')
-                except:
+                except Exception:
                     print('creating interupt_state and interupt_cutoff table')
                     cur.execute(create_interupt_state_sql)
                     cur.execute(create_interupt_cutoff_sql)

@@ -86,7 +86,7 @@ def get_critical_energy_gap(mpr_beta: float, absfwhm: float) -> float:
 def get_MD_line_strength_from_icc(
         initial_intermediate_coupling_coefficients: np.ndarray,
         final_intermediate_coupling_coefficients: np.ndarray, ji: float,
-        jf: float, s: np.ndarray, l: np.ndarray) -> float:
+        jf: float, s_vector: np.ndarray, l_vector: np.ndarray) -> float:
     """
 
     port of PP_ICcoefs2MDLineStrength
@@ -97,11 +97,11 @@ def get_MD_line_strength_from_icc(
         raise ValueError(
             "Number of rows in initial_intermediate_coupling_coefficient and"
             " final_intermediate_coupling_coefficients do not match")
-    elif len(initial_intermediate_coupling_coefficients) != len(s):
+    elif len(initial_intermediate_coupling_coefficients) != len(s_vector):
         raise ValueError(
             "Number of rows in initial_intermediate_coupling_coefficient and"
             " s do not match")
-    elif len(initial_intermediate_coupling_coefficients) != len(l):
+    elif len(initial_intermediate_coupling_coefficients) != len(l_vector):
         raise ValueError(
             "Number of rows in initial_intermediate_coupling_coefficient and"
             " l do not match")
@@ -114,8 +114,8 @@ def get_MD_line_strength_from_icc(
             continue
 
         # Only look at cases with equal s's, because otherwise MD operator = 0
-        si = sf = s[i]
-        li = lf = l[i]
+        si = sf = s_vector[i]
+        li = lf = l_vector[i]
 
         m_sum += eigenvector_i * eigenvector_f * magnetic_dipole_operation(
             si, li, ji, sf, lf, jf)

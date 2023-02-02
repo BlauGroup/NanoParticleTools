@@ -29,8 +29,8 @@ class SpectralKinetics(MSONable):
                 NaYF4:Er3+/Tm3+ Upconverting Nanocrystals.
                 J. Phys. Chem. B 2012, 116, 10561–10570.
 
-         (2)	Chan, E. M. Combinatorial Approaches for Developing 
-                Upconverting Nanomaterials: High-Throughput Screening, 
+         (2)	Chan, E. M. Combinatorial Approaches for Developing
+                Upconverting Nanomaterials: High-Throughput Screening,
                 Modeling, and Applications.
                 Chem. Soc. Rev. 2015, 44, 1653–1679.
     """
@@ -207,9 +207,11 @@ class SpectralKinetics(MSONable):
     @lru_cache
     def non_radiative_rate_matrix(self) -> np.ndarray:
         """
-        Makes the n x n M_NRrate matrix.  M_NRrate[i][j] gives the rate of non-radiative decay from level i->j,
-        which are combined energy level indices
-        :return:
+        Makes the n x n M_NRrate matrix. M_NRrate[i][j] gives the rate of non-radiative decay
+        from level i->j, which are combined energy level indices
+
+        Returns:
+            np.ndarray: _description_
         """
 
         mpr_rates = []
@@ -244,8 +246,10 @@ class SpectralKinetics(MSONable):
     @lru_cache
     def line_strength_matrix(self) -> np.ndarray:
         """
-        makes the n x n lineStrengthMatrix from a wave of lineStrengths labeled with the transitions "i->j" in transitionLabels wave
-        :return:
+        Makes the n x n lineStrengthMatrix from a wave of lineStrengths labeled with the
+        transitions "i->j" in transitionLabels wave
+        Returns:
+            np.ndarray: _description_
         """
         # TODO: make the combined rate matrix if necessary
 
@@ -267,7 +271,8 @@ class SpectralKinetics(MSONable):
     def radiative_rate_matrix(self) -> np.ndarray:
         """
 
-        :return:
+        Returns:
+            np.ndarray: _description_
         """
         rad_rates = np.zeros((self.total_n_levels, self.total_n_levels))
         energy_gaps = np.zeros((self.total_n_levels, self.total_n_levels))
@@ -292,7 +297,8 @@ class SpectralKinetics(MSONable):
                                 self.line_strength_matrix[combined_i]
                                 [combined_j], dopant.slj[i][2], self.n_refract)
                     elif energy_gap > 0:
-                        # Going up in energy, therefore calculate the photon absorption based on abs. cross section and incident flux
+                        # Going up in energy, therefore calculate the photon absorption based on
+                        # abs. cross section and incident flux
                         absfwhm = dopant.absFWHM[j]
                         abs_sigma = absfwhm / (
                             2 * np.sqrt(2 * np.log(2))
@@ -307,20 +313,24 @@ class SpectralKinetics(MSONable):
                             self.mpr_alpha, absfwhm)
                         if abs(energy_gap -
                                self.incident_wavenumber) > critical_energy_gap:
-                            individual_absorption_cross_section = absorption_cross_section * gaussian(
-                                energy_gap, energy_gap, abs_sigma)
+                            individual_absorption_cross_section = (
+                                absorption_cross_section
+                                * gaussian(energy_gap, energy_gap, abs_sigma))
                             mpr_assisted_absorption_correction_factor = np.exp(
                                 -self.mpr_alpha *
                                 np.abs(energy_gap - self.incident_wavenumber))
                         else:
-                            individual_absorption_cross_section = absorption_cross_section * gaussian(
-                                energy_gap, self.incident_wavenumber,
-                                abs_sigma)
+                            individual_absorption_cross_section = (
+                                absorption_cross_section
+                                * gaussian(energy_gap, self.incident_wavenumber, abs_sigma))
                             mpr_assisted_absorption_correction_factor = 1
 
-                        radiative_rate = self.incident_photon_flux * individual_absorption_cross_section * mpr_assisted_absorption_correction_factor
+                        radiative_rate = (self.incident_photon_flux
+                                          * individual_absorption_cross_section
+                                          * mpr_assisted_absorption_correction_factor)
 
-                        # exponential term accounts for differences between incident energy and energy level gap
+                        # exponential term accounts for differences between incident
+                        # energy and energy level gap
                         if radiative_rate > self.radiative_rate_threshold:
                             rad_rates[combined_i][combined_j] = radiative_rate
 
@@ -330,8 +340,11 @@ class SpectralKinetics(MSONable):
     @lru_cache
     def magnetic_dipole_rate_matrix(self) -> np.ndarray:
         """
-        creates the MDradRate matrix containing the MD line strength in cm^2 from intermediate coupling coefficient vectors
-        :return:
+        Creates the MDradRate matrix containing the MD line strength in cm^2
+        from intermediate coupling coefficient vectors
+
+        Returns:
+            np.ndarray: _description_
         """
         magnetic_dipole_radiative_rates = np.zeros(
             (self.total_n_levels, self.total_n_levels))
@@ -383,33 +396,39 @@ class SpectralKinetics(MSONable):
                                 current_line_strength, energy_gap, Ji,
                                 self.n_refract)
                     elif energy_gap > 0:
-                        # Going up in energy, calculate photon absorption based on abs. cross section and incident flux
+                        # Going up in energy, calculate photon absorption based on abs.
+                        # cross section and incident flux
                         absfwhm = dopant.absFWHM[j]
                         abs_sigma = absfwhm / (
                             2 * np.sqrt(2 * np.log(2))
                         )  # convert fwhm to width in gaussian equation
 
-                        absorption_cross_section = get_absorption_cross_section_from_MD_line_strength(
-                            current_line_strength, energy_gap, Ji,
-                            self.n_refract)
+                        absorption_cross_section = (
+                            get_absorption_cross_section_from_MD_line_strength(
+                                current_line_strength, energy_gap, Ji, self.n_refract))
                         critical_energy_gap = get_critical_energy_gap(
                             self.mpr_alpha, absfwhm)
                         if np.abs(energy_gap - self.incident_wavenumber
                                   ) > critical_energy_gap:
-                            individual_absorption_cross_section = absorption_cross_section * gaussian(
-                                energy_gap, energy_gap, abs_sigma)
+                            individual_absorption_cross_section = (
+                                absorption_cross_section
+                                * gaussian(energy_gap, energy_gap, abs_sigma))
                             mpr_assisted_absorption_correction_factor = np.exp(
                                 -self.mpr_alpha *
                                 np.abs(energy_gap - self.incident_wavenumber))
                         else:
-                            # energy mismatch < critical energy gap, therefore don't use any MPR assistance
-                            individual_absorption_cross_section = absorption_cross_section * gaussian(
-                                energy_gap, self.incident_wavenumber,
-                                abs_sigma)
+                            # energy mismatch < critical energy gap, therefore don't use
+                            # any MPR assistance
+                            individual_absorption_cross_section = (
+                                absorption_cross_section
+                                * gaussian(energy_gap, self.incident_wavenumber, abs_sigma))
                             mpr_assisted_absorption_correction_factor = 1
 
-                        # TODO: Resolve comment: "FIXME -- this should probably be enabled since there is no MD absorption without it, but need to double check if it is correct"
-                        # absorption_rate = individual_absorption_cross_section*self.incident_photon_flux * mpr_assisted_absorption_correction_factor
+                        # TODO: Resolve comment: "FIXME -- this should probably be enabled since
+                        # there is no MD absorption without it, but need to double check if
+                        # it is correct"
+                        # absorption_rate = individual_absorption_cross_section
+                        #   * self.incident_photon_flux * mpr_assisted_absorption_correction_factor
                         absorption_rate = 0
                         if absorption_rate > self.radiative_rate_threshold:
                             magnetic_dipole_radiative_rates[combined_i][
@@ -420,9 +439,12 @@ class SpectralKinetics(MSONable):
     @lru_cache
     def energy_transfer_rate_matrix(self) -> List[List[float]]:
         """
-        makes the phonon assisted (not migration assisted)  energy transfer rate constant waves (W_ETrates, W_ETIndices)
+        makes the phonon assisted (not migration assisted) energy transfer rate
+        constant waves (W_ETrates, W_ETIndices)
 
-        :return: the phonon-assisted, non-migration-assisted energy transfer rate constant K (1/s)
+        Returns:
+            List[List[float]]: the phonon-assisted, non-migration-assisted energy
+                transfer rate constant K (1/s)
         """
         energy_transfers = []
 
@@ -443,7 +465,9 @@ class SpectralKinetics(MSONable):
             absfwhm = dopant_di.absFWHM[di]
             critical_energy_gap = get_critical_energy_gap(
                 self.mpr_beta, absfwhm)
-            donor_concentration = dopant_di.volume_concentration * 1e21  # convert from nm^-3 to cm^-3
+
+            # convert from nm^-3 to cm^-3
+            donor_concentration = dopant_di.volume_concentration * 1e21
             combined_donor_ground_state_index = sum(
                 [dopant.n_levels for dopant in self.dopants[:dopant_di_index]])
 
@@ -478,7 +502,8 @@ class SpectralKinetics(MSONable):
                     ])
                     Jai = dopant_ai.slj[ai, 2]
 
-                    acceptor_concentration = dopant_ai.volume_concentration * 1e21  # convert from nm^-3 to cm^-3
+                    # convert from nm^-3 to cm^-3
+                    acceptor_concentration = dopant_ai.volume_concentration * 1e21
 
                     for combined_aj in range(self.total_n_levels):
                         dopant_aj_index = species_map[combined_aj]
@@ -530,8 +555,7 @@ class SpectralKinetics(MSONable):
 
                         # TODO: Add SK_omitETtransitions to omit specific transitions
                         if (energy_transfer_rate * donor_concentration *
-                                acceptor_concentration
-                            ) > self.energy_transfer_rate_threshold:
+                                acceptor_concentration) > self.energy_transfer_rate_threshold:
                             energy_transfers.append([
                                 combined_di, combined_dj, combined_ai,
                                 combined_aj, energy_transfer_rate
@@ -555,20 +579,20 @@ class SpectralKinetics(MSONable):
             t0: Optional[int] = 0,
             t_bound: Optional[int] = 1):
         """
-        SOLVES the differential equations without doing any of the setup or analysis of SK_SetUpAndDoKinetics
+        SOLVES the differential equations without doing any of the setup or
+        analysis of SK_SetUpAndDoKinetics
         ASSUMES that all of the proper values have already been stored in the global variables
 
-        :return:
-        """
-        """
-        SK_SetSimParams()
-        SetDataFolder $SIM_CONFIG_FOLDER //leaves system in $SK_CALC_RATES_FOLDER
-        NVAR ODEsolveMethod
-        NVAR ODEmaxError
+        Args:
+            initial_populations (Union[Sequence[Sequence[float]], str], None): _description_.
+                Defaults to 'ground_state'.
+            t0 (int, None): _description_.
+                Defaults to 0.
+            t_bound (int, None): _description_.
+                Defaults to 1.
 
-        SetDataFolder $SK_CALC_RATES_FOLDER
-
-        Wave /D W_pop_time
+        Returns:
+            _type_: _description_
         """
         if isinstance(initial_populations, list):
             # check if supplied populations is the proper length
@@ -576,7 +600,8 @@ class SpectralKinetics(MSONable):
                 print('Using user input initial population')
             else:
                 raise ValueError(
-                    "Supplied Population is invalid. Expected length of {self.total_n_levels, received length of {len(initial_population)}"
+                    "Supplied Population is invalid. Expected length of {self.total_n_levels, "
+                    "received length of {len(initial_population)}"
                 )
         elif initial_populations == 'ground_state':
             for dopant in self.dopants:
@@ -601,14 +626,15 @@ class SpectralKinetics(MSONable):
 
     def differential_kinetics(self, N_pop):
         """
-        #This function is intended to be called by igor's IntegrateODE function
+        # This function is intended to be called by igor's IntegrateODE function
 
-        #FYI, this function does not use matrix math (e.g., MatrixOps). It was tested and found to perform slower
-        #than iterating through For loops.
+        # FYI, this function does not use matrix math (e.g., MatrixOps).
+        # It was tested and found to perform slower
+        # than iterating through For loops.
 
         :param params: params is the parameter wave, which is not used in this function
-            Instead, this function calls global waves M_ETRate, M_RadRate, M_NRrate in $KINETIC_PARAMS_FOLDER
-            These must be set or else the function will return gibberish
+            Instead, this function calls global waves M_ETRate, M_RadRate, M_NRrate
+            in $KINETIC_PARAMS_FOLDER These must be set or else the function will return gibberish
         :param tt: time value at which to calculate derivatives
         :param N_pop: the fractional occupation or population of each level.
             yw[0]-yw[3] containing concentrations of A,B,C,D
@@ -616,28 +642,28 @@ class SpectralKinetics(MSONable):
             wave to receive dA/dt, dB/dt etc. (output)
         :return:
         """
-        numspecies = len(N_pop)
+        num_species = len(N_pop)
         dNdt = np.zeros(self.total_n_levels + 2)
 
         # NRate
-        for i in range(0, numspecies):
-            for j in range(0, numspecies):
+        for i in range(0, num_species):
+            for j in range(0, num_species):
                 dNdt[i] -= N_pop[i] * self.non_radiative_rate_matrix[i][
                     j]  # depletion
                 dNdt[j] += N_pop[i] * self.non_radiative_rate_matrix[i][
                     j]  # accumulation
 
         # Electric Dipole Radiative Emission
-        for i in range(0, numspecies):
-            for j in range(0, numspecies):
+        for i in range(0, num_species):
+            for j in range(0, num_species):
                 dNdt[i] -= N_pop[i] * self.radiative_rate_matrix[i][
                     j]  # depletion
                 dNdt[j] += N_pop[i] * self.radiative_rate_matrix[i][
                     j]  # accumulation
 
         # Magnetic Dipole Radiative Emission
-        for i in range(0, numspecies):
-            for j in range(0, numspecies):
+        for i in range(0, num_species):
+            for j in range(0, num_species):
                 dNdt[i] -= N_pop[i] * self.magnetic_dipole_rate_matrix[i][
                     j]  # depletion
                 dNdt[j] += N_pop[i] * self.magnetic_dipole_rate_matrix[i][
@@ -662,7 +688,8 @@ class SpectralKinetics(MSONable):
                     (4 * math.pi / 3) * N_pop[ai])
 
             # last term doesn't really change things that much.
-            # 1e42 = W_ETrates needs to be converted from cm^6/s to nm^6/s since N_pop is in nm^-3 and W_ET is in cm^6/s
+            # 1e42 = W_ETrates needs to be converted from cm^6/s to nm^6/s since N_pop is in nm^-3
+            # and W_ET is in cm^6/s
             # Minimum dopant distance multiplied by 1e-21 to convert from (cm^-3 -> nm^-3
             if (et_rate > 0):
                 et_rate = et_rate

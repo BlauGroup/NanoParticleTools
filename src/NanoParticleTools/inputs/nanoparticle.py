@@ -26,6 +26,7 @@ except (ImportError, ModuleNotFoundError):
     Tensor = object
     missing_ml_package = False
 
+
 class NanoParticleConstraint(ABC, MSONable):
     """
     Template for a Nanoparticle constraint. This defines the shape of a control
@@ -140,9 +141,7 @@ class SphericalConstraint(NanoParticleConstraint):
         if center is None:
             center = [0, 0, 0]
 
-        distances_from_center = np.linalg.norm(np.subtract(
-            site_coords, center),
-                                               axis=1)
+        distances_from_center = np.linalg.norm(np.subtract(site_coords, center), axis=1)
         return distances_from_center <= self.radius
 
     def __str__(self) -> str:
@@ -358,7 +357,6 @@ class DopedNanoparticle(MSONable):
         # Move to dopant area
         self.dopant_indices = [[] for _ in self.constraints]
         self._dopant_concentration = [{} for _ in self.constraints]
-
 
     @property
     def has_structure(self) -> bool:

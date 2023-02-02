@@ -93,7 +93,8 @@ class NanoParticleSampler():
             constraints, dopant_specifications = self.generate_random_configuration(
                 combination)
 
-            # Check if this configuration is valid (concentration does not exceed the threshold in each layer)
+            # Check if this configuration is valid (concentration does not
+            # exceed the threshold in each layer)
             valid = True
             for i in range(len(constraints)):
                 layer_concentrations = [
@@ -102,7 +103,8 @@ class NanoParticleSampler():
                 if sum(layer_concentrations) > self.concentration_constraint:
                     valid = False
             if valid:
-                # 0th and 1st index of the combination are included (To retain info on excitation parameters)
+                # 0th and 1st index of the combination are included (To retain
+                # info on excitation parameters)
                 configurations.append((combination[0], combination[1],
                                        constraints, dopant_specifications))
         return configurations

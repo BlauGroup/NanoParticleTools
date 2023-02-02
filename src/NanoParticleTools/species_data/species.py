@@ -88,8 +88,8 @@ class Dopant(MSONable):
         'P': 'Surface5'
     }
     SURFACE_DOPANT_NAMES_TO_SYMBOLS = dict(
-            zip(SURFACE_DOPANT_SYMBOLS_TO_NAMES.values(),
-                SURFACE_DOPANT_SYMBOLS_TO_NAMES.keys()))
+        zip(SURFACE_DOPANT_SYMBOLS_TO_NAMES.values(),
+            SURFACE_DOPANT_SYMBOLS_TO_NAMES.keys()))
 
     def __init__(self,
                  symbol: str,
@@ -122,8 +122,7 @@ class Dopant(MSONable):
             raise ValueError(
                 'Error: The number of eigenvectors does not match'
                 'the number of intermediate coupling coefficients')
-        elif len(self.energy_levels
-                 ) > self.intermediate_coupling_coefficients.shape[0]:
+        elif len(self.energy_levels) > self.intermediate_coupling_coefficients.shape[0]:
             raise ValueError(
                 'Error: The number of Energy levels does not match the number'
                 ' of intermediate coupling coefficients'
