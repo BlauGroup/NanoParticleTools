@@ -26,7 +26,6 @@ except (ImportError, ModuleNotFoundError):
     Tensor = object
     missing_ml_package = False
 
-
 class NanoParticleConstraint(ABC, MSONable):
     """
     Template for a Nanoparticle constraint. This defines the shape of a control
