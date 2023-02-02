@@ -88,7 +88,7 @@ def test_energy_transfer_rate_matrix():
             data.append([float(val) for val in line.strip().split(',')])
     rates = np.array(data)
 
-    with open(os.path.join(TEST_FILE_DIR, 'M_ETindices.txt'), 'r') as f:
+    with open(os.path.join(TEST_FILE_DIR, 'M_ETIndices.txt'), 'r') as f:
         lines = f.readlines()
         data = []
         for i, line in enumerate(lines):
