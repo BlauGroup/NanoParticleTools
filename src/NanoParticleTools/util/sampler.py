@@ -5,6 +5,7 @@ import math
 
 
 class NanoParticleSampler():
+
     def __init__(self,
                  seed,
                  min_core_radius: Optional[float] = 40,
@@ -38,30 +39,39 @@ class NanoParticleSampler():
         return self.rng.uniform(self.min_core_radius, self.max_core_radius)
 
     def random_nanoparticle_layer_thickness(self):
-        return self.rng.uniform(self.min_shell_thickness, self.max_shell_thickness)
+        return self.rng.uniform(self.min_shell_thickness,
+                                self.max_shell_thickness)
 
     def random_doping_concentration(self):
         return self.rng.uniform(self.min_concentration, self.max_concentration)
 
-    def generate_samples(self, n, excitation_wavelengths, excitation_powers, dopants):
+    def generate_samples(self, n, excitation_wavelengths, excitation_powers,
+                         dopants):
         configurations = []
         for i in range(n):
-            combination = self.one_random_configuration_template(excitation_wavelengths, excitation_powers, dopants)
+            combination = self.one_random_configuration_template(
+                excitation_wavelengths, excitation_powers, dopants)
             configurations.extend(self.get_configurations(combination))
 
         return configurations
 
-    def one_random_configuration_template(self, excitation_wavelengths, excitation_powers, dopants):
+    def one_random_configuration_template(self, excitation_wavelengths,
+                                          excitation_powers, dopants):
 
         # Pick a excitation wavelength and power
         excitation_wavelength = self.rng.choice(excitation_wavelengths)
         excitation_power = self.rng.choice(excitation_powers)
 
         # Determine the weights for random selection from distribution
-        n_dopant_weights = [math.comb(len(dopants), i) for i in range(len(dopants) + 1)]
-        n_shell_weights = [np.power(sum(n_dopant_weights), i) for i in range(4)]
+        n_dopant_weights = [
+            math.comb(len(dopants), i) for i in range(len(dopants) + 1)
+        ]
+        n_shell_weights = [
+            np.power(sum(n_dopant_weights), i) for i in range(4)
+        ]
 
-        n_dopant_weights = np.divide(n_dopant_weights, np.sum(n_dopant_weights))
+        n_dopant_weights = np.divide(n_dopant_weights,
+                                     np.sum(n_dopant_weights))
         n_shell_weights = np.divide(n_shell_weights, np.sum(n_shell_weights))
 
         # Determine number of shells
@@ -69,8 +79,10 @@ class NanoParticleSampler():
 
         nanoparticle_config = []
         for _ in range(0, n_shells + 1):
-            n_dopants_in_layer = self.rng.choice(range(len(dopants) + 1), p=n_dopant_weights)
-            _dopants = list(self.rng.choice(dopants, n_dopants_in_layer, replace=False))
+            n_dopants_in_layer = self.rng.choice(range(len(dopants) + 1),
+                                                 p=n_dopant_weights)
+            _dopants = list(
+                self.rng.choice(dopants, n_dopants_in_layer, replace=False))
 
             nanoparticle_config.append(_dopants)
         return (excitation_wavelength, excitation_power, nanoparticle_config)
@@ -78,17 +90,23 @@ class NanoParticleSampler():
     def get_configurations(self, combination, n_configs=1):
         configurations = []
         while len(configurations) < n_configs:
-            constraints, dopant_specifications = self.generate_random_configuration(combination)
+            constraints, dopant_specifications = self.generate_random_configuration(
+                combination)
 
-            # Check if this configuration is valid (concentration does not exceed the threshold in each layer)
+            # Check if this configuration is valid (concentration does not
+            # exceed the threshold in each layer)
             valid = True
             for i in range(len(constraints)):
-                layer_concentrations = [spec[1] for spec in dopant_specifications if spec[0] == i]
+                layer_concentrations = [
+                    spec[1] for spec in dopant_specifications if spec[0] == i
+                ]
                 if sum(layer_concentrations) > self.concentration_constraint:
                     valid = False
             if valid:
-                # 0th and 1st index of the combination are included (To retain info on excitation parameters)
-                configurations.append((combination[0], combination[1], constraints, dopant_specifications))
+                # 0th and 1st index of the combination are included (To retain
+                # info on excitation parameters)
+                configurations.append((combination[0], combination[1],
+                                       constraints, dopant_specifications))
         return configurations
 
     def generate_random_configuration(self, combination):
@@ -117,5 +135,3 @@ class NanoParticleSampler():
                 _concentration = self.random_doping_concentration()
                 dopant_specifications.append((n, _concentration, el, 'Y'))
         return constraints, dopant_specifications
-
-

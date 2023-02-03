@@ -78,8 +78,9 @@ After running simulations, you may wish to average the outputs of trajectories o
 An example of instantiating a builder is as follows:
 ```
 from maggma.stores.mongolike import MongoStore
-source_store = MongoStore.from_launchpad_file(".my_launchpad.yaml", "docs_npmc")
-target_store = MongoStore.from_launchpad_file(".my_launchpad.yaml", "avg_npmc")
+
+source_store = MongoStore(collection_name = "docs_npmc", <mongo credentials here>)
+target_store = MongoStore(collection_name = "avg_npmc", <mongo credentials here>)
 
 builder = UCNPBuilder(source_store, target_store, docs_filter={'data.simulation_time': {'$gte': 0.01}}, chunk_size=4)
 ```

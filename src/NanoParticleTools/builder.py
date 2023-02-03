@@ -13,8 +13,8 @@ class UCNPBuilder(Builder):
     """
     Builder that processes and averages NPMC documents
     """
-    
-    def __init__(self, 
+
+    def __init__(self,
                  source: Store,
                  target: Store,
                  docs_filter: Optional[Dict]={},
@@ -86,15 +86,19 @@ class UCNPBuilder(Builder):
                    }
         
         avg_doc["output"] = {}
-        
+
         # Average the dndt
-        avg_doc["output"]["summary_keys"] = ["interaction_id", "number_of_sites", "species_id_1", "species_id_2", "left_state_1", "left_state_2",
-                "right_state_1", "right_state_2", "interaction_type", "rate_coefficient", "dNdT", "std_dev_dNdt", 
-                "dNdT per atom", "std_dev_dNdT per atom", "occurences", "std_dev_occurences", 
-                "occurences per atom", "std_dev_occurences per atom"]
+        avg_doc["output"]["summary_keys"] = [
+            "interaction_id", "number_of_sites", "species_id_1",
+            "species_id_2", "left_state_1", "left_state_2", "right_state_1",
+            "right_state_2", "interaction_type", "rate_coefficient", "dNdT",
+            "std_dev_dNdt", "dNdT per atom", "std_dev_dNdT per atom",
+            "occurences", "std_dev_occurences", "occurences per atom",
+            "std_dev_occurences per atom"
+        ]
         avg_dndt = self.average_dndt(items)
         avg_doc["output"]["summary"] = avg_dndt
-        
+
         # Compute the spectrum
         dopants = [Dopant(key, val) for key, val in avg_doc["overall_dopant_concentration"].items()]
         x, y = self.get_spectrum_energy(avg_dndt, dopants, **self.energy_spectrum_args)
@@ -178,39 +182,57 @@ class UCNPBuilder(Builder):
     def average_dndt(self, 
                      docs: List[Dict]) -> Dict:
         """
-        Compute the average of the dndts
-        
-        Output will have the following fields:
-        ["interaction_id", "number_of_sites", "species_id_1", "species_id_2", "left_state_1", "left_state_2",
-                "right_state_1", "right_state_2", "interaction_type", "rate_coefficient", "dNdT", "std_dev_dNdt", 
-                "dNdT per atom", "std_dev_dNdT per atom", "occurences", "std_dev_occurences", 
-                "occurences per atom", "std_dev_occurences per atom"]
+        Compute the average dndt for all interactions
+
+        Args:
+            docs (List[Dict]): List of taskdocs to average
+
+        Returns:
+            Dict: Output will have the following fields:
+                ["interaction_id", "number_of_sites", "species_id_1",
+                "species_id_2", "left_state_1", "left_state_2",
+                "right_state_1", "right_state_2", "interaction_type",
+                "rate_coefficient", "dNdT", "std_dev_dNdt",
+                "dNdT per atom", "std_dev_dNdT per atom", "occurences",
+                "std_dev_occurences", "occurences per atom",
+                "std_dev_occurences per atom"]
         """
         accumulated_dndt = {}
-        n_docs=0
+        n_docs = 0
         for doc in docs:
             n_docs += 1
             keys = doc["data"]["output"]["summary_keys"]
             try:
-                search_keys = ["interaction_id", "number_of_sites", "species_id_1", "species_id_2", "left_state_1", "left_state_2",
-                "right_state_1", "right_state_2", "interaction_type", 'rate_coefficient', 'dNdT', 'dNdT per atom', 'occurences', 'occurences per atom']
+                search_keys = [
+                    "interaction_id", "number_of_sites", "species_id_1",
+                    "species_id_2", "left_state_1", "left_state_2",
+                    "right_state_1", "right_state_2", "interaction_type",
+                    'rate_coefficient', 'dNdT', 'dNdT per atom', 'occurences',
+                    'occurences per atom'
+                ]
                 indices = []
                 for key in search_keys:
                     indices.append(keys.index(key))
-            except:
-                search_keys = ["interaction_id", "number_of_sites", "species_id_1", "species_id_2", "left_state_1", "left_state_2",
-                "right_state_1", "right_state_2", "interaction_type", 'rate', 'dNdT', 'dNdT per atom', 'occurences', 'occurences per atom']
+            except KeyError:
+                search_keys = [
+                    "interaction_id", "number_of_sites", "species_id_1",
+                    "species_id_2", "left_state_1", "left_state_2",
+                    "right_state_1", "right_state_2", "interaction_type",
+                    'rate', 'dNdT', 'dNdT per atom', 'occurences',
+                    'occurences per atom'
+                ]
                 indices = []
                 for key in search_keys:
                     indices.append(keys.index(key))
-                
+
             dndt = doc["data"]["output"]["summary"]
 
             for interaction in dndt:
                 interaction_id = interaction[0]
                 if interaction_id not in accumulated_dndt:
                     accumulated_dndt[interaction_id] = []
-                accumulated_dndt[interaction_id].append([interaction[i] for i in indices])
+                accumulated_dndt[interaction_id].append(
+                    [interaction[i] for i in indices])
 
         avg_dndt = []
         for interaction_id in accumulated_dndt:
@@ -224,6 +246,9 @@ class UCNPBuilder(Builder):
 
             mean = np.mean(_dndt, axis=0)
             std = np.std(_dndt, axis=0)
-            arr.extend([mean[0], std[0], mean[1], std[1], mean[2], std[2], mean[3], std[3]])
+            arr.extend([
+                mean[0], std[0], mean[1], std[1], mean[2], std[2], mean[3],
+                std[3]
+            ])
             avg_dndt.append(arr)
         return avg_dndt
