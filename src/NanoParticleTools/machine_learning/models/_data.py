@@ -19,6 +19,7 @@ from monty.serialization import MontyEncoder
 from torch_geometric.data import Data, HeteroData
 import warnings
 
+
 class DataProcessor():
     """
     Template for a data processor. The data processor allows modularity in definitions
@@ -29,24 +30,27 @@ class DataProcessor():
 
     Fields are specified to ensure they are present in documents
     """
-    def __init__(self, fields):
+
+    fields: List[str]
+
+    def __init__(self, fields: List[str]):
         """
         :param fields: fields required in the document(s) to be processed
         """
         self.fields = fields
 
     @property
-    def required_fields(self):
+    def required_fields(self) -> List[str]:
         return self.fields
-        
-    def process_doc(self, doc):
+
+    def process_doc(self, doc: Dict) -> Dict:
         pass
-        
-    def get_item_from_doc(self, 
-                          doc, 
-                          field):
+
+    def get_item_from_doc(self,
+                          doc: dict,
+                          field: str):
         keys = field.split('.')
-        
+
         val = doc
         for key in keys:
             val = val[key]
@@ -61,11 +65,11 @@ class DataProcessor():
             r_inner = constraints[idx-1].radius
         r_outer = constraints[idx].radius
         return r_inner, r_outer
-        
+
     @staticmethod
     def get_volume(r):
         return 4/3*np.pi*(r**3)
-    
+
     @property
     def is_graph(self):
         pass
@@ -73,7 +77,8 @@ class DataProcessor():
     @property
     def data_cls(self):
         return Data
-    
+
+
 class EnergyLabelProcessor(DataProcessor):
     """
     This Label processor returns a spectrum that is binned uniformly with respect to energy (I(E))
@@ -225,15 +230,15 @@ class WavelengthLabelProcessor(DataProcessor):
         y = spectrum
         if self.gaussian_filter > 0:
             y = torch.tensor(gaussian_filter1d(y, self.gaussian_filter))
-        
+
         # Keep track of where the spectrum changes from
         # emission to absorption.
         idx_zero = torch.tensor(int(np.floor(0-self.spectrum_range[0])/step))
-        
+
         # Count the total number of photons, we can add this to the loss
         n_photons_absorbed = torch.sum(spectrum[idx_zero:])
         n_photons_emitted = torch.sum(spectrum[:idx_zero])
-        
+
         # Integrate the energy absorbed vs emitted.
         # This can be added to the loss to enforce conservation of energy
         total_energy = spectrum * x
@@ -249,27 +254,30 @@ class WavelengthLabelProcessor(DataProcessor):
                 'n_emitted': n_photons_emitted,
                 'e_absorbed': e_absorbed,
                 'e_emitted': e_emitted}
-    
+
     def __str__(self):
-        return f"Wavelength Label Processor - {self.output_size} bins, x_min = {self.spectrum_range[0]}, x_max = {self.spectrum_range[1]}, log_constant = {self.log_constant}"
+        return (f"Wavelength Label Processor - {self.output_size} bins, "
+                f"x_min = {self.spectrum_range[0]}, x_max = {self.spectrum_range[1]}, "
+                f"log_constant = {self.log_constant}")
+
 
 class NPMCDataset(Dataset):
     """
     NPMC dataset
-    
+
     TODO: 1) Figure out a more elegant way to check if the data should be redownloaded (if the store has been updated)
           2) More elegant way to enforce size of dataset and redownload if the size is incorrect
     """
-    def __init__(self, 
+    def __init__(self,
                  root: str,
                  feature_processor: DataProcessor,
-                 label_processor: DataProcessor, 
+                 label_processor: DataProcessor,
                  data_store: Store,
                  doc_filter: dict = None,
-                 download = False,
-                 overwrite = False,
-                 use_cache = False,
-                 dataset_size = None):
+                 download: bool = False,
+                 overwrite: bool = False,
+                 use_cache: bool = False,
+                 dataset_size: int = None):
         """
         :param feature_processor:
         :param label_processor:
