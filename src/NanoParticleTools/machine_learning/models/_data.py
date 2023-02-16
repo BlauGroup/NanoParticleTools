@@ -606,26 +606,26 @@ class NPMCDataModule(pl.LightningDataModule):
     def train_dataloader(self) -> DataLoader:
         if self.feature_processor.is_graph:
             # The data is graph structured
-            return pyg_DataLoader(self.npmc_train, batch_size=self.batch_size, shuffle=True, num_workers=self.loader_workers)
+            return pyg_DataLoader(self.npmc_train, batch_size=self.batch_size, shuffle=True, num_workers=self.loader_workers, drop_last=True)
         else:
             # The data is in an image representation
-            return DataLoader(self.npmc_train, batch_size=self.batch_size, collate_fn=self.collate, shuffle=True, num_workers=self.loader_workers)
+            return DataLoader(self.npmc_train, batch_size=self.batch_size, collate_fn=self.collate, shuffle=True, num_workers=self.loader_workers, drop_last=True)
     
     def val_dataloader(self) -> DataLoader:
         if self.feature_processor.is_graph:
             # The data is graph structured
-            return pyg_DataLoader(self.npmc_val, batch_size=self.batch_size, shuffle=False, num_workers=self.loader_workers)
+            return pyg_DataLoader(self.npmc_val, batch_size=self.batch_size, shuffle=False, num_workers=self.loader_workers, drop_last=True)
         else:
             # The data is in an image representation
-            return DataLoader(self.npmc_val, batch_size=self.batch_size, collate_fn=self.collate, shuffle=False, num_workers=self.loader_workers)
+            return DataLoader(self.npmc_val, batch_size=self.batch_size, collate_fn=self.collate, shuffle=False, num_workers=self.loader_workers, drop_last=True)
 
     def test_dataloader(self) -> DataLoader:
         if self.feature_processor.is_graph:
             # The data is graph structured
-            return pyg_DataLoader(self.npmc_test, batch_size=self.batch_size, shuffle=False, num_workers=self.loader_workers)
+            return pyg_DataLoader(self.npmc_test, batch_size=self.batch_size, shuffle=False, num_workers=self.loader_workers, drop_last=True)
         else:
             # The data is in an image representation
-            return DataLoader(self.npmc_test, batch_size=self.batch_size, collate_fn=self.collate, shuffle=False, num_workers=self.loader_workers)
+            return DataLoader(self.npmc_test, batch_size=self.batch_size, collate_fn=self.collate, shuffle=False, num_workers=self.loader_workers, drop_last=True)
 
 
 class UCNPAugmenter():
