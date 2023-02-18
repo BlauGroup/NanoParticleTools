@@ -1,10 +1,7 @@
-from genericpath import isfile
-from pydoc import doc
 from torch.utils.data import Dataset, DataLoader
 from torch_geometric.loader import DataLoader as pyg_DataLoader
-from typing import Union, Dict, List, Tuple, Optional, Type, Any
+from typing import Union, Dict, List, Tuple, Optional, Any
 from maggma.core import Store
-from functools import lru_cache
 import torch
 import json
 import numpy as np
@@ -12,21 +9,21 @@ from monty.json import MontyDecoder
 import os
 import pytorch_lightning as pl
 from NanoParticleTools.inputs.nanoparticle import NanoParticleConstraint, SphericalConstraint
-from NanoParticleTools.inputs.nanoparticle import Dopant
 from scipy.ndimage import gaussian_filter1d
 import hashlib
 from monty.serialization import MontyEncoder
 from torch_geometric.data import Data, HeteroData
 import warnings
+from abc import ABC, abstractmethod
 
 
-class DataProcessor():
+class DataProcessor(ABC):
     """
     Template for a data processor. The data processor allows modularity in definitions
     of how data is to be converted from a dictionary (typically a fireworks output document)
     to the desired form. This can be used for features or labels.
 
-    To implementation a DataProcessor, override the process_docs function.
+    To implementation a DataProcessor, override the process_doc function.
 
     Fields are specified to ensure they are present in documents
     """
@@ -43,12 +40,11 @@ class DataProcessor():
     def required_fields(self) -> List[str]:
         return self.fields
 
+    @abstractmethod
     def process_doc(self, doc: Dict) -> Dict:
-        pass
+        raise NotImplementedError
 
-    def get_item_from_doc(self,
-                          doc: dict,
-                          field: str):
+    def get_item_from_doc(self, doc: dict, field: str):
         keys = field.split('.')
 
         val = doc
@@ -62,13 +58,13 @@ class DataProcessor():
             # The constraint was the first one, therefore the inner radius is 0
             r_inner = 0
         else:
-            r_inner = constraints[idx-1].radius
+            r_inner = constraints[idx - 1].radius
         r_outer = constraints[idx].radius
         return r_inner, r_outer
 
     @staticmethod
     def get_volume(r):
-        return 4/3*np.pi*(r**3)
+        return 4 / 3 * np.pi * (r**3)
 
     @property
     def is_graph(self):
@@ -82,150 +78,203 @@ class DataProcessor():
 class EnergyLabelProcessor(DataProcessor):
     """
     This Label processor returns a spectrum that is binned uniformly with respect to energy (I(E))
+        Args:
+            spectrum_range (Tuple | List, optional): Range over which the spectrum should be
+                cropped. Defaults to (-40000, 20000).
+            output_size (int, optional): Number of bins in the resultant spectra.
+                This quantity will be used as the # of output does in the NN. Defaults to 600.
+            log_constant (float, optional): When applying the log function,
+                we use the form log_10(I+b). Since the intensity is always positive, this function
+                is easily invertible. min_log_val sets the minimum value of the label after
+                applying the log.
+
+                To make sure the values aren't clipped, it is recommended that the smallest b is
+                chosen at least 1 order of magnitude lower than 1/(# avg'd documents).
+
+                Example:
+                    With 16 documents averaged, the lowest (non-zero) observation is 0.0625(1/16),
+                    therefore choose 0.001 as the log_constant. . Defaults to 1e-3.
+            gaussian_filter (float, optional): Standard deviation over which to apply gaussian
+                filtering to smooth the otherwise very peaked spectrum. Defaults to 0.
     """
-    def __init__(self, 
-                 spectrum_range: Union[Tuple, List] = (-1000, 0),
-                 output_size: Optional[int] = 600,
-                 log_constant: Optional[float] = 1e-3,
-                 gaussian_filter: Optional[float] = 0,
+
+    def __init__(self,
+                 spectrum_range: Tuple | List = (-40000, 20000),
+                 output_size: int = 600,
+                 log_constant: float = 1e-3,
+                 gaussian_filter: float = 0,
                  **kwargs):
-        """
-        :param spectrum_range: Range over which the spectrum should be cropped
-        :param output_size: Number of bins in the resultant spectra. This quantity will be used as the # of output does in the NN
-        :param log_constant: When applying the log function, we use the form log_10(I+b). 
-            Since the intensity is always positive, this function is easily invertible. min_log_val sets the minimum value of the label after applying the log.
-            To make sure the values aren't clipped, it is recommended that the smallest b is chosen at least 1 order of magnitude lower than 1/(# avg'd documents).
-            Example: With 16 documents averaged, the lowest (non-zero) observation is 0.0625(1/16), therefore choose 0.001 as the log. 
-        :param normalize: Normalize the integrated area of the spectrum to 1
-        """
-        super().__init__(fields=['output.energy_spectrum_x', 'output.energy_spectrum_y'], **kwargs)
-        
+        super().__init__(
+            fields=['output.energy_spectrum_x', 'output.energy_spectrum_y'],
+            **kwargs)
+
         self.spectrum_range = spectrum_range
         self.output_size = output_size
         self.log_constant = log_constant
         self.gaussian_filter = gaussian_filter
-            
-    def process_doc(self, 
-                doc: dict) -> torch.Tensor:
-        x = torch.tensor(self.get_item_from_doc(doc, 'output.energy_spectrum_x'))
-        spectrum = torch.tensor(self.get_item_from_doc(doc, 'output.energy_spectrum_y'))
-        step = x[1]-x[0]
+
+    def process_doc(self, doc: dict) -> torch.Tensor:
+        x = torch.tensor(
+            self.get_item_from_doc(doc, 'output.energy_spectrum_x'))
+        spectrum = torch.tensor(
+            self.get_item_from_doc(doc, 'output.energy_spectrum_y'))
+        step = x[1] - x[0]
 
         if x.shape[0] != self.output_size:
             if x.shape[0] >= self.output_size:
-                warnings.warn('Desired spectrum resolution is coarser than found in the document. \
-                               Spectrum will be rebinned approximately. It is recommended to rebuild the collection to match the desired resolution')
+                warnings.warn(
+                    "Desired spectrum resolution is coarser than found in the document."
+                    " Spectrum will be rebinned approximately. It is recommended to rebuild"
+                    " the collection to match the desired resolution"
+                )
                 # We need to rebin the distribution
-                multiplier = int(torch.lcm(torch.tensor(x.size(0)), torch.tensor(self.output_size))/x.shape[0])
-                
-                _spectrum = spectrum.expand(multiplier, -1).moveaxis(0, 1).reshape(self.output_size, -1).sum(dim=-1) 
-                _spectrum = _spectrum * x.size(0) / (multiplier * self.output_size) # ensure integral is constant
+                multiplier = int(
+                    torch.lcm(torch.tensor(x.size(0)),
+                              torch.tensor(self.output_size)) / x.shape[0])
 
-                ## Get the edges of the spectra
-                lower_bound = x[0] - (step/2)
-                upper_bound = x[-1] + (step/2)
+                _spectrum = spectrum.expand(multiplier, -1).moveaxis(
+                    0, 1).reshape(self.output_size, -1).sum(dim=-1)
+                _spectrum = _spectrum * x.size(0) / (
+                    multiplier * self.output_size
+                )  # ensure integral is constant
 
-                ## Construct the new array
+                # Get the edges of the spectra
+                lower_bound = x[0] - (step / 2)
+                upper_bound = x[-1] + (step / 2)
+
+                # Construct the new array
                 _x = torch.linspace(lower_bound, upper_bound, self.output_size)
-                
+
                 # Replace the old spectrum with the new
                 x = _x
                 spectrum = _spectrum
             else:
-                raise RuntimeError("Spectrum in document is different than desired resolution and cannot be rebinned. Please rebuild the collection")
-            
-        # Assign to a different variable, so we can modify 
+                raise RuntimeError(
+                    "Spectrum in document is different than desired resolution and cannot"
+                    " be rebinned. Please rebuild the collection"
+                )
+
+        # Assign to a different variable, so we can modify
         # the spectrum while keeping a reference to the original
         y = spectrum
         if self.gaussian_filter > 0:
             y = torch.tensor(gaussian_filter1d(y, self.gaussian_filter))
-        
+
         # Keep track of where the spectrum changes from
         # emission to absorption.
-        idx_zero = torch.tensor(int(np.floor(0-self.spectrum_range[0])/step))
-        
+        idx_zero = torch.tensor(
+            int(np.floor(0 - self.spectrum_range[0]) / step))
+
         # Count the total number of photons, we can add this to the loss
         n_photons_absorbed = torch.sum(spectrum[idx_zero:])
         n_photons_emitted = torch.sum(spectrum[:idx_zero])
-        
+
         # Integrate the energy absorbed vs emitted.
         # This can be added to the loss to enforce conservation of energy
         total_energy = spectrum * x
         e_absorbed = torch.sum(total_energy[idx_zero:])
         e_emitted = torch.sum(total_energy[:idx_zero])
 
-        return {'spectra_x': x.unsqueeze(0),
-                'y': y.float().unsqueeze(0),
-                'log_y': torch.log10(y + self.log_constant).float().unsqueeze(0),
-                'log_const': self.log_constant,
-                'idx_zero': idx_zero,
-                'n_absorbed': n_photons_absorbed,
-                'n_emitted': n_photons_emitted,
-                'e_absorbed': e_absorbed,
-                'e_emitted': e_emitted}
-    
+        return {
+            'spectra_x': x.unsqueeze(0),
+            'y': y.float().unsqueeze(0),
+            'log_y': torch.log10(y + self.log_constant).float().unsqueeze(0),
+            'log_const': self.log_constant,
+            'idx_zero': idx_zero,
+            'n_absorbed': n_photons_absorbed,
+            'n_emitted': n_photons_emitted,
+            'e_absorbed': e_absorbed,
+            'e_emitted': e_emitted
+        }
+
     def __str__(self):
-        return f"Energy Label Processor - {self.output_size} bins, x_min = {self.spectrum_range[0]}, x_max = {self.spectrum_range[1]}, log_constant = {self.log_constant}"
-    
+        return (f"Energy Label Processor - {self.output_size} bins, x_min ="
+                " {self.spectrum_range[0]}, x_max = {self.spectrum_range[1]},"
+                " log_constant = {self.log_constant}")
+
+
 class WavelengthLabelProcessor(DataProcessor):
+    r"""
+    This Label processor returns a spectrum that is binned uniformly with respect to
+    wavelength $I(\lambda{})$
+        Args:
+            spectrum_range (Tuple | List, optional): Range over which the spectrum should be
+                cropped. Defaults to (-1000, 1000).
+            output_size (int, optional): Number of bins in the resultant spectra.
+                This quantity will be used as the # of output does in the NN. Defaults to 600.
+            log_constant (float, optional): When applying the log function,
+                we use the form log_10(I+b). Since the intensity is always positive, this function
+                is easily invertible. min_log_val sets the minimum value of the label after
+                applying the log.
+
+                To make sure the values aren't clipped, it is recommended that the smallest b is
+                chosen at least 1 order of magnitude lower than 1/(# avg'd documents).
+
+                Example:
+                    With 16 documents averaged, the lowest (non-zero) observation is 0.0625(1/16),
+                    therefore choose 0.001 as the log_constant. . Defaults to 1e-3.
+            gaussian_filter (float, optional): Standard deviation over which to apply gaussian
+                filtering to smooth the otherwise very peaked spectrum. Defaults to 0.
     """
-    This Label processor returns a spectrum that is binned uniformly with respect to wavelength I(\lambda{})
-    """
-    def __init__(self, 
-                 spectrum_range: Union[Tuple, List] = (-1000, 0),
+    def __init__(self,
+                 spectrum_range: Union[Tuple, List] = (-1000, 1000),
                  output_size: Optional[int] = 600,
                  log_constant: Optional[float] = 1e-3,
                  gaussian_filter: Optional[float] = None,
                  **kwargs):
-        """
-        :param spectrum_range: Range over which the spectrum should be cropped
-        :param output_size: Number of bins in the resultant spectra. This quantity will be used as the # of output does in the NN
-        :param log_constant: When applying the log function, we use the form log_10(I+b). 
-            Since the intensity is always positive, this function is easily invertible. min_log_val sets the minimum value of the label after applying the log.
-            To make sure the values aren't clipped, it is recommended that the smallest b is chosen at least 1 order of magnitude lower than 1/(# avg'd documents).
-            Example: With 16 documents averaged, the lowest (non-zero) observation is 0.0625(1/16), therefore choose 0.001 as the log. 
-        :param normalize: Normalize the integrated area of the spectrum to 1
-        """
         if gaussian_filter is None:
             gaussian_filter = 0
-        
-        super().__init__(fields=['output.wavelength_spectrum_x', 'output.wavelength_spectrum_y', 'output.summary', 'overall_dopant_concentration'], **kwargs)
-        
+
+        super().__init__(fields=['output.wavelength_spectrum_x', 'output.wavelength_spectrum_y',
+                                 'output.summary', 'overall_dopant_concentration'], **kwargs)
+
         self.spectrum_range = spectrum_range
         self.output_size = output_size
         self.log_constant = log_constant
         self.gaussian_filter = gaussian_filter
 
-    def process_doc(self, 
-                doc: dict) -> torch.Tensor:
-        x = torch.tensor(self.get_item_from_doc(doc, 'output.wavelength_spectrum_x'))
-        spectrum = torch.tensor(self.get_item_from_doc(doc, 'output.wavelength_spectrum_y'))
-        step = x[1]-x[0]
+    def process_doc(self, doc: dict) -> torch.Tensor:
+        x = torch.tensor(
+            self.get_item_from_doc(doc, 'output.wavelength_spectrum_x'))
+        spectrum = torch.tensor(
+            self.get_item_from_doc(doc, 'output.wavelength_spectrum_y'))
+        step = x[1] - x[0]
 
         if x.shape[0] != self.output_size:
             if x.shape[0] >= self.output_size:
-                warnings.warn('Desired spectrum resolution is coarser than found in the document. \
-                               Spectrum will be rebinned approximately. It is recommended to rebuild the collection to match the desired resolution')
+                warnings.warn(
+                    "Desired spectrum resolution is coarser than found in the document."
+                    " Spectrum will be rebinned approximately. It is recommended to rebuild"
+                    " the collection to match the desired resolution"
+                )
                 # We need to rebin the distribution
-                multiplier = int(torch.lcm(torch.tensor(x.size(0)), torch.tensor(self.output_size))/x.shape[0])
-                
-                _spectrum = spectrum.expand(multiplier, -1).moveaxis(0, 1).reshape(self.output_size, -1).sum(dim=-1) 
-                _spectrum = _spectrum * x.size(0) / (multiplier * self.output_size) # ensure integral is constant
+                multiplier = int(
+                    torch.lcm(torch.tensor(x.size(0)),
+                              torch.tensor(self.output_size)) / x.shape[0])
 
-                ## Get the edges of the spectra
-                lower_bound = x[0] - (step/2)
-                upper_bound = x[-1] + (step/2)
+                _spectrum = spectrum.expand(multiplier, -1).moveaxis(
+                    0, 1).reshape(self.output_size, -1).sum(dim=-1)
+                _spectrum = _spectrum * x.size(0) / (
+                    multiplier * self.output_size
+                )  # ensure integral is constant
 
-                ## Construct the new array
+                # Get the edges of the spectra
+                lower_bound = x[0] - (step / 2)
+                upper_bound = x[-1] + (step / 2)
+
+                # Construct the new array
                 _x = torch.linspace(lower_bound, upper_bound, self.output_size)
-                
+
                 # Replace the old spectrum with the new
                 x = _x
                 spectrum = _spectrum
             else:
-                raise RuntimeError("Spectrum in document is different than desired resolution and cannot be rebinned. Please rebuild the collection")
-            
-        # Assign to a different variable, so we can modify 
+                raise RuntimeError(
+                    "Spectrum in document is different than desired resolution and"
+                    " cannot be rebinned. Please rebuild the collection"
+                )
+
+        # Assign to a different variable, so we can modify
         # the spectrum while keeping a reference to the original
         y = spectrum
         if self.gaussian_filter > 0:
@@ -233,7 +282,8 @@ class WavelengthLabelProcessor(DataProcessor):
 
         # Keep track of where the spectrum changes from
         # emission to absorption.
-        idx_zero = torch.tensor(int(np.floor(0-self.spectrum_range[0])/step))
+        idx_zero = torch.tensor(
+            int(np.floor(0 - self.spectrum_range[0]) / step))
 
         # Count the total number of photons, we can add this to the loss
         n_photons_absorbed = torch.sum(spectrum[idx_zero:])
@@ -245,29 +295,34 @@ class WavelengthLabelProcessor(DataProcessor):
         e_absorbed = torch.sum(total_energy[idx_zero:])
         e_emitted = torch.sum(total_energy[:idx_zero])
 
-        return {'spectra_x': x.unsqueeze(0),
-                'y': y.float().unsqueeze(0),
-                'log_y': torch.log10(y + self.log_constant).float().unsqueeze(0),
-                'log_const': self.log_constant,
-                'idx_zero': idx_zero,
-                'n_absorbed': n_photons_absorbed,
-                'n_emitted': n_photons_emitted,
-                'e_absorbed': e_absorbed,
-                'e_emitted': e_emitted}
+        return {
+            'spectra_x': x.unsqueeze(0),
+            'y': y.float().unsqueeze(0),
+            'log_y': torch.log10(y + self.log_constant).float().unsqueeze(0),
+            'log_const': self.log_constant,
+            'idx_zero': idx_zero,
+            'n_absorbed': n_photons_absorbed,
+            'n_emitted': n_photons_emitted,
+            'e_absorbed': e_absorbed,
+            'e_emitted': e_emitted
+        }
 
     def __str__(self):
-        return (f"Wavelength Label Processor - {self.output_size} bins, "
-                f"x_min = {self.spectrum_range[0]}, x_max = {self.spectrum_range[1]}, "
-                f"log_constant = {self.log_constant}")
+        return (
+            f"Wavelength Label Processor - {self.output_size} bins, "
+            f"x_min = {self.spectrum_range[0]}, x_max = {self.spectrum_range[1]}, "
+            f"log_constant = {self.log_constant}")
 
 
 class NPMCDataset(Dataset):
     """
     NPMC dataset
 
-    TODO: 1) Figure out a more elegant way to check if the data should be redownloaded (if the store has been updated)
+    TODO: 1) Figure out a more elegant way to check if the data should be redownloaded
+             (if the store has been updated)
           2) More elegant way to enforce size of dataset and redownload if the size is incorrect
     """
+
     def __init__(self,
                  root: str,
                  feature_processor: DataProcessor,
@@ -296,24 +351,33 @@ class NPMCDataset(Dataset):
 
         if download:
             self.download()
-        
+
         if not self._check_exists():
             raise RuntimeError("Dataset not downloaded")
 
         self.docs = self._load_data()
 
         if self.dataset_size == -1:
-            warnings.warn("dataset_size set to -1, no check was performed on the currently downloaded dataset. It may be out of date")
+            warnings.warn(
+                "dataset_size set to -1, no check was performed on the currently"
+                " downloaded dataset. It may be out of date"
+            )
         elif self.dataset_size is None:
             self.data_store.connect()
             if len(self.docs) != self.data_store.count():
-                warnings.warn("Length of dataset is not of the desired length. Automatically setting 'overwrite=True' to redownload the data")
+                warnings.warn(
+                    "Length of dataset is not of the desired length. Automatically setting"
+                    " 'overwrite=True' to redownload the data"
+                )
                 self.overwrite = True
                 self.download()
                 self.docs = self._load_data()
             self.data_store.close()
         elif len(self.docs) != self.dataset_size:
-            warnings.warn("Length of dataset is not of the desired length. Automatically setting 'overwrite=True' to redownload the data")
+            warnings.warn(
+                "Length of dataset is not of the desired length. Automatically setting"
+                " 'overwrite=True' to redownload the data"
+            )
             self.data_store.connect()
             self.overwrite = True
             self.download()
@@ -349,7 +413,8 @@ class NPMCDataset(Dataset):
         dhash = hashlib.md5()
         # We need to sort arguments so {'a': 1, 'b': 2} is
         # the same as {'b': 2, 'a': 1}
-        encoded = json.dumps(dictionary, sort_keys=True, cls=MontyEncoder).encode()
+        encoded = json.dumps(dictionary, sort_keys=True,
+                             cls=MontyEncoder).encode()
         dhash.update(encoded)
         return dhash.hexdigest()
 
@@ -362,36 +427,39 @@ class NPMCDataset(Dataset):
     def _check_processors(self):
         """
         We only redownload the data if the feature_processor or label_processor has changed
-        
+
         If using a new data store or a new set of data, use the 'overwrite=True' arg
         """
-        feature_processor_match = self._check_hash('feature_processor', 
-                                                   self.get_hash(self.feature_processor.__dict__))
-        label_processor_match = self._check_hash('label_processor', 
-                                                 self.get_hash(self.label_processor.__dict__))
+        feature_processor_match = self._check_hash(
+            'feature_processor',
+            self.get_hash(self.feature_processor.__dict__))
+        label_processor_match = self._check_hash(
+            'label_processor', self.get_hash(self.label_processor.__dict__))
 
         return all(feature_processor_match, label_processor_match)
 
-    def _check_hash(self, 
-                    fname: str, 
-                    hash: int):
+    def _check_hash(self, fname: str, hash: int):
         if not os.path.isfile(self.hash_file):
             return False
 
         with open(self.hash_file, 'r') as f:
             hashes = json.load(f)
-        
+
         return hashes[fname] == hash
-            
+
     def log_processors(self):
         _d = {}
-        _d['feature_processor'] = self.get_hash(self.feature_processor.__dict__)
+        _d['feature_processor'] = self.get_hash(
+            self.feature_processor.__dict__)
         _d['label_processor'] = self.get_hash(self.label_processor.__dict__)
         with open(os.path.join(self.raw_folder, 'hashes.json'), 'w') as f:
             json.dump(_d, f)
 
     def download(self):
-        required_fields = self.feature_processor.required_fields + self.label_processor.required_fields + ['metadata']
+        required_fields = self.feature_processor.required_fields \
+            + self.label_processor.required_fields \
+            + ['metadata']
+
         if 'input' not in required_fields:
             required_fields.append('input')
 
@@ -403,25 +471,29 @@ class NPMCDataset(Dataset):
 
         # Download the data
         with self.data_store:
-            documents = list(self.data_store.query(self.doc_filter, properties=required_fields))
-        
+            documents = list(
+                self.data_store.query(self.doc_filter,
+                                      properties=required_fields))
+
         if self.dataset_size is not None:
             # Choose a subset of the total documents
-            documents = list(np.random.choice(documents, 
-                                         size=min(len(documents), self.dataset_size), 
-                                         replace=False))
+            documents = list(
+                np.random.choice(documents,
+                                 size=min(len(documents), self.dataset_size),
+                                 replace=False))
 
         # Write the data to the raw directory
         with open(os.path.join(self.raw_folder, 'data.json'), 'w') as f:
             json.dump(documents, f, cls=MontyEncoder)
-        
+
         # Log the processor hashes
         self.log_processors()
-    
+
     def process_single_doc(self, idx: int):
         """
         Processes a single document and produces datapoint
         """
+
         doc = self.docs[idx]
         _d = self.feature_processor.process_doc(doc)
         _d.update(self.label_processor.process_doc(doc))
@@ -454,46 +526,53 @@ class NPMCDataset(Dataset):
 
                 self.cached_data[idx] = True
                 self.item_cache[idx] = data
-                self.docs[idx] = None # We have cached the output of this document, so we can free up the memory
+                self.docs[idx] = None  # We have cached the output of this document, free up memory
         else:
             data = self.process_single_doc(idx)
         return data
-    
+
     def get_random(self):
         _idx = np.random.choice(range(len(self)))
-        
+
         return self[_idx]
 
+
 class NPMCDataModule(pl.LightningDataModule):
+    """_summary_
+
+    Args:
+        feature_processor (DataProcessor): _description_
+        label_processor (DataProcessor): _description_
+        training_data_store (Store): _description_
+        testing_data_store (Optional[Store], optional): _description_. Defaults to None.
+        training_doc_filter (Optional[dict], optional): _description_. Defaults to {}.
+        testing_doc_filter (Optional[dict], optional): _description_. Defaults to {}.
+        training_data_dir (Optional[str], optional): _description_. Defaults to './training_data'.
+        testing_data_dir (Optional[str], optional): _description_. Defaults to './testing_data'.
+        batch_size (Optional[int], optional): _description_. Defaults to 16.
+        validation_split (Optional[float], optional): _description_. Defaults to 0.15.
+        test_split (Optional[float], optional): _description_. Defaults to 0.15.
+        training_size (Optional[int], optional): _description_. Defaults to None.
+        testing_size (Optional[int], optional): _description_. Defaults to None.
+        loader_workers (Optional[int], optional): _description_. Defaults to 0.
+        use_cache (Optional[bool], optional): _description_. Defaults to False.
+    """
     def __init__(self,
                  feature_processor: DataProcessor,
                  label_processor: DataProcessor,
-                 training_data_store: Store, 
+                 training_data_store: Store,
                  testing_data_store: Optional[Store] = None,
                  training_doc_filter: Optional[dict] = {},
                  testing_doc_filter: Optional[dict] = {},
                  training_data_dir: Optional[str] = './training_data',
                  testing_data_dir: Optional[str] = './testing_data',
-                 batch_size: Optional[int] = 16, 
+                 batch_size: Optional[int] = 16,
                  validation_split: Optional[float] = 0.15,
                  test_split: Optional[float] = 0.15,
                  training_size: Optional[int] = None,
                  testing_size: Optional[int] = None,
                  loader_workers: Optional[int] = 0,
                  use_cache: Optional[bool] = False):
-        """
-        If a 
-
-        :param feature_processor: 
-        :param label_processor: 
-        :param doc_filter: Query to use for documents
-        :param training_data_store:
-        :param testing_data_store: 
-        :param data_dir: 
-        :param batch_size: 
-        :param validation_split: 
-        :param test_split: 
-        """
         super().__init__()
 
         # We want to prepare the data on each node. That way each has access to the original data
@@ -523,11 +602,11 @@ class NPMCDataModule(pl.LightningDataModule):
         self.spectra_std = None
 
         self.save_hyperparameters()
-    
+
     def get_training_dataset(self, download=False):
         return NPMCDataset(root=self.training_data_dir,
-                           feature_processor = self.feature_processor,
-                           label_processor = self.label_processor,
+                           feature_processor=self.feature_processor,
+                           label_processor=self.label_processor,
                            data_store=self.training_data_store,
                            doc_filter=self.training_doc_filter,
                            download=download,
@@ -538,8 +617,8 @@ class NPMCDataModule(pl.LightningDataModule):
     def get_testing_dataset(self, download=False):
         if self.testing_data_store is not None:
             return NPMCDataset(root=self.testing_data_dir,
-                               feature_processor = self.feature_processor,
-                               label_processor = self.label_processor,
+                               feature_processor=self.feature_processor,
+                               label_processor=self.label_processor,
                                data_store=self.testing_data_store,
                                doc_filter=self.testing_doc_filter,
                                download=download,
@@ -551,42 +630,43 @@ class NPMCDataModule(pl.LightningDataModule):
     def prepare_data(self) -> None:
         """
         We only want to download the data in this method.
-        Since this function is only called once in the main process, assigning state variables 
+        Since this function is only called once in the main process, assigning state variables
         here will result in only the main process having access to those states (data).
-        i.e. don't do: 
+        i.e. It should not contain the following:
         ```
         self.training_dataset = self.get_training_dataset()
         self.testing_dataset = self.get_testing_dataset()
         ```
         """
-        
+
         self.get_training_dataset(download=True)
         self.get_testing_dataset(download=True)
 
-    def setup(self, 
-              stage: Optional[str] = None):
+    def setup(self, stage: Optional[str] = None):
 
         training_dataset = self.get_training_dataset(download=False)
-        
+
         if self.testing_data_store is not None:
             # We have a separate testing data set, defined by its own store
             testing_dataset = self.get_testing_dataset(download=False)
-            validation_size = int(len(training_dataset) * self.validation_split)
+            validation_size = int(
+                len(training_dataset) * self.validation_split)
             train_size = len(training_dataset) - validation_size
-            
-            self.npmc_train, self.npmc_val = torch.utils.data.random_split(training_dataset, 
-                                                                           [train_size, validation_size])
+
+            self.npmc_train, self.npmc_val = torch.utils.data.random_split(
+                training_dataset, [train_size, validation_size])
             self.npmc_test = testing_dataset
         else:
             # We don't have a testing dataset explicitly defined. We will split the training dataset
             # into the training, validation, and testing dataset
             test_size = int(len(training_dataset) * self.test_split)
-            validation_size = int(len(training_dataset) * self.validation_split)
+            validation_size = int(
+                len(training_dataset) * self.validation_split)
             train_size = len(training_dataset) - validation_size - test_size
 
-            self.npmc_train, self.npmc_val, self.npmc_test = torch.utils.data.random_split(training_dataset, 
-                                                                                           [train_size, validation_size, test_size])
-        
+            self.npmc_train, self.npmc_val, self.npmc_test = torch.utils.data.random_split(
+                training_dataset, [train_size, validation_size, test_size])
+
         spectra = []
         # Leave out test data, since we aren't supposed to have knowledge of that in our model
         for data in self.npmc_train + self.npmc_test:
@@ -594,16 +674,17 @@ class NPMCDataModule(pl.LightningDataModule):
         spectra = torch.cat(spectra, dim=0)
         self.spectra_mean = spectra.mean(0)
         self.spectra_std = spectra.std(0)
-    
+
     @staticmethod
     def collate(data_list: List[Data]):
         if len(data_list) == 0:
             return data_list[0]
-        
+
         _data = {}
         for key in data_list[0].keys:
             if torch.is_tensor(getattr(data_list[0], key)):
-                _data[key] = torch.stack([getattr(data, key) for data in data_list])
+                _data[key] = torch.stack(
+                    [getattr(data, key) for data in data_list])
             else:
                 _data[key] = [getattr(data, key) for data in data_list]
 
@@ -614,71 +695,113 @@ class NPMCDataModule(pl.LightningDataModule):
     def train_dataloader(self) -> DataLoader:
         if self.feature_processor.is_graph:
             # The data is graph structured
-            return pyg_DataLoader(self.npmc_train, batch_size=self.batch_size, shuffle=True, num_workers=self.loader_workers, drop_last=True)
+            return pyg_DataLoader(self.npmc_train,
+                                  batch_size=self.batch_size,
+                                  shuffle=True,
+                                  num_workers=self.loader_workers,
+                                  drop_last=True)
         else:
             # The data is in an image representation
-            return DataLoader(self.npmc_train, batch_size=self.batch_size, collate_fn=self.collate, shuffle=True, num_workers=self.loader_workers, drop_last=True)
-    
+            return DataLoader(self.npmc_train,
+                              batch_size=self.batch_size,
+                              collate_fn=self.collate,
+                              shuffle=True,
+                              num_workers=self.loader_workers,
+                              drop_last=True)
+
     def val_dataloader(self) -> DataLoader:
         if self.feature_processor.is_graph:
             # The data is graph structured
-            return pyg_DataLoader(self.npmc_val, batch_size=self.batch_size, shuffle=False, num_workers=self.loader_workers, drop_last=True)
+            return pyg_DataLoader(self.npmc_val,
+                                  batch_size=self.batch_size,
+                                  shuffle=False,
+                                  num_workers=self.loader_workers,
+                                  drop_last=True)
         else:
             # The data is in an image representation
-            return DataLoader(self.npmc_val, batch_size=self.batch_size, collate_fn=self.collate, shuffle=False, num_workers=self.loader_workers, drop_last=True)
+            return DataLoader(self.npmc_val,
+                              batch_size=self.batch_size,
+                              collate_fn=self.collate,
+                              shuffle=False,
+                              num_workers=self.loader_workers,
+                              drop_last=True)
 
     def test_dataloader(self) -> DataLoader:
         if self.feature_processor.is_graph:
             # The data is graph structured
-            return pyg_DataLoader(self.npmc_test, batch_size=self.batch_size, shuffle=False, num_workers=self.loader_workers, drop_last=True)
+            return pyg_DataLoader(self.npmc_test,
+                                  batch_size=self.batch_size,
+                                  shuffle=False,
+                                  num_workers=self.loader_workers,
+                                  drop_last=True)
         else:
             # The data is in an image representation
-            return DataLoader(self.npmc_test, batch_size=self.batch_size, collate_fn=self.collate, shuffle=False, num_workers=self.loader_workers, drop_last=True)
+            return DataLoader(self.npmc_test,
+                              batch_size=self.batch_size,
+                              collate_fn=self.collate,
+                              shuffle=False,
+                              num_workers=self.loader_workers,
+                              drop_last=True)
 
 
 class UCNPAugmenter():
     """
-    This class defines functionality to augment UCNP/NPMC data. 
-    Augmentation is achieved by subdividing constraints, keeping the same dopant concentrations and output spectra.
+    This class defines functionality to augment UCNP/NPMC data.
+    Augmentation is achieved by subdividing constraints, keeping the same dopant concentrations
+    and output spectra.
+    Args:
+        random_seed (int, optional): Seed for random number generator.
+            Used to ensure reproducibility.. Defaults to 1.
     """
-    def __init__(self, 
-                 random_seed : Optional[int] = 1):
-        """
-        :param random_seed: Seed for random number generator. Used to ensure reproducibility.
-        """
+
+    rng: int
+
+    def __init__(self, random_seed: int = 1):
         self.rng = np.random.default_rng(random_seed)
-        
+
     def augment_template(self,
-                         constraints: List[NanoParticleConstraint], 
-                         dopant_specifications: List[Tuple[int, float, str, str]], 
+                         constraints: List[NanoParticleConstraint],
+                         dopant_specifications: List[Tuple[int, float, str,
+                                                           str]],
                          n_augments: Optional[int] = 10) -> List[dict]:
-                        
+
         new_templates = []
         for i in range(n_augments):
-            new_constraints, new_dopant_specification = self.generate_single_augment(constraints, dopant_specifications)
-            new_templates.append({'constraints': new_constraints,
-                                  'dopant_specifications': new_dopant_specification})
+            new_constraints, new_dopant_specification = self.generate_single_augment(
+                constraints, dopant_specifications)
+            new_templates.append({
+                'constraints':
+                new_constraints,
+                'dopant_specifications':
+                new_dopant_specification
+            })
         return new_templates
 
-    def generate_single_augment(self, 
-                                constraints: List[NanoParticleConstraint], 
-                                dopant_specifications: List[Tuple[int, float, str, str]],
-                                max_subdivisions: Optional[int] = 3,
-                                subdivision_increment = 0.1) -> Tuple[List[NanoParticleConstraint], List[Tuple[int, float, str, str]]]:        
-        n_constraints = len(constraints) 
+    def generate_single_augment(
+        self,
+        constraints: List[NanoParticleConstraint],
+        dopant_specifications: List[Tuple[int, float, str, str]],
+        max_subdivisions: Optional[int] = 3,
+        subdivision_increment=0.1
+    ) -> Tuple[List[NanoParticleConstraint], List[Tuple[int, float, str,
+                                                        str]]]:
+        n_constraints = len(constraints)
         max_subdivisions = 3
         subdivision_increment = 0.1
 
         # Create a map of the dopant specifications
-        dopant_specification_by_layer = {i:[] for i in range(n_constraints)}
+        dopant_specification_by_layer = {i: [] for i in range(n_constraints)}
         for _tuple in dopant_specifications:
             try:
                 dopant_specification_by_layer[_tuple[0]].append(_tuple[1:])
-            except:
+            except KeyError:
                 dopant_specification_by_layer[_tuple[0]] = [_tuple[1:]]
 
-        n_constraints_to_divide = self.rng.integers(1, n_constraints+1)
-        constraints_to_subdivide = sorted(self.rng.choice(list(range(n_constraints)), n_constraints_to_divide, replace=False))
+        n_constraints_to_divide = self.rng.integers(1, n_constraints + 1)
+        constraints_to_subdivide = sorted(
+            self.rng.choice(list(range(n_constraints)),
+                            n_constraints_to_divide,
+                            replace=False))
 
         new_constraints = []
         new_dopant_specification = []
@@ -686,26 +809,36 @@ class UCNPAugmenter():
         constraint_counter = 0
         for i in range(n_constraints):
             if i in constraints_to_subdivide:
-                min_radius = 0 if i == 0 else constraints[i-1].radius
+                min_radius = 0 if i == 0 else constraints[i - 1].radius
                 max_radius = constraints[i].radius
 
-                #pick a number of subdivisions
+                # pick a number of subdivisions
                 n_divisions = self.rng.integers(1, max_subdivisions)
-                radii = sorted(self.rng.choice(np.arange(min_radius, max_radius, subdivision_increment), n_divisions, replace=False))
-                
+                radii = sorted(
+                    self.rng.choice(np.arange(min_radius, max_radius,
+                                              subdivision_increment),
+                                    n_divisions,
+                                    replace=False))
+
                 for r in radii:
                     new_constraints.append(SphericalConstraint(np.round(r, 1)))
                     try:
-                        new_dopant_specification.extend([(constraint_counter, *spec) for spec in dopant_specification_by_layer[i]])
-                    except:
-                        constraint_counter+=1
+                        new_dopant_specification.extend([
+                            (constraint_counter, *spec)
+                            for spec in dopant_specification_by_layer[i]
+                        ])
+                    except Exception:
+                        constraint_counter += 1
                         continue
 
-                    constraint_counter+=1
-                    
+                    constraint_counter += 1
+
             # Add the original constraint back to the list
             new_constraints.append(constraints[i])
-            new_dopant_specification.extend([(constraint_counter, *spec) for spec in dopant_specification_by_layer[i]])
+            new_dopant_specification.extend([
+                (constraint_counter, *spec)
+                for spec in dopant_specification_by_layer[i]
+            ])
 
-            constraint_counter+=1
+            constraint_counter += 1
         return new_constraints, new_dopant_specification

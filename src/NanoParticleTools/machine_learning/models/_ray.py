@@ -233,14 +233,18 @@ def train_spectrum_model(config,
 
     trainer.fit(model=model, datamodule=data_module)
 
-    # Calculate the testing loss
-    trainer.test(dataloaders=data_module.test_dataloader(), ckpt_path='best')
-    trainer.validate(dataloaders=data_module.val_dataloader(),
-                     ckpt_path='best')
-
-    # Load the best model
+    # Load the best model checkpoint, set it to evaluation mode, and then evaluate the metrics
+    # for the training, validation, and test sets
     model = model_cls.load_from_checkpoint(checkpoint_callback.best_model_path)
     model.eval()
+
+    # Train metrics
+
+    # Validation metrics
+    trainer.validate(dataloaders=data_module.val_dataloader(),
+                     ckpt_path='best')
+    # Test metrics
+    trainer.test(dataloaders=data_module.test_dataloader(), ckpt_path='best')
 
     # Get sample nanoparticle predictions within the test set
     columns = [
@@ -324,7 +328,7 @@ def tune_npmc(model_cls,
     else:
         # Default to asha
         scheduler = ASHAScheduler(
-            metric='loss',  # This metric refers to the one we have mapped to in the TuneReportCallback
+            metric='loss',  # Metric refers to the one we have mapped to in the TuneReportCallback
             mode='min',
             max_t=num_epochs,
             grace_period=100,

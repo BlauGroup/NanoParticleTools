@@ -76,7 +76,7 @@ def check_vec_vec_transform(module, print_match=True, **kwargs):
     out = _module(vecs1[i], vecs2[j])
     out_sum = _module(vecs1_sum, vecs2_sum)
     assert vectors_match(out_sum, out, print_match=print_match), (
-        f"Module is not additive equivariant to vector-vector multiplication"
+        "Module is not additive equivariant to vector-vector multiplication"
     )
     return True
 

@@ -86,41 +86,41 @@ class UCNPBuilder(Builder):
             "uuid":
             uuid.uuid4(),
             "avg_simulation_length":
-            np.mean([i["data"]["simulation_length"] for i in items]),
+                np.mean([i["data"]["simulation_length"] for i in items]),
             "avg_simulation_time":
-            np.mean([i["data"]["simulation_time"] for i in items]),
+                np.mean([i["data"]["simulation_time"] for i in items]),
             "n_constraints":
-            items[0]["data"]["n_constraints"],
+                items[0]["data"]["n_constraints"],
             "n_dopant_sites":
-            items[0]["data"]["n_dopant_sites"],
+                items[0]["data"]["n_dopant_sites"],
             "n_dopants":
-            items[0]["data"]["n_dopants"],
+                items[0]["data"]["n_dopants"],
             "formula":
-            items[0]["data"]["formula"],
+                items[0]["data"]["formula"],
             "nanostructure":
-            items[0]["data"]["nanostructure"],
+                items[0]["data"]["nanostructure"],
             "nanostructure_size":
-            items[0]["data"]["nanostructure_size"],
+                items[0]["data"]["nanostructure_size"],
             "total_n_levels":
-            items[0]["data"]["total_n_levels"],
+                items[0]["data"]["total_n_levels"],
             "formula_by_constraint":
-            items[0]["data"]["formula_by_constraint"],
+                items[0]["data"]["formula_by_constraint"],
             "dopants":
-            items[0]["data"]["dopants"],
+                items[0]["data"]["dopants"],
             "dopant_concentration":
-            items[0]["data"]["dopant_concentration"],
+                items[0]["data"]["dopant_concentration"],
             "overall_dopant_concentration":
-            items[0]["data"]["overall_dopant_concentration"],
+                items[0]["data"]["overall_dopant_concentration"],
             "excitation_power":
-            items[0]["data"]["excitation_power"],
+                items[0]["data"]["excitation_power"],
             "excitation_wavelength":
-            items[0]["data"]["excitation_wavelength"],
+                items[0]["data"]["excitation_wavelength"],
             "dopant_composition":
-            items[0]["data"]["dopant_composition"],
+                items[0]["data"]["dopant_composition"],
             "input":
-            items[0]["data"]["input"],
+                items[0]["data"]["input"],
             "num_averaged":
-            len(items)
+                len(items)
         }
 
         avg_doc["output"] = {}

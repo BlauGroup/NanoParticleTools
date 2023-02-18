@@ -1,6 +1,7 @@
 from ray.tune import CLIReporter
 from ray.tune.experiment.trial import Trial
 
+
 class ExperimentTerminationReporter(CLIReporter):
     """
     This is adapted from the ray documentation:
@@ -8,22 +9,22 @@ class ExperimentTerminationReporter(CLIReporter):
     https://docs.ray.io/en/latest/tune/api_docs/reporters.html
     """
     def __init__(self, **kwargs):
-        super().__init__(max_report_frequency = 30, **kwargs)
+        super().__init__(max_report_frequency=30, **kwargs)
 
     def should_report(self, trials, done=False):
         """Reports only on experiment termination."""
         return done
 
+
 class TrialTerminationReporter(CLIReporter):
     """
     This is adapted from the ray documentation:
-    
+
     https://docs.ray.io/en/latest/tune/api_docs/reporters.html
     """
     def __init__(self, **kwargs):
-        super().__init__(max_report_frequency = 30, **kwargs)
+        super().__init__(max_report_frequency=30, **kwargs)
         self.num_terminated = 0
-        
 
     def should_report(self, trials, done=False):
         """Reports only on trial termination events."""
