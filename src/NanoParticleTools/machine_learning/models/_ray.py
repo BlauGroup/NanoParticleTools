@@ -31,8 +31,8 @@ class NPMCTrainer():
                  data_module,
                  model_cls,
                  wandb_entity: Optional[str] = None,
-                 wandb_project: Optional[str] = 'default_project',
-                 wandb_save_dir: Optional[str] = os.environ['HOME'],
+                 wandb_project: Optional[str] = None,
+                 wandb_save_dir: Optional[str] = None,
                  gpu: Optional[bool] = False,
                  n_available_devices: Optional[int] = 4,
                  augment_loss: Optional[int] = None):
@@ -41,8 +41,16 @@ class NPMCTrainer():
         self.augment_loss = augment_loss
 
         self.wandb_entity = wandb_entity
-        self.wandb_project = wandb_project
-        self.wandb_save_dir = wandb_save_dir
+    
+        if wandb_project is None:
+            self.wandb_project = 'default_project'
+        else:
+            self.wandb_project = wandb_project
+
+        if wandb_save_dir is None:
+            self.wandb_save_dir = os.environ['HOME']
+        else:
+            self.wandb_save_dir = wandb_save_dir
         self.n_available_devices = n_available_devices
         self.gpu = gpu
 
