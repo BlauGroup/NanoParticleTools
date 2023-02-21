@@ -19,7 +19,7 @@ class SubdivisionInvariantRepresentation(nn.Module):
                  intermediate_film_dim: int | None = None,
                  n_message_passing: int = 1,
                  norm_representation: bool = True,
-                 norm_interaction: bool = True,
+                 norm_interaction: bool = False,
                  batch_norm: bool = False):
         super().__init__()
         self.embedder = nn.Embedding(n_dopants**2, embed_dim)
