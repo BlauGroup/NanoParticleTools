@@ -654,7 +654,8 @@ class NPMCDataModule(pl.LightningDataModule):
             train_size = len(training_dataset) - validation_size
 
             self.npmc_train, self.npmc_val = torch.utils.data.random_split(
-                training_dataset, [train_size, validation_size])
+                training_dataset, [train_size, validation_size],
+                generator=torch.Generator().manual_seed(torch.default_generator.seed()))
             self.npmc_test = testing_dataset
         else:
             # We don't have a testing dataset explicitly defined. We will split the training dataset
@@ -665,7 +666,8 @@ class NPMCDataModule(pl.LightningDataModule):
             train_size = len(training_dataset) - validation_size - test_size
 
             self.npmc_train, self.npmc_val, self.npmc_test = torch.utils.data.random_split(
-                training_dataset, [train_size, validation_size, test_size])
+                training_dataset, [train_size, validation_size, test_size],
+                generator=torch.Generator().manual_seed(torch.default_generator.seed()))
 
         spectra = []
         # Leave out test data, since we aren't supposed to have knowledge of that in our model
