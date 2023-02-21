@@ -115,7 +115,7 @@ class SubdivisionInvariantModel(SpectrumModelBase):
                  tunable_sigma: bool = True,
                  output_mean: Optional[torch.Tensor] = None,
                  mlp_layers=[128, 256],
-                 dropout_probability: float = 0,
+                 dropout_probability: float = 0.5,
                  activation_module=nn.SiLU,
                  intermediate_film_dim=None,
                  norm_representation=False,
@@ -139,6 +139,7 @@ class SubdivisionInvariantModel(SpectrumModelBase):
         self.embed_dim = embed_dim
         self.n_output_nodes = n_output_nodes
         self.norm_representation = norm_representation
+        self.dropout_probability = dropout_probability
 
         if output_mean is not None:
             self.register_buffer("output_mean", output_mean)
@@ -151,7 +152,7 @@ class SubdivisionInvariantModel(SpectrumModelBase):
         for i, _ in enumerate(mlp_sizes):
             if i == len(mlp_sizes) - 1:
                 break
-            mlp_modules.append(nn.Dropout())
+            mlp_modules.append(nn.Dropout(dropout_probability))
             mlp_modules.append(nn.Linear(*mlp_sizes[i:i + 2]))
             mlp_modules.append(activation_module(inplace=True))
         # Exclude the last activation, since this will inhibit learning
