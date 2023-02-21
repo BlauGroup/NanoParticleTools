@@ -247,6 +247,16 @@ def train_spectrum_model(config,
     model.eval()
 
     # Train metrics
+    train_metrics = {}
+    factor = 1 / len(data_module.train_dataloader())
+    for batch_idx, batch in enumerate(data_module.train_dataloader()):
+        _, _loss_d = model._step('train_eval', batch, batch_idx, log=False)
+        for key in _loss_d:
+            try:
+                train_metrics[key] += _loss_d[key].item() * factor
+            except KeyError:
+                train_metrics[key] = _loss_d[key] * factor
+    wandb_logger.log_metrics(train_metrics)
 
     # Validation metrics
     trainer.validate(dataloaders=data_module.val_dataloader(),

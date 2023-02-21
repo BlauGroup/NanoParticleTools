@@ -85,7 +85,8 @@ class SpectrumModelBase(pl.LightningModule):
     def _step(self,
               prefix: str,
               batch: Data | Batch,
-              batch_idx: int | None = None):
+              batch_idx: int | None = None,
+              log: bool = True):
         y_hat, loss = self._evaluate_step(batch)
 
         # Determine the batch size
@@ -104,7 +105,8 @@ class SpectrumModelBase(pl.LightningModule):
             metric_dict[f'{prefix}_hinge'] = F.hinge_embedding_loss(y_hat, batch.log_y)
             metric_dict[f'{prefix}_cos_sim'] = F.cosine_similarity(y_hat, batch.log_y, 1).mean(0)
 
-        self.log_dict(metric_dict, batch_size=batch_size)
+        if log:
+            self.log_dict(metric_dict, batch_size=batch_size)
         return loss, metric_dict
 
     def training_step(self,
