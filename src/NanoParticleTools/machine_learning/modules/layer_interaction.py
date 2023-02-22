@@ -219,9 +219,7 @@ def integrated_gaussian_interaction(ri0: torch.Tensor, rif: torch.Tensor,
          (ri0**3 + rjf**3 + 3 * rjf * sigma**2) * erf1 +
          (rif**3 + rjf**3 + 3 * rjf * sigma**2) * erf2)
 
-    out = (term1.round(decimals=0) + term2 .round(decimals=0) - term3.round(decimals=0)
-           - term4 .round(decimals=0) - term5.round(decimals=0) - term6.round(decimals=0)
-           + term7.round(decimals=0) + term8.round(decimals=0))
+    out = term1 + term2 - term3 - term4 - term5 - term6 + term7 + term8
     return out.to(input_dtype)
 
 
@@ -316,7 +314,5 @@ def integrated_gaussian_interaction_tanh(ri0: torch.Tensor, rif: torch.Tensor,
          (ri0**3 + rjf**3 + 3 * rjf * sigma**2) * tanh1 +
          (rif**3 + rjf**3 + 3 * rjf * sigma**2) * tanh2)
 
-    out = (term1.round(decimals=0) + term2 .round(decimals=0) - term3.round(decimals=0)
-           - term4 .round(decimals=0) - term5.round(decimals=0) - term6.round(decimals=0)
-           + term7.round(decimals=0) + term8.round(decimals=0))
+    out = term1 + term2 - term3 - term4 - term5 - term6 + term7 + term8
     return out.to(input_dtype)
