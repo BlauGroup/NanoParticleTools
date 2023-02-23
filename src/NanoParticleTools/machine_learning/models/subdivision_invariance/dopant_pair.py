@@ -102,38 +102,40 @@ class GraphFeatureProcessor(DataProcessor):
         """
 
         types = []
-        compositions = []
-        radii = []
         node_dopant_ids = []
+
+        # Not all constraints are filled. Here we create a map from the constraint index
+        # to the index of the filled constraint.
+        constraint_index_map = {
+            key: i
+            for i, key in enumerate(
+                sorted(list(set([spec[0] for spec in dopant_specifications]))))
+        }
 
         for i, (constraint_i, x_i, el_i,
                 _) in enumerate(dopant_specifications):
-            r_inner_i, r_outer_i = self.get_radii(constraint_i, constraints)
-
             for j, (constraint_j, x_j, el_j,
                     _) in enumerate(dopant_specifications):
-                r_inner_j, r_outer_j = self.get_radii(constraint_j,
-                                                      constraints)
 
                 types.append(self.edge_type_map[el_i][el_j])
-                compositions.append([x_i, x_j])
-                radii.append([[r_inner_i, r_outer_i], [r_inner_j, r_outer_j]])
                 node_dopant_ids.append([i, j])
 
         return {
             'x_dopant':
             torch.tensor([
-                x_i for i, (constraint_i, x_i, el_i,
-                            _) in enumerate(dopant_specifications)
+                x_i for _, (_, x_i, _, _) in enumerate(dopant_specifications)
             ]),
-            # 'x': torch.tensor(compositions).float(),
+            'x_layer_index':
+            torch.tensor([
+                constraint_index_map[constraint_i] for _, (constraint_i, _, _,
+                                     _) in enumerate(dopant_specifications)
+            ]),
             'types':
             torch.tensor(types),
-            'radii_dopant':
+            'radii':
             torch.tensor([
                 self.get_radii(constraint_i, constraints)
-                for i, (constraint_i, x_i, el_i,
-                        _) in enumerate(dopant_specifications)
+                for constraint_i, key in constraint_index_map.items()
             ]),
             # 'radii': torch.tensor(radii).float(),
             'node_dopant_index':
@@ -161,8 +163,8 @@ class GraphFeatureProcessor(DataProcessor):
             edge_index = torch.stack((i, j))
         else:
             edge_shared_bool = node_dopant_ids[i] == node_dopant_ids[j]
-            edge_shared_bool_flip = node_dopant_ids[i] == node_dopant_ids[j].flip(
-                1)
+            edge_shared_bool_flip = node_dopant_ids[i] == node_dopant_ids[
+                j].flip(1)
 
             edge_share_bool = torch.logical_or(edge_shared_bool,
                                                edge_shared_bool_flip)
@@ -189,9 +191,12 @@ class GraphFeatureProcessor(DataProcessor):
 
         if isinstance(constraints[0], NanoParticleConstraint):
             if isinstance(constraints[0], dict):
-                constraints = [SphericalConstraint.from_dict(c) for c in constraints]
+                constraints = [
+                    SphericalConstraint.from_dict(c) for c in constraints
+                ]
             elif not isinstance(constraints[0], SphericalConstraint):
-                raise NotImplementedError(f'Unsupported constraint type {constraints[0].__class__}')
+                raise NotImplementedError(
+                    f'Unsupported constraint type {constraints[0].__class__}')
 
         return self.get_data_graph(constraints, dopant_specifications)
 
