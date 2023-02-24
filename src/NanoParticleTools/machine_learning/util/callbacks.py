@@ -2,6 +2,7 @@ from pytorch_lightning.callbacks import Callback
 import pytorch_lightning as pl
 from typing import Optional
 import wandb
+from torch.nn import functional as F
 
 
 class LogPredictionsCallback(Callback):
@@ -66,4 +67,72 @@ class LossAugmentCallback(Callback):
                              pl_module: "pl.LightningModule") -> None:
         if trainer.current_epoch >= self.aug_loss_epoch:
             pl_module.augment_loss = True
+        return super().on_epoch_start(trainer, pl_module)
+
+
+class WeightedMultiLoss(Callback):
+    """
+    This pytorch lightning callback enables one to use a weighted-sum loss function which has
+    weights that change during training. Currently, this supports linear interpolation between
+    the initial and target weights.
+    """
+    initial_mse_factor: float
+    initial_mae_factor: float
+    initial_cos_sim_factor: float
+    target_mse_factor: float
+    target_mae_factor: float
+    target_cos_sim_factor: float
+    target_epoch: int
+
+    def __init__(self,
+                 initial_mse_factorial_mse: float = 1.0,
+                 initial_mae_factor: float = 0.0,
+                 initial_cos_sim_factor: float = 0.0,
+                 target_mse_factor: float = 0.0,
+                 target_mae_factor: float = 1.0,
+                 target_cos_sim_factor: float = 1.0,
+                 target_epoch: int = 100):
+        self.initial_mse_factor = initial_mse_factorial_mse
+        self.initial_mae_factor = initial_mae_factor
+        self.initial_cos_sim_factor = initial_cos_sim_factor
+        self.target_mse_factor = target_mse_factor
+        self.target_mae_factor = target_mae_factor
+        self.target_cos_sim_factor = target_cos_sim_factor
+        self.target_epoch = target_epoch
+        return super().__init__()
+
+    def get_loss_function(self,
+                          mse_factor: float = 1.0,
+                          mae_factor: float = 1.0,
+                          cos_sim_factor: float = 1.0):
+
+        def loss_function(y_hat, y):
+            mse_loss = F.mse_loss(y_hat, y)
+            mae_loss = F.l1_loss(y_hat, y)
+            cos_sim = F.cosine_similarity(y_hat, y, 1).mean(0)
+            return (mse_factor * mse_loss + mae_factor * mae_loss -
+                    cos_sim_factor * cos_sim)
+
+        return loss_function
+
+    def get_factor(self, initial_factor: float, target_factor: float,
+                   current_epoch: int):
+        epochs = min(current_epoch, self.target_epoch)
+        factor = ((target_factor - initial_factor) *
+                  (epochs / self.target_epoch) + initial_factor)
+        return factor
+
+    def on_train_epoch_start(self, trainer: "pl.Trainer",
+                             pl_module: "pl.LightningModule") -> None:
+        mse_factor = self.get_factor(self.initial_mse_factor,
+                                     self.target_mse_factor,
+                                     trainer.current_epoch)
+        mae_factor = self.get_factor(self.initial_mae_factor,
+                                     self.target_mae_factor,
+                                     trainer.current_epoch)
+        cos_sim_factor = self.get_factor(self.initial_cos_sim_factor,
+                                         self.target_cos_sim_factor,
+                                         trainer.current_epoch)
+        pl_module.loss_function = self.get_loss_function(
+            mse_factor, mae_factor, cos_sim_factor)
         return super().on_epoch_start(trainer, pl_module)
