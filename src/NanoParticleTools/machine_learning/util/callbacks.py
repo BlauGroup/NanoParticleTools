@@ -67,7 +67,7 @@ class LossAugmentCallback(Callback):
                              pl_module: "pl.LightningModule") -> None:
         if trainer.current_epoch >= self.aug_loss_epoch:
             pl_module.augment_loss = True
-        return super().on_epoch_start(trainer, pl_module)
+        return super().on_train_epoch_start(trainer, pl_module)
 
 
 class WeightedMultiLoss(Callback):
@@ -85,19 +85,21 @@ class WeightedMultiLoss(Callback):
     target_epoch: int
 
     def __init__(self,
-                 initial_mse_factorial_mse: float = 1.0,
+                 initial_mse_factor: float = 1.0,
                  initial_mae_factor: float = 0.0,
                  initial_cos_sim_factor: float = 0.0,
                  target_mse_factor: float = 0.0,
                  target_mae_factor: float = 1.0,
                  target_cos_sim_factor: float = 1.0,
-                 target_epoch: int = 100):
-        self.initial_mse_factor = initial_mse_factorial_mse
+                 start_epoch: int = 500,
+                 target_epoch: int = 1000):
+        self.initial_mse_factor = initial_mse_factor
         self.initial_mae_factor = initial_mae_factor
         self.initial_cos_sim_factor = initial_cos_sim_factor
         self.target_mse_factor = target_mse_factor
         self.target_mae_factor = target_mae_factor
         self.target_cos_sim_factor = target_cos_sim_factor
+        self.start_epoch = start_epoch
         self.target_epoch = target_epoch
         return super().__init__()
 
@@ -110,29 +112,38 @@ class WeightedMultiLoss(Callback):
             mse_loss = F.mse_loss(y_hat, y)
             mae_loss = F.l1_loss(y_hat, y)
             cos_sim = F.cosine_similarity(y_hat, y, 1).mean(0)
-            return (mse_factor * mse_loss + mae_factor * mae_loss -
-                    cos_sim_factor * cos_sim)
+            return (mse_factor * mse_loss + mae_factor * mae_loss +
+                    cos_sim_factor * (1 - cos_sim))
 
         return loss_function
 
     def get_factor(self, initial_factor: float, target_factor: float,
                    current_epoch: int):
-        epochs = min(current_epoch, self.target_epoch)
-        factor = ((target_factor - initial_factor) *
-                  (epochs / self.target_epoch) + initial_factor)
-        return factor
+        if current_epoch < self.start_epoch:
+            return initial_factor
+        else:
+            # If we've already reached the target epoch, we don't make any changes to the factor
+            epochs = min(current_epoch, self.target_epoch)
+            factor = ((target_factor - initial_factor) *
+                      ((epochs - self.start_epoch) /
+                       (self.target_epoch - self.start_epoch)) +
+                      initial_factor)
+            return factor
 
     def on_train_epoch_start(self, trainer: "pl.Trainer",
                              pl_module: "pl.LightningModule") -> None:
-        mse_factor = self.get_factor(self.initial_mse_factor,
-                                     self.target_mse_factor,
-                                     trainer.current_epoch)
-        mae_factor = self.get_factor(self.initial_mae_factor,
-                                     self.target_mae_factor,
-                                     trainer.current_epoch)
-        cos_sim_factor = self.get_factor(self.initial_cos_sim_factor,
-                                         self.target_cos_sim_factor,
-                                         trainer.current_epoch)
+        mse_factor, mae_factor, cos_sim_factor = self.get_factors(
+            trainer.current_epoch)
         pl_module.loss_function = self.get_loss_function(
             mse_factor, mae_factor, cos_sim_factor)
-        return super().on_epoch_start(trainer, pl_module)
+        return super().on_train_epoch_start(trainer, pl_module)
+
+    def get_factors(self, current_epoch) -> None:
+        mse_factor = self.get_factor(self.initial_mse_factor,
+                                     self.target_mse_factor, current_epoch)
+        mae_factor = self.get_factor(self.initial_mae_factor,
+                                     self.target_mae_factor, current_epoch)
+        cos_sim_factor = self.get_factor(self.initial_cos_sim_factor,
+                                         self.target_cos_sim_factor,
+                                         current_epoch)
+        return mse_factor, mae_factor, cos_sim_factor

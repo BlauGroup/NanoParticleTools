@@ -186,7 +186,8 @@ def train_spectrum_model(config,
                          swa: Optional[bool] = False,
                          save_checkpoints: Optional[bool] = True,
                          wandb_config: Optional[dict] = None,
-                         trainer_device_config: Optional[dict] = None):
+                         trainer_device_config: Optional[dict] = None,
+                         additional_callbacks: Optional[List] = None):
     """
         params
         model_cls:
@@ -231,6 +232,10 @@ def train_spectrum_model(config,
                                               monitor="val_loss",
                                               save_last=True)
         callbacks.append(checkpoint_callback)
+    
+    if additional_callbacks is not None:
+        # Allow for custom callbacks to be passed in
+        callbacks.extend(additional_callbacks)
 
     # Make the trainer
     trainer = pl.Trainer(max_epochs=num_epochs,
