@@ -31,13 +31,11 @@ class NanoParticleOptimizer():
                                                       self.x_index)
         elif algo == 'adam':
             # We want to use adam, but clamp at x = 0 and x = 1. When at either of these points,
-            # we will set the ema of the gradient to zero 
+            # we will set the ema of the gradient to zero
             raise NotImplementedError('Adam not implemented')
         return x_tensor
 
-    def optimize_radii(self,
-                       radii_tensor,
-                       algo: str = 'sgd'):
+    def optimize_radii(self, radii_tensor, algo: str = 'sgd'):
         # We need to make sure here that our radii is always in ascending order.
         # If we have a violation, we will need to clamp the radii or remove it (if it is 0 width).
         # For the implementation with momentum, we also set the ema of the gradient at that
@@ -45,16 +43,64 @@ class NanoParticleOptimizer():
         if algo == 'sgd':
             # Seems like gradients with respect to the radii are much smaller, so we
             # set the learning rate to be 10 times the learning rate of the dopant
-            radii_tensor = constrainted_radius_update(radii_tensor, 10*self.lr)
+            radii_tensor = constrainted_radius_update(radii_tensor,
+                                                      10 * self.lr)
         elif algo == 'adam':
             raise NotImplementedError('Adam not implemented')
 
         return radii_tensor
 
 
-def constrainted_radius_update(radii: torch.Tensor,
-                               lr: float):
-    #TODO: make sure that the radii cannot have negative thickness 
+def remove_zero_dopant():
+    """
+    If a dopant has a concentration of 0, we will remove it from the nanoparticle, since it is not
+    contributing and may cause inaccuracy in the prediction.
+
+    We need to update the dopant composition and radii before doing this, since the gradients
+    will not be preserved by this operation.
+    """
+    pass
+
+
+def add_zero_dopant():
+    """
+    We complement removing dopants with occasionally adding zero dopants. This is to ensure that
+    we are not in a local minima or loose all our dopants.
+
+    We need to update the dopant composition and radii before doing this, since the gradients
+    will not be preserved by this operation.
+    """
+    pass
+
+
+def constrainted_radius_update(radii: torch.Tensor, lr: float) -> torch.Tensor:
+    r"""
+    This function performs a SGD update of the radii utilizing the gradients($dr$) obtained from the
+    model, as described by the equation:
+
+    $r^{t+1} = r^{t} + \gamma{}\cdot{}dr^{t}$
+
+    where $r^{t}$ is the radii at time $t$, and $\gamma$ is the learning rate. Where the volumes
+    would be overlapping, the (gradient) update is scaled such that the volumes do not coincide.
+    The scaling factor ($\beta{}$) is incorporated as follows:
+
+    $r_{i,j}^{t+1} = r_{i,j}^{t} + \beta{}_{i,j}\gamma{}dr_{i,j}^{t}$
+
+    where $i$ is the layer index and j is the selector for inner/outer diameter, under the
+    constraint that 0 <= $\beta{}_{i,j}$ <= 1. The scaling factor is computed as:
+
+    $\beta{}_{i+1,0} = \beta{}_{i,1} = min(1, \frac{r^t_{i+1,0}-r^t_{i,1}}
+    {\gamma{}(dr^t_{i, 1}-dr^t_{i+1, 0})})$
+
+    TODO: Make sure that the radii cannot have negative thickness
+    Args:
+        radii (torch.Tensor): The radii tensor to be optimized.
+            Should have gradients attached.
+        lr (float): The learning rate.
+
+    Returns:
+        torch.Tensor: The updated radii tensor.
+    """
     change = radii.grad
 
     # Calculate what the new radii would be
@@ -63,31 +109,45 @@ def constrainted_radius_update(radii: torch.Tensor,
     # Clamp the smallest radii to be > 0
     new_radii[0, 0] = max(0, new_radii[0, 0])
 
-    # The case in which both boundaries are decreasing, but the outer decreases more, causing an overlap
-    new_radii[1:, 0] = torch.where(torch.logical_and(change[1:, 0] < 0, change[:-1, 1] < 0), new_radii[:-1, 1], new_radii[1:, 0])
-    # The case in which both boundaries increase, but the inner increases more, causing an overlap
-    new_radii[:-1, 1] = torch.where(torch.logical_and(change[1:, 0] > 0, change[:-1, 1] > 0), new_radii[1:, 0], new_radii[:-1, 1])
+    # The case in which both boundaries are decreasing, but the outer
+    # decreases more, causing an overlap
+    new_radii[1:, 0] = torch.where(
+        torch.logical_and(change[1:, 0] < 0, change[:-1, 1] < 0),
+        new_radii[:-1, 1], new_radii[1:, 0])
+    # The case in which both boundaries increase, but the inner increases
+    # more, causing an overlap
+    new_radii[:-1, 1] = torch.where(
+        torch.logical_and(change[1:, 0] > 0, change[:-1, 1] > 0),
+        new_radii[1:, 0], new_radii[:-1, 1])
 
-    # Now this is the condition in which the outer boundary decreases, but the inner boundary increases
+    # Now this is the condition in which the outer boundary decreases,
+    # but the inner boundary increases
     loc_overlap = torch.logical_and(change[1:, 0] < 0, change[:-1, 1] > 0)
 
     # This is the subcase in which the radii are already equal. In this case, we just keep
     # them as the original radii
-    new_radii[1:, 0] = torch.where(torch.logical_and(loc_overlap, radii[1:, 0] == radii[:-1, 1]), radii[1:, 0], new_radii[1:, 0])
-    new_radii[:-1, 1] = torch.where(torch.logical_and(loc_overlap, radii[1:, 0] == radii[:-1, 1]), radii[:-1, 1], new_radii[:-1, 1])
-    # This is the subcase in which the radii are not equal. In this case, we need to scale the 
+    new_radii[1:, 0] = torch.where(
+        torch.logical_and(loc_overlap, radii[1:, 0] == radii[:-1, 1]),
+        radii[1:, 0], new_radii[1:, 0])
+    new_radii[:-1, 1] = torch.where(
+        torch.logical_and(loc_overlap, radii[1:, 0] == radii[:-1, 1]),
+        radii[:-1, 1], new_radii[:-1, 1])
+    # This is the subcase in which the radii are not equal. In this case, we need to scale the
     # new_radii[1:, 0] = torch.where(, new_radii[:-1, 1], new_radii[1:, 0])
-    _idx = torch.logical_and(loc_overlap, new_radii[1:, 0] != new_radii[:-1, 1])
-    factor = (radii[1:, 0]-radii[:-1, 1]) / (change[:-1, 1]-change[1:, 0])
-    new_radii[1:, 0] = torch.where(_idx, radii[1:, 0] + factor * change[1:, 0], new_radii[1:, 0])
-    new_radii[:-1, 1] = torch.where(_idx, radii[:-1, 1] + factor * change[:-1, 1], new_radii[:-1, 1])
+    _idx = torch.logical_and(loc_overlap,
+                             new_radii[1:, 0] != new_radii[:-1, 1])
+    factor = (radii[1:, 0] - radii[:-1, 1]) / (change[:-1, 1] - change[1:, 0])
+    new_radii[1:, 0] = torch.where(_idx, radii[1:, 0] + factor * change[1:, 0],
+                                   new_radii[1:, 0])
+    new_radii[:-1,
+              1] = torch.where(_idx, radii[:-1, 1] + factor * change[:-1, 1],
+                               new_radii[:-1, 1])
 
     return new_radii.detach().requires_grad_(True)
 
 
 def constrained_composition_update(
-        x_dopant: torch.Tensor,
-        lr: float,
+        x_dopant: torch.Tensor, lr: float,
         x_layer_index: torch.Tensor) -> torch.Tensor:
     """
     This function performs a constrained update of the dopant composition.
@@ -105,7 +165,7 @@ def constrained_composition_update(
         torch.Tensor: The updated composition tensor.
     """
     change = lr * x_dopant.grad
-    # print(change)
+
     # Determine the original total layer concentration
     x_scatter_out = scatter(x_dopant.detach(),
                             x_layer_index,
