@@ -125,7 +125,7 @@ class GraphFeatureProcessor(DataProcessor):
             torch.tensor([
                 x_i for _, (_, x_i, _, _) in enumerate(dopant_specifications)
             ]),
-            'x_layer_index':
+            'x_layer_idx':
             torch.tensor([
                 constraint_index_map[constraint_i] for _, (constraint_i, _, _,
                                      _) in enumerate(dopant_specifications)

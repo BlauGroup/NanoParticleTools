@@ -70,7 +70,7 @@ class SubdivisionInvariantRepresentation(nn.Module):
                 x_dopant,
                 node_dopant_index,
                 radii,
-                x_layer_index,
+                x_layer_idx,
                 edge_index,
                 batch=None,
                 **kwargs):
@@ -80,7 +80,7 @@ class SubdivisionInvariantRepresentation(nn.Module):
         # Condition the embedding on the composition
         x_embedding = self.film_layer(embedding, x_dopant[node_dopant_index])
 
-        radii = radii[x_layer_index][node_dopant_index].double()
+        radii = radii[x_layer_idx][node_dopant_index].double()
         # Cast back to a float, since we don't want to keep the whole model in double precision.
         integrated_interaction = self.integrated_interaction(radii[:, 0, 0], radii[:, 0, 1],
                                                              radii[:, 1, 0], radii[:, 1, 1]).float()
@@ -168,13 +168,13 @@ class SubdivisionInvariantModel(SpectrumModelBase):
                 x_dopant,
                 node_dopant_index,
                 radii,
-                x_layer_index,
+                x_layer_idx,
                 edge_index,
                 batch=None,
                 **kwargs):
         # Generate the representation of the nanoparticle
         rep = self.representation_module(types, x_dopant, node_dopant_index,
-                                         radii, x_layer_index, edge_index, batch)
+                                         radii, x_layer_idx, edge_index, batch)
 
         # Make the spectrum prediction
         out = self.nn(rep)
