@@ -17,6 +17,8 @@ class InteractionData(Data):
             return (0, 1)
         elif key == 'node_dopant_index':
             return 0
+        elif key == 'x_layer_idx':
+            return 0
         elif 'index' in key or key == 'face':
             return -1
         else:
@@ -27,6 +29,8 @@ class InteractionData(Data):
             return int(value.max()) + 1
         elif key == 'node_dopant_index':
             return self.x_dopant.size(0)
+        elif key == 'x_layer_idx':
+            return self.radii.size(0)
         elif 'index' in key or key == 'face':
             return self.num_nodes
         else:
