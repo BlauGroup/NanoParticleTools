@@ -87,10 +87,11 @@ class UCNPBuilder(Builder):
         for i, doc in enumerate(items):
             unduplicated_dict[f"{doc['data']['simulation_seed']}-{doc['data']['dopant_seed']}"] = i
 
-        items = [items[i] for i in unduplicated_dict.values()]
+        if len(unduplicated_dict) != len(items):
+            items = [items[i] for i in unduplicated_dict.values()]
 
-        self.logger.info(f"Pruned duplicates, resulting in {len(items)} to process")
-        
+            self.logger.info(f"Pruned duplicates, resulting in {len(items)} to process")
+
         # Create/Populate a new document for the average
         avg_doc = {
             "uuid":
