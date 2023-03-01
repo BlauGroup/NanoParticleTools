@@ -90,7 +90,7 @@ class SpectrumModelBase(pl.LightningModule):
         y_hat, loss = self._evaluate_step(batch)
 
         # Determine the batch size
-        if hasattr(batch, 'batch'):
+        if batch.batch is not None:
             batch_size = batch.batch[-1]
         else:
             batch_size = 1
