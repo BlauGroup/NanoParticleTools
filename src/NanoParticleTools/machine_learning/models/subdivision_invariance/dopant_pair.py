@@ -131,8 +131,9 @@ class GraphFeatureProcessor(DataProcessor):
             ]),
             'x_layer_idx':
             torch.tensor([
-                constraint_index_map[constraint_i] for _, (constraint_i, _, _,
-                                     _) in enumerate(dopant_specifications)
+                constraint_index_map[constraint_i]
+                for _, (constraint_i, _, _,
+                        _) in enumerate(dopant_specifications)
             ]),
             'types':
             torch.tensor(types),
@@ -211,3 +212,40 @@ class GraphFeatureProcessor(DataProcessor):
     @property
     def data_cls(self):
         return InteractionData
+
+
+class CompleteGraphFeatureProcessor(GraphFeatureProcessor):
+
+    def process_doc(self, doc: dict) -> dict:
+        constraints = doc['input']['constraints']
+        dopant_specifications = doc['input']['dopant_specifications']
+
+        if isinstance(constraints[0], NanoParticleConstraint):
+            if isinstance(constraints[0], dict):
+                constraints = [
+                    SphericalConstraint.from_dict(c) for c in constraints
+                ]
+            elif not isinstance(constraints[0], SphericalConstraint):
+                raise NotImplementedError(
+                    f'Unsupported constraint type {constraints[0].__class__}')
+
+        # Fill in the empty/missing dopants
+        _dopant_dict = {
+            i: {el: None
+                for el in self.possible_elements}
+            for i, _ in enumerate(constraints)
+        }
+        for spec in dopant_specifications:
+            _dopant_dict[spec[0]][spec[2]] = spec
+
+        for layer_i in _dopant_dict:
+            for el in _dopant_dict[layer_i]:
+                if _dopant_dict[layer_i][el] is None:
+                    _dopant_dict[layer_i][el] = (layer_i, 0, el, 'Y')
+
+        dopant_specifications = [
+            _dopant_dict[k1][k2] for k1 in _dopant_dict.keys()
+            for k2 in _dopant_dict[k1].keys()
+        ]
+
+        return self.get_data_graph(constraints, dopant_specifications)
