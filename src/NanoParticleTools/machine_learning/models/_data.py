@@ -372,7 +372,6 @@ class NPMCDataset(Dataset):
                 self.overwrite = True
                 self.download()
                 self.docs = self._load_data()
-            self.data_store.close()
         elif len(self.docs) != self.dataset_size:
             warnings.warn(
                 "Length of dataset is not of the desired length. Automatically setting"
@@ -382,7 +381,6 @@ class NPMCDataset(Dataset):
             self.overwrite = True
             self.download()
             self.docs = self._load_data()
-            self.data_store.close()
 
         self.cached_data = [False for _ in self.docs]
         self.item_cache = [None for _ in self.docs]
