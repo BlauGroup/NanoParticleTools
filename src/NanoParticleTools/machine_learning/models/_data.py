@@ -570,7 +570,8 @@ class NPMCDataModule(pl.LightningDataModule):
                  training_size: Optional[int] = None,
                  testing_size: Optional[int] = None,
                  loader_workers: Optional[int] = 0,
-                 use_cache: Optional[bool] = False):
+                 use_cache: Optional[bool] = False,
+                 calc_mean: bool = False):
         super().__init__()
 
         # We want to prepare the data on each node. That way each has access to the original data
@@ -594,7 +595,7 @@ class NPMCDataModule(pl.LightningDataModule):
         self.testing_size = testing_size
         self.loader_workers = loader_workers
         self.use_cache = use_cache
-
+        self.calc_mean = calc_mean
         # Initialize class variables that we will use later
         self.spectra_mean = None
         self.spectra_std = None
@@ -667,13 +668,14 @@ class NPMCDataModule(pl.LightningDataModule):
                 training_dataset, [train_size, validation_size, test_size],
                 generator=torch.Generator().manual_seed(torch.default_generator.seed()))
 
-        spectra = []
-        # Leave out test data, since we aren't supposed to have knowledge of that in our model
-        for data in self.npmc_train + self.npmc_test:
-            spectra.append(data.log_y)
-        spectra = torch.cat(spectra, dim=0)
-        self.spectra_mean = spectra.mean(0)
-        self.spectra_std = spectra.std(0)
+        if self.calc_mean:
+            spectra = []
+            # Leave out test data, since we aren't supposed to have knowledge of that in our model
+            for data in self.npmc_train + self.npmc_test:
+                spectra.append(data.log_y)
+            spectra = torch.cat(spectra, dim=0)
+            self.spectra_mean = spectra.mean(0)
+            self.spectra_std = spectra.std(0)
 
     @staticmethod
     def collate(data_list: List[Data]):
