@@ -364,7 +364,7 @@ class NPMCDataset(Dataset):
             )
         elif self.dataset_size is None:
             self.data_store.connect()
-            if len(self.docs) != self.data_store.count():
+            if len(self.docs) != self.data_store.count(self.doc_filter):
                 warnings.warn(
                     "Length of dataset is not of the desired length. Automatically setting"
                     " 'overwrite=True' to redownload the data"
