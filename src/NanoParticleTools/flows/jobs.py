@@ -83,7 +83,7 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
     # Initialize Spectral Kinetics class to calculate transition rates
     dopants = [
         Dopant(key, concentration)
-        for key, concentration in nanoparticle.dopant_concentrations.items()
+        for key, concentration in nanoparticle.dopant_concentrations().items()
     ]
     spectral_kinetics = SpectralKinetics(dopants, **spectral_kinetics_args)
 
