@@ -193,4 +193,7 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
         result_docs[i]['initial_state_db_args'] = _initial_state_db_args
         result_docs[i]['metadata'] = metadata
 
+        # Add metadata to trajectory doc
+        result_docs[i]['trajectory_doc']['metadata'] = metadata
+
     return result_docs
