@@ -1,11 +1,9 @@
 from NanoParticleTools.inputs.nanoparticle import SphericalConstraint
 from NanoParticleTools.machine_learning.util.learning_rate import get_sequential
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-from pytorch_lightning.callbacks import (
-    LearningRateMonitor,
-    StochasticWeightAveraging,
-    ModelCheckpoint
-)
+from pytorch_lightning.callbacks import (LearningRateMonitor,
+                                         StochasticWeightAveraging,
+                                         ModelCheckpoint)
 from pytorch_lightning.loggers import WandbLogger
 
 import wandb
@@ -24,9 +22,13 @@ import numpy as np
 from joblib import Parallel, delayed
 from threading import Lock
 import torch
+from pandas import DataFrame
+from matplotlib import ticker as mticker
+from matplotlib.lines import Line2D
 
 
 class NPMCTrainer():
+
     def __init__(self,
                  data_module,
                  model_cls,
@@ -41,7 +43,7 @@ class NPMCTrainer():
         self.augment_loss = augment_loss
 
         self.wandb_entity = wandb_entity
-    
+
         if wandb_project is None:
             self.wandb_project = 'default_project'
         else:
@@ -127,6 +129,151 @@ class NPMCTrainer():
         Parallel(n_jobs=self.n_available_devices)(
             delayed(self.train_one_model)(run_config)
             for run_config in training_runs)
+
+
+def get_metrics(model, dataset):
+    output_type_sorted = None
+    if hasattr(dataset[0], 'metadata') and dataset[0].metadata is not None:
+        output_type_sorted = {}
+
+    output = []
+    for data in dataset:
+        if output_type_sorted is not None:
+            data_label = data.metadata['tags'][0]
+        y_hat = model(**data.to_dict(), batch=None).detach()
+        # Calculate the metrics
+        _output = [
+            torch.nn.functional.cosine_similarity(y_hat, data.log_y,
+                                                  dim=1).mean().item(),
+            torch.nn.functional.mse_loss(y_hat, data.log_y).item(),
+            torch.nn.functional.cosine_similarity(y_hat[:, 200:257],
+                                                  data.log_y[:, 200:257],
+                                                  dim=1).mean().item(),
+            torch.nn.functional.mse_loss(y_hat[:, 200:257],
+                                         data.log_y[:, 200:257]).item()
+        ]
+        output.append(_output)
+        if output_type_sorted is not None:
+            try:
+                output_type_sorted[data_label].append(_output)
+            except KeyError:
+                output_type_sorted[data_label] = [_output]
+
+    output = torch.tensor(output)
+    if output_type_sorted is not None:
+        for key in output_type_sorted:
+            output_type_sorted[key] = torch.tensor(output_type_sorted[key])
+
+    return output, output_type_sorted
+
+
+def log_additional_data(model, data_module, wandb_logger):
+    columns = ['Cos Sim', 'MSE', 'UV Cos Sim', 'UV MSE']
+
+    # Run the data metrics on the train data
+    output, output_type_sorted = get_metrics(model, data_module.npmc_train)
+    overall_train_metrics = {
+        'train_mean': output.mean(0).tolist(),
+        'train_std': output.std(0).tolist(),
+        'train_min': output.min(0).values.tolist(),
+        'train_max': output.max(0).values.tolist(),
+        'train_median': output.median(0).values.tolist(),
+    }
+    df = DataFrame(
+        overall_train_metrics,
+        index=['cosine similarity', 'mse', 'UV cosine similarity', 'UV mse'])
+    df.reset_index(inplace=True)
+    df = df.rename(columns={'index': 'metric'})
+    wandb_logger.log_table('overall_train_metrics', dataframe=df)
+    # wandb.log({'overall_train_metrics': wandb.Table(dataframe=df)})
+    violin_fig = get_violin_plot(output, 'Train')
+    wandb_train_violin_fig = fig_to_wandb_image(violin_fig)
+    # Close the figure
+    plt.close(violin_fig)
+
+    # Run the data metrics on the train data
+    output, output_type_sorted = get_metrics(model, data_module.npmc_val)
+    overall_val_metrics = {
+        'val_mean': output.mean(0).tolist(),
+        'val_std': output.std(0).tolist(),
+        'val_min': output.min(0).values.tolist(),
+        'val_max': output.max(0).values.tolist(),
+        'val_median': output.median(0).values.tolist(),
+    }
+    df = DataFrame(
+        overall_val_metrics,
+        index=['cosine similarity', 'mse', 'UV cosine similarity', 'UV mse'])
+    df.reset_index(inplace=True)
+    df = df.rename(columns={'index': 'metric'})
+    wandb_logger.log_table('overall_val_metrics', dataframe=df)
+    # wandb.log({'overall_val_metrics': wandb.Table(dataframe=df)})
+    violin_fig = get_violin_plot(output, 'Validation')
+    wandb_val_violin_fig = fig_to_wandb_image(violin_fig)
+
+    # Close the figure
+    plt.close(violin_fig)
+
+    # Run the data metrics on the test data
+    output, output_type_sorted = get_metrics(model, data_module.npmc_test)
+    overall_test_metrics = {
+        'test_mean': output.mean(0).tolist(),
+        'test_std': output.std(0).tolist(),
+        'test_min': output.min(0).values.tolist(),
+        'test_max': output.max(0).values.tolist(),
+        'test_median': output.median(0).values.tolist(),
+    }
+    test_metrics_by_class = {
+        key: item.mean(0).tolist()
+        for key, item in output_type_sorted.items()
+    }
+    df = DataFrame(
+        overall_test_metrics,
+        index=['cosine similarity', 'mse', 'UV cosine similarity', 'UV mse'])
+    df.reset_index(inplace=True)
+    df = df.rename(columns={'index': 'metric'})
+    wandb_logger.log_table('overall_test_metrics', dataframe=df)
+    # wandb.log({'overall_test_metrics': wandb.Table(dataframe=df)})
+    df = DataFrame(
+        test_metrics_by_class,
+        index=['cosine similarity', 'mse', 'UV cosine similarity', 'UV mse']).T
+    df.reset_index(inplace=True)
+    df = df.rename(columns={'index': 'metric'})
+    wandb_logger.log_table('test_metrics_by_class', dataframe=df)
+    # wandb.log({'test_metrics_by_class': wandb.Table(dataframe=df)})
+
+    # Get the figures for the test data
+    violin_fig = get_violin_plot(output, 'Test')
+    wandb_test_violin_fig = fig_to_wandb_image(violin_fig)
+    test_fig = get_test_figure(output_type_sorted)
+    wandb_test_fig = fig_to_wandb_image(test_fig)
+
+    # Close the figures
+    plt.close(violin_fig)
+    plt.close(test_fig)
+
+    # yapf: disable
+    # table = wandb.Table(columns=['Train Violin Plot', 'Validation Violin Plot',
+    #                              'Test Violin Plot', 'Test Split Figure'],
+    #                     data=[[wandb_train_violin_fig, wandb_val_violin_fig,
+    #                            wandb_test_violin_fig, wandb_test_fig]])
+    wandb_logger.log_table('Metric Figures', 
+                           columns=['Train Violin Plot', 'Validation Violin Plot',
+                                    'Test Violin Plot', 'Test Split Figure'],
+                           data=[[wandb_train_violin_fig, wandb_val_violin_fig,
+                                  wandb_test_violin_fig, wandb_test_fig]])
+    # yapf: enable
+
+    # wandb.log({'Metric Figures': table})
+    # wandb.log({
+    #     'Train Violin Plot': wandb_train_violin_fig,
+    #     'Validation Violin Plot': wandb_val_violin_fig,
+    #     'Test Violin Plot': wandb_test_violin_fig,
+    #     'Test Split Figure': wandb_test_fig
+    # })
+    # wandb_logger.log_image('Train Violin Plot', wandb_train_violin_fig)
+    # wandb_logger.log_image('Validation Violin Plot', wandb_val_violin_fig)
+    # wandb_logger.log_image('Test Violin Plot', wandb_test_violin_fig)
+    # wandb_logger.log_image('Test Split Figure', wandb_test_fig)
 
 
 def get_logged_data(model, data):
@@ -232,7 +379,7 @@ def train_spectrum_model(config,
                                               monitor="val_loss",
                                               save_last=True)
         callbacks.append(checkpoint_callback)
-    
+
     if additional_callbacks is not None:
         # Allow for custom callbacks to be passed in
         callbacks.extend(additional_callbacks)
@@ -281,6 +428,9 @@ def train_spectrum_model(config,
         save_data.append(get_logged_data(trainer.model, data))
 
     wandb_logger.log_table(key='sample_table', columns=columns, data=save_data)
+
+    # Log the additional data
+    log_additional_data(model, data_module, wandb_logger)
     wandb.finish()
 
     return model
@@ -351,7 +501,8 @@ def tune_npmc(model_cls,
     else:
         # Default to asha
         scheduler = ASHAScheduler(
-            metric='loss',  # Metric refers to the one we have mapped to in the TuneReportCallback
+            metric=
+            'loss',  # Metric refers to the one we have mapped to in the TuneReportCallback
             mode='min',
             max_t=num_epochs,
             grace_period=100,
@@ -386,3 +537,137 @@ def get_np_template_from_feature(types, volumes, compositions,
     radii = torch.pow(cum_volumes * 3 / (4 * np.pi), 1 / 3) * 100
     constraints = [SphericalConstraint(radius.item()) for radius in radii]
     return constraints, dopant_specifications
+
+
+def fig_to_wandb_image(fig):
+    fig.canvas.draw()
+    data = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+    data = data.reshape(fig.canvas.get_width_height()[::-1] + (3, ))
+    return wandb.Image(data)
+
+
+def get_violin_plot(output, title='Test'):
+    fig = plt.figure(dpi=150)
+    ax = fig.add_subplot()
+    ax1 = ax.twinx()
+    columns = ['Cos Sim', 'MSE', 'UV Cos Sim', 'UV MSE']
+
+    vp = ax.violinplot(output[..., 0].numpy(), [0],
+                       showmeans=True,
+                       showmedians=True)
+    for pc in vp['bodies']:
+        pc.set_facecolor('tab:blue')
+        # pc.set_edgecolor('black')
+        pc.set_alpha(0.65)
+    for line_label in ['cbars', 'cmins', 'cmaxes', 'cmeans', 'cmedians']:
+        vp[line_label].set_color('k')
+        vp[line_label].set_linewidth(0.75)
+    vp['cbars'].set_linewidth(0.25)
+    vp['cmedians'].set_linestyle('--')
+    vp = ax1.violinplot(output[..., 1].log10().numpy(), [1],
+                        showmeans=True,
+                        showmedians=True)
+    for pc in vp['bodies']:
+        pc.set_facecolor('tab:red')
+        # pc.set_edgecolor('black')
+        pc.set_alpha(0.65)
+    for line_label in ['cbars', 'cmins', 'cmaxes', 'cmeans', 'cmedians']:
+        vp[line_label].set_color('k')
+        vp[line_label].set_linewidth(0.75)
+    vp['cbars'].set_linewidth(0.25)
+    vp['cmedians'].set_linestyle('--')
+    vp = ax.violinplot(output[..., 2].numpy(), [2],
+                       showmeans=True,
+                       showmedians=True)
+    for pc in vp['bodies']:
+        pc.set_facecolor('tab:blue')
+        # pc.set_edgecolor('black')
+        pc.set_alpha(0.65)
+    for line_label in ['cbars', 'cmins', 'cmaxes', 'cmeans', 'cmedians']:
+        vp[line_label].set_color('k')
+        vp[line_label].set_linewidth(0.75)
+    vp['cbars'].set_linewidth(0.25)
+    vp['cmedians'].set_linestyle('--')
+    vp = ax1.violinplot(output[..., 3].log10().numpy(), [3],
+                        showmeans=True,
+                        showmedians=True)
+    for pc in vp['bodies']:
+        pc.set_facecolor('tab:red')
+        # pc.set_edgecolor('black')
+        pc.set_alpha(0.65)
+    vp['cbars'].set_linewidth(0.25)
+    for line_label in ['cbars', 'cmins', 'cmaxes', 'cmeans', 'cmedians']:
+        vp[line_label].set_color('k')
+        vp[line_label].set_linewidth(0.75)
+    vp['cbars'].set_linewidth(0.25)
+    vp['cmedians'].set_linestyle('--')
+
+    ax.tick_params(axis='y', colors='tab:blue')
+    ax.set_yticklabels(ax.get_yticklabels(), fontsize=14)
+    ax.set_xticks([0, 1, 2, 3])
+    ax.set_xticklabels(columns, fontsize=14)
+    ax.set_ylabel('Cosine Similarity', color='tab:blue', fontsize=18)
+    ax1.tick_params(axis='y', colors='tab:red')
+    ax1.set_yticks(np.arange(-2, 1, 1))
+    ax1.yaxis.set_major_formatter(
+        mticker.StrMethodFormatter("$10^{{{x:.0f}}}$"))
+    # ax1.set_yticklabels(ax1.get_yticklabels(), fontsize=14)
+    ax1.set_ylabel(r'$log_{10}(MSE)$', color='tab:red', fontsize=18)
+    ax.set_title(f"{title} Data Metrics", fontsize=20)
+    plt.tight_layout()
+    return fig
+
+
+def get_test_figure(output_type_sorted):
+    fig = plt.figure(dpi=150)
+    ax = fig.add_subplot()
+    ax1 = ax.twinx()
+    ax1.semilogy()
+    x_labels = list(output_type_sorted.keys())
+    columns = ['Cos Sim', 'MSE', 'UV Cos Sim', 'UV MSE']
+
+    for i, label in zip([0, 1, 2, 3], columns):
+        x = torch.arange(len(x_labels))
+        y = torch.tensor([_l.mean(0)[i] for _l in output_type_sorted.values()])
+        # if i < 2:
+        #     fmt = 'o'
+        # else:
+        #     fmt = 'D'
+        if i % 2 == 0:
+            color = 'tab:blue'
+            fmt = 'o' if i < 2 else 'D'
+            ax.plot(x, y, fmt, color=color, alpha=0.6, markeredgecolor='k')
+        else:
+            color = 'tab:red'
+            fmt = 'o' if i < 2 else 'D'
+            ax1.plot(x, y, fmt, color=color, alpha=0.6, markeredgecolor='k')
+
+    legend_elements = [
+        Line2D([0], [0],
+               marker='o',
+               color='k',
+               label='Full Spectrum',
+               markerfacecolor='grey',
+               linewidth=0,
+               alpha=0.6),
+        Line2D([0], [0],
+               marker='D',
+               color='k',
+               label='UV Section',
+               markerfacecolor='grey',
+               linewidth=0,
+               alpha=0.6)
+    ]
+    plt.legend(handles=legend_elements, loc='center right')
+    ax.tick_params(axis='y', colors='tab:blue')
+    ax.set_yticklabels(ax.get_yticklabels(), fontsize=14)
+    ax.set_xticks([0, 1, 2, 3])
+    ax.set_xticklabels(columns, fontsize=14)
+    ax.set_ylabel('Cosine Similarity', color='tab:blue', fontsize=18)
+    ax1.tick_params(axis='y', which='both', colors='tab:red')
+    ax1.set_yticklabels(ax1.get_yticklabels(), fontsize=14)
+    ax1.set_ylabel('MSE', color='tab:red', fontsize=18)
+    ax.set_xticks(range(len(x_labels)))
+    ax.set_xticklabels(x_labels, rotation=55)
+    plt.tight_layout()
+    return fig
