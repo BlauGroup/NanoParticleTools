@@ -8,6 +8,7 @@ import signal
 import time
 from monty.json import MSONable
 from functools import lru_cache
+import os
 
 create_species_table_sql = """
     CREATE TABLE species (
@@ -296,6 +297,7 @@ class NPMCRunner:
         self.process = None
 
     def error_handler(self, _signo, _stack_frame):
+        os.kill(self.process.pid, signal.SIGTERM)
         # Sleep for 30 seconds before exiting
         time.sleep(40)
         # Kill the program
