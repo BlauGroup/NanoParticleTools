@@ -120,7 +120,24 @@ class EnergyLabelProcessor(DataProcessor):
             self.get_item_from_doc(doc, 'output.energy_spectrum_y'))
         step = x[1] - x[0]
 
-        if x.shape[0] != self.output_size:
+        # Assign to a different variable, so we can modify
+        # the spectrum while keeping a reference to the original
+        y = spectrum
+        if self.gaussian_filter > 0:
+            y = torch.tensor(gaussian_filter1d(y, self.gaussian_filter))
+
+        target_range = torch.linspace(*self.spectrum_range, self.output_size + 1)
+        target_step = target_range[1] - target_range[0]
+        target_range = (target_range + target_step / 2)[:-1]
+        if target_step == step and target_range[0] > x[0] and target_range[-1] < x[-1]:
+            # The specified range is a subset of the original spectrum, we can just crop
+            # the spectrum
+            start = torch.nonzero(torch.isclose(x, target_range[0]))
+            end = torch.nonzero(torch.isclose(x, target_range[-1]))
+            
+            x = x[start:(end + 1)]
+            y = y[start:(end + 1)]
+        elif x.shape[0] != self.output_size:
             if x.shape[0] >= self.output_size:
                 warnings.warn(
                     "Desired spectrum resolution is coarser than found in the document."
@@ -132,7 +149,7 @@ class EnergyLabelProcessor(DataProcessor):
                     torch.lcm(torch.tensor(x.size(0)),
                               torch.tensor(self.output_size)) / x.shape[0])
 
-                _spectrum = spectrum.expand(multiplier, -1).moveaxis(
+                _spectrum = y.expand(multiplier, -1).moveaxis(
                     0, 1).reshape(self.output_size, -1).sum(dim=-1)
                 _spectrum = _spectrum * x.size(0) / (
                     multiplier * self.output_size
@@ -147,18 +164,12 @@ class EnergyLabelProcessor(DataProcessor):
 
                 # Replace the old spectrum with the new
                 x = _x
-                spectrum = _spectrum
+                y = _spectrum
             else:
                 raise RuntimeError(
                     "Spectrum in document is different than desired resolution and cannot"
                     " be rebinned. Please rebuild the collection"
                 )
-
-        # Assign to a different variable, so we can modify
-        # the spectrum while keeping a reference to the original
-        y = spectrum
-        if self.gaussian_filter > 0:
-            y = torch.tensor(gaussian_filter1d(y, self.gaussian_filter))
 
         # Keep track of where the spectrum changes from
         # emission to absorption.
@@ -171,7 +182,7 @@ class EnergyLabelProcessor(DataProcessor):
 
         # Integrate the energy absorbed vs emitted.
         # This can be added to the loss to enforce conservation of energy
-        total_energy = spectrum * x
+        total_energy = y * x
         e_absorbed = torch.sum(total_energy[idx_zero:])
         e_emitted = torch.sum(total_energy[:idx_zero])
 
