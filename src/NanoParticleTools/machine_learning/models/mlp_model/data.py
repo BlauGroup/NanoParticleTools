@@ -97,14 +97,14 @@ class VolumeFeatureProcessor(DataProcessor):
                 except:
                     _layer_feature.append(0)
             feature.append(_layer_feature)
-        return {'x': torch.tensor(np.hstack(feature)).float()}
+        return {'x': torch.tensor(np.hstack(feature)).unsqueeze(0).float()}
     
     def __str__(self):
         return f"Feature Processor - {self.max_layers} x [radius, volume, x_{', x_'.join(self.possible_elements)}]"
 
     @property
     def is_graph(self):
-        return False
+        return True
 
     @property
     def data_cls(self):

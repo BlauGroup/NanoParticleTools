@@ -1,6 +1,7 @@
 from NanoParticleTools.inputs.nanoparticle import NanoParticleConstraint, SphericalConstraint
 from NanoParticleTools.machine_learning.models._data import DataProcessor
 
+from monty.serialization import MontyDecoder
 from typing import List, Tuple, Any, Dict
 from itertools import combinations_with_replacement
 from functools import lru_cache
@@ -194,14 +195,9 @@ class GraphFeatureProcessor(DataProcessor):
         constraints = doc['input']['constraints']
         dopant_specifications = doc['input']['dopant_specifications']
 
-        if isinstance(constraints[0], NanoParticleConstraint):
-            if isinstance(constraints[0], dict):
-                constraints = [
-                    SphericalConstraint.from_dict(c) for c in constraints
-                ]
-            elif not isinstance(constraints[0], SphericalConstraint):
-                raise NotImplementedError(
-                    f'Unsupported constraint type {constraints[0].__class__}')
+        if not isinstance(constraints[0], NanoParticleConstraint):
+            decoder = MontyDecoder()
+            constraints = decoder.process_decoded(constraints)
 
         return self.get_data_graph(constraints, dopant_specifications)
 
@@ -220,14 +216,9 @@ class CompleteGraphFeatureProcessor(GraphFeatureProcessor):
         constraints = doc['input']['constraints']
         dopant_specifications = doc['input']['dopant_specifications']
 
-        if isinstance(constraints[0], NanoParticleConstraint):
-            if isinstance(constraints[0], dict):
-                constraints = [
-                    SphericalConstraint.from_dict(c) for c in constraints
-                ]
-            elif not isinstance(constraints[0], SphericalConstraint):
-                raise NotImplementedError(
-                    f'Unsupported constraint type {constraints[0].__class__}')
+        if not isinstance(constraints[0], NanoParticleConstraint):
+            decoder = MontyDecoder()
+            constraints = decoder.process_decoded(constraints)
 
         # Fill in the empty/missing dopants
         _dopant_dict = {

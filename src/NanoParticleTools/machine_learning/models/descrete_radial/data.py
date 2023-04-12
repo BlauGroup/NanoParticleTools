@@ -1,10 +1,37 @@
 from ....inputs.nanoparticle import NanoParticleConstraint, SphericalConstraint
 from .._data import DataProcessor
 
-from typing import List, Union, Tuple, Optional
+from typing import List, Union, Tuple, Optional, Any
 import torch
 import itertools
 from torch_geometric.data.data import Data
+from torch_geometric.typing import SparseTensor
+
+
+class CNNData(Data):
+
+    def __cat_dim__(self, key: str, value: Any, *args, **kwargs) -> Any:
+        if isinstance(value, SparseTensor) and 'adj' in key:
+            return (0, 1)
+        elif key == 'y':
+            return 0
+        elif 'index' in key or key == 'face':
+            return -1
+        else:
+            return 0
+
+    def __inc__(self, key: str, value: Any, *args, **kwargs) -> Any:
+        if 'batch' in key:
+            return int(value.max()) + 1
+        elif key == 'node_dopant_index':
+            return self.x.size(0)
+        elif key == 'x_layer_idx':
+            return self.radii.size(0)
+        elif 'index' in key or key == 'face':
+            return self.num_nodes
+        else:
+            return 0
+        
 
 class GraphFeatureProcessor(DataProcessor):
     def __init__(self,
@@ -220,7 +247,7 @@ class FeatureProcessor(DataProcessor):
         elif self.dims == 3:
             node_features = torch.nn.functional.avg_pool3d(node_features, 2, 2)
 
-        return {'x': node_features}
+        return {'x': node_features.unsqueeze(0)}
 
     def get_data_graph(self, 
                        constraints: List[NanoParticleConstraint], 
@@ -265,4 +292,8 @@ class FeatureProcessor(DataProcessor):
 
     @property
     def is_graph(self):
-        return False
+        return True
+
+    @property
+    def data_cls(self):
+        return CNNData

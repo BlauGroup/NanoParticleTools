@@ -126,15 +126,17 @@ class EnergyLabelProcessor(DataProcessor):
         if self.gaussian_filter > 0:
             y = torch.tensor(gaussian_filter1d(y, self.gaussian_filter))
 
-        target_range = torch.linspace(*self.spectrum_range, self.output_size + 1)
+        target_range = torch.linspace(*self.spectrum_range,
+                                      self.output_size + 1)
         target_step = target_range[1] - target_range[0]
         target_range = (target_range + target_step / 2)[:-1]
-        if target_step == step and target_range[0] > x[0] and target_range[-1] < x[-1]:
+        if target_step == step and target_range[0] > x[0] and target_range[
+                -1] < x[-1]:
             # The specified range is a subset of the original spectrum, we can just crop
             # the spectrum
             start = torch.nonzero(torch.isclose(x, target_range[0]))
             end = torch.nonzero(torch.isclose(x, target_range[-1]))
-            
+
             x = x[start:(end + 1)]
             y = y[start:(end + 1)]
         elif x.shape[0] != self.output_size:
@@ -142,15 +144,14 @@ class EnergyLabelProcessor(DataProcessor):
                 warnings.warn(
                     "Desired spectrum resolution is coarser than found in the document."
                     " Spectrum will be rebinned approximately. It is recommended to rebuild"
-                    " the collection to match the desired resolution"
-                )
+                    " the collection to match the desired resolution")
                 # We need to rebin the distribution
                 multiplier = int(
                     torch.lcm(torch.tensor(x.size(0)),
                               torch.tensor(self.output_size)) / x.shape[0])
 
-                _spectrum = y.expand(multiplier, -1).moveaxis(
-                    0, 1).reshape(self.output_size, -1).sum(dim=-1)
+                _spectrum = y.expand(multiplier, -1).moveaxis(0, 1).reshape(
+                    self.output_size, -1).sum(dim=-1)
                 _spectrum = _spectrum * x.size(0) / (
                     multiplier * self.output_size
                 )  # ensure integral is constant
@@ -168,8 +169,7 @@ class EnergyLabelProcessor(DataProcessor):
             else:
                 raise RuntimeError(
                     "Spectrum in document is different than desired resolution and cannot"
-                    " be rebinned. Please rebuild the collection"
-                )
+                    " be rebinned. Please rebuild the collection")
 
         # Keep track of where the spectrum changes from
         # emission to absorption.
@@ -204,6 +204,85 @@ class EnergyLabelProcessor(DataProcessor):
                 " log_constant = {self.log_constant}")
 
 
+class TotalEnergyLabelProcessor(DataProcessor):
+    """
+    This Label processor returns a spectrum that is binned uniformly with respect to energy (I(E))
+        Args:
+            spectrum_range (Tuple | List, optional): Range over which the spectrum should be
+                cropped. Defaults to (-40000, 20000).
+            output_size (int, optional): Number of bins in the resultant spectra.
+                This quantity will be used as the # of output does in the NN. Defaults to 600.
+            log_constant (float, optional): When applying the log function,
+                we use the form log_10(I+b). Since the intensity is always positive, this function
+                is easily invertible. min_log_val sets the minimum value of the label after
+                applying the log.
+
+                To make sure the values aren't clipped, it is recommended that the smallest b is
+                chosen at least 1 order of magnitude lower than 1/(# avg'd documents).
+
+                Example:
+                    With 16 documents averaged, the lowest (non-zero) observation is 0.0625(1/16),
+                    therefore choose 0.001 as the log_constant. . Defaults to 1e-3.
+            gaussian_filter (float, optional): Standard deviation over which to apply gaussian
+                filtering to smooth the otherwise very peaked spectrum. Defaults to 0.
+    """
+
+    def __init__(self,
+                 spectrum_range: Tuple | List = (-40000, 20000),
+                 log_constant: float = 1e-3,
+                 gaussian_filter: float = 0,
+                 **kwargs):
+        super().__init__(
+            fields=['output.energy_spectrum_x', 'output.energy_spectrum_y'],
+            **kwargs)
+
+        self.spectrum_range = spectrum_range
+        self.log_constant = log_constant
+        self.gaussian_filter = gaussian_filter
+
+    def process_doc(self, doc: dict) -> torch.Tensor:
+        x = torch.tensor(
+            self.get_item_from_doc(doc, 'output.energy_spectrum_x'))
+        spectrum = torch.tensor(
+            self.get_item_from_doc(doc, 'output.energy_spectrum_y'))
+        step = x[1] - x[0]
+
+        # Assign to a different variable, so we can modify
+        # the spectrum while keeping a reference to the original
+        y = spectrum
+        if self.gaussian_filter > 0:
+            y = torch.tensor(gaussian_filter1d(y, self.gaussian_filter))
+
+        if self.spectrum_range[0] > x[0] and self.spectrum_range[-1] < x[-1]:
+            # The specified range is a subset of the original spectrum, we can just crop
+            # the spectrum
+            start = torch.nonzero(x < self.spectrum_range[0])[-1][0]
+            end = torch.nonzero(x > self.spectrum_range[-1])[0][0]
+            x = x[start:(end + 1)]
+            y = y[start:(end + 1)]
+
+        # Keep track of where the spectrum changes from
+        # emission to absorption.
+        idx_zero = torch.tensor(
+            int(np.floor(0 - self.spectrum_range[0]) / step))
+
+        y_sum = y.sum()
+
+        return {
+            'spectra_x': x.unsqueeze(0),
+            'y': y_sum.float().reshape(1, 1),
+            'log_y':
+            torch.log10(y_sum + self.log_constant).float().reshape(1, 1),
+            'log_const': self.log_constant,
+            'idx_zero': idx_zero
+        }
+
+    def __str__(self):
+        return (f"Energy Label Processor - 1 bins, x_min ="
+                " {self.spectrum_range[0]}, x_max = {self.spectrum_range[1]},"
+                " log_constant = {self.log_constant}")
+
+
 class WavelengthLabelProcessor(DataProcessor):
     r"""
     This Label processor returns a spectrum that is binned uniformly with respect to
@@ -227,6 +306,7 @@ class WavelengthLabelProcessor(DataProcessor):
             gaussian_filter (float, optional): Standard deviation over which to apply gaussian
                 filtering to smooth the otherwise very peaked spectrum. Defaults to 0.
     """
+
     def __init__(self,
                  spectrum_range: Union[Tuple, List] = (-1000, 1000),
                  output_size: Optional[int] = 600,
@@ -236,8 +316,11 @@ class WavelengthLabelProcessor(DataProcessor):
         if gaussian_filter is None:
             gaussian_filter = 0
 
-        super().__init__(fields=['output.wavelength_spectrum_x', 'output.wavelength_spectrum_y',
-                                 'output.summary', 'overall_dopant_concentration'], **kwargs)
+        super().__init__(fields=[
+            'output.wavelength_spectrum_x', 'output.wavelength_spectrum_y',
+            'output.summary', 'overall_dopant_concentration'
+        ],
+                         **kwargs)
 
         self.spectrum_range = spectrum_range
         self.output_size = output_size
@@ -256,8 +339,7 @@ class WavelengthLabelProcessor(DataProcessor):
                 warnings.warn(
                     "Desired spectrum resolution is coarser than found in the document."
                     " Spectrum will be rebinned approximately. It is recommended to rebuild"
-                    " the collection to match the desired resolution"
-                )
+                    " the collection to match the desired resolution")
                 # We need to rebin the distribution
                 multiplier = int(
                     torch.lcm(torch.tensor(x.size(0)),
@@ -282,8 +364,7 @@ class WavelengthLabelProcessor(DataProcessor):
             else:
                 raise RuntimeError(
                     "Spectrum in document is different than desired resolution and"
-                    " cannot be rebinned. Please rebuild the collection"
-                )
+                    " cannot be rebinned. Please rebuild the collection")
 
         # Assign to a different variable, so we can modify
         # the spectrum while keeping a reference to the original
@@ -371,23 +452,20 @@ class NPMCDataset(Dataset):
         if self.dataset_size == -1:
             warnings.warn(
                 "dataset_size set to -1, no check was performed on the currently"
-                " downloaded dataset. It may be out of date"
-            )
+                " downloaded dataset. It may be out of date")
         elif self.dataset_size is None:
             self.data_store.connect()
             if len(self.docs) != self.data_store.count(self.doc_filter):
                 warnings.warn(
                     "Length of dataset is not of the desired length. Automatically setting"
-                    " 'overwrite=True' to redownload the data"
-                )
+                    " 'overwrite=True' to redownload the data")
                 self.overwrite = True
                 self.download()
                 self.docs = self._load_data()
         elif len(self.docs) != self.dataset_size:
             warnings.warn(
                 "Length of dataset is not of the desired length. Automatically setting"
-                " 'overwrite=True' to redownload the data"
-            )
+                " 'overwrite=True' to redownload the data")
             self.data_store.connect()
             self.overwrite = True
             self.download()
@@ -535,7 +613,8 @@ class NPMCDataset(Dataset):
 
                 self.cached_data[idx] = True
                 self.item_cache[idx] = data
-                self.docs[idx] = None  # We have cached the output of this document, free up memory
+                self.docs[
+                    idx] = None  # We have cached the output of this document, free up memory
         else:
             data = self.process_single_doc(idx)
         return data
@@ -566,6 +645,7 @@ class NPMCDataModule(pl.LightningDataModule):
         loader_workers (Optional[int], optional): _description_. Defaults to 0.
         use_cache (Optional[bool], optional): _description_. Defaults to False.
     """
+
     def __init__(self,
                  feature_processor: DataProcessor,
                  label_processor: DataProcessor,
@@ -665,7 +745,8 @@ class NPMCDataModule(pl.LightningDataModule):
 
             self.npmc_train, self.npmc_val = torch.utils.data.random_split(
                 training_dataset, [train_size, validation_size],
-                generator=torch.Generator().manual_seed(torch.default_generator.seed()))
+                generator=torch.Generator().manual_seed(
+                    torch.default_generator.seed()))
             self.npmc_test = testing_dataset
         else:
             # We don't have a testing dataset explicitly defined. We will split the training dataset
@@ -677,7 +758,8 @@ class NPMCDataModule(pl.LightningDataModule):
 
             self.npmc_train, self.npmc_val, self.npmc_test = torch.utils.data.random_split(
                 training_dataset, [train_size, validation_size, test_size],
-                generator=torch.Generator().manual_seed(torch.default_generator.seed()))
+                generator=torch.Generator().manual_seed(
+                    torch.default_generator.seed()))
 
         if self.calc_mean:
             spectra = []
