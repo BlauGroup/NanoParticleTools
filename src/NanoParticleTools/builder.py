@@ -130,11 +130,11 @@ class UCNPBuilder(Builder):
                 items[0]["data"]["dopant_composition"],
             "input":
                 items[0]["data"]["input"],
-            "metadata":
-            items[0]["data"]["metadata"],
             "num_averaged":
                 len(items)
         }
+        if metadata in items[0]["data"]:
+            avg_doc["metadata"] = items[0]["data"]["metadata"]
 
         avg_doc["output"] = {}
 
