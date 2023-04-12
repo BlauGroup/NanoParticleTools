@@ -444,7 +444,8 @@ def tune_npmc(model_cls,
               save_dir='./',
               wandb_config={},
               use_gpu=True,
-              algo='asha'):
+              algo='asha',
+              num_samples=100):
 
     date = ''.join([
         f'{val}{sym}' for val, sym in zip(
@@ -494,6 +495,7 @@ def tune_npmc(model_cls,
         analysis = tune.run(train_fn_with_parameters,
                             resources_per_trial=resources_per_trial,
                             config=config,
+                            num_samples=num_samples,
                             scheduler=scheduler,
                             local_dir=save_dir,
                             search_alg=algo,
@@ -501,7 +503,7 @@ def tune_npmc(model_cls,
     else:
         # Default to asha
         scheduler = ASHAScheduler(
-            metric=
+            metric =
             'loss',  # Metric refers to the one we have mapped to in the TuneReportCallback
             mode='min',
             max_t=num_epochs,
@@ -511,7 +513,7 @@ def tune_npmc(model_cls,
         analysis = tune.run(train_fn_with_parameters,
                             resources_per_trial=resources_per_trial,
                             config=config,
-                            num_samples=1000,
+                            num_samples=num_samples,
                             scheduler=scheduler,
                             reuse_actors=False,
                             local_dir=save_dir,
