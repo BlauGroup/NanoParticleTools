@@ -133,7 +133,7 @@ class UCNPBuilder(Builder):
             "num_averaged":
                 len(items)
         }
-        if metadata in items[0]["data"]:
+        if 'metadata' in items[0]["data"]:
             avg_doc["metadata"] = items[0]["data"]["metadata"]
 
         avg_doc["output"] = {}
