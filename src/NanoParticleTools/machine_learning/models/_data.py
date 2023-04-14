@@ -424,7 +424,8 @@ class NPMCDataset(Dataset):
                  download: bool = False,
                  overwrite: bool = False,
                  use_cache: bool = False,
-                 dataset_size: int = None):
+                 dataset_size: int = None, 
+                 use_metadata: bool = False):
         """
         :param feature_processor:
         :param label_processor:
@@ -440,6 +441,7 @@ class NPMCDataset(Dataset):
         self.overwrite = overwrite
         self.use_cache = use_cache
         self.dataset_size = dataset_size
+        self.use_metadata = use_metadata
 
         if download:
             self.download()
@@ -544,8 +546,10 @@ class NPMCDataset(Dataset):
 
     def download(self):
         required_fields = self.feature_processor.required_fields \
-            + self.label_processor.required_fields \
-            + ['metadata']
+            + self.label_processor.required_fields
+            
+        if self.use_metadata:
+            required_fields += ['metadata']
 
         if 'input' not in required_fields:
             required_fields.append('input')
@@ -702,7 +706,8 @@ class NPMCDataModule(pl.LightningDataModule):
                            download=download,
                            overwrite=False,
                            dataset_size=self.training_size,
-                           use_cache=self.use_cache)
+                           use_cache=self.use_cache,
+                           use_metadata=False)
 
     def get_testing_dataset(self, download=False):
         if self.testing_data_store is not None:
@@ -714,7 +719,8 @@ class NPMCDataModule(pl.LightningDataModule):
                                download=download,
                                overwrite=False,
                                dataset_size=self.testing_size,
-                               use_cache=self.use_cache)
+                               use_cache=self.use_cache,
+                               use_metadata=True)
         return None
 
     def prepare_data(self) -> None:
