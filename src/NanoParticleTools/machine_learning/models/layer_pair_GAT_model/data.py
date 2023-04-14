@@ -16,7 +16,7 @@ class GraphFeatureProcessor(DataProcessor):
         :param possible_elements: 
         :param log_volume: Whether to apply a log10 to the volume to reduce orders of magnitude. defaults to False
         """
-        super().__init__(fields = ['formula_by_constraint', 'dopant_concentration', 'input'],
+        super().__init__(fields = ['formula_by_constraint', 'dopant_concentration', 'input', 'metadata'],
                          **kwargs)
         
         self.possible_elements = possible_elements

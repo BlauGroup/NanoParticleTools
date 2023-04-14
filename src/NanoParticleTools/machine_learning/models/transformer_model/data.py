@@ -19,7 +19,7 @@ class TransformerFeatureProcessor(DataProcessor):
         :param max_layers: 
         :param possible_elements:
         """
-        super().__init__(fields=['formula_by_constraint', 'dopant_concentration', 'input.constraints'], **kwargs)
+        super().__init__(fields=['formula_by_constraint', 'dopant_concentration', 'input.constraints', 'metadata'], **kwargs)
         
         self.max_layers = max_layers
         self.possible_elements = possible_elements

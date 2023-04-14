@@ -16,7 +16,7 @@ class GraphFeatureProcessor(DataProcessor):
         :param edge_attr_bias: A bias added to the edge_attr before applying 1/edge_attr. This serves to eliminate
             divide by zero and inf in the tensor. Additionally, it acts as a weight on the self-interaction.
         """
-        super().__init__(fields = ['formula_by_constraint', 'dopant_concentration', 'input'],
+        super().__init__(fields = ['formula_by_constraint', 'dopant_concentration', 'input', 'metadata'],
                          **kwargs)
         
         self.possible_elements = possible_elements
@@ -102,7 +102,7 @@ class GraphInteractionFeatureProcessor(DataProcessor):
         :param edge_attr_bias: A bias added to the edge_attr before applying 1/edge_attr. This serves to eliminate
             divide by zero and inf in the tensor. Additionally, it acts as a weight on the self-interaction.
         """
-        super().__init__(fields = ['formula_by_constraint', 'dopant_concentration', 'input'],
+        super().__init__(fields = ['formula_by_constraint', 'dopant_concentration', 'input', 'metadata'],
                          **kwargs)
         
         self.possible_elements = possible_elements

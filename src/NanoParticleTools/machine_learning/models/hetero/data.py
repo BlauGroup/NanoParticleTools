@@ -9,7 +9,7 @@ class HeteroFeatureProcessor(DataProcessor):
     def __init__(self, 
                  possible_elements = ['Yb', 'Er', 'Nd'],
                  **kwargs):
-        super().__init__(fields = ['formula_by_constraint', 'dopant_concentration', 'input'],
+        super().__init__(fields = ['formula_by_constraint', 'dopant_concentration', 'input', 'metadata'],
                          **kwargs)
         self.possible_elements = possible_elements
         self.elements_map = dict([(_t[1], _t[0]) for _t in enumerate(possible_elements)])

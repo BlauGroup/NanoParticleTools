@@ -47,7 +47,7 @@ class GraphFeatureProcessor(DataProcessor):
         :param cutoff_distance: 
         :param resolution: Angstroms
         """
-        super().__init__(fields = ['formula_by_constraint', 'dopant_concentration', 'input'],
+        super().__init__(fields = ['formula_by_constraint', 'dopant_concentration', 'input', 'metadata'],
                          **kwargs)
 
         self.possible_elements = possible_elements
@@ -176,7 +176,7 @@ class FeatureProcessor(DataProcessor):
         :param resolution: Angstroms
         :param max_np_size: Angstroms
         """
-        super().__init__(fields = ['formula_by_constraint', 'dopant_concentration', 'input'],
+        super().__init__(fields = ['formula_by_constraint', 'dopant_concentration', 'input', 'metadata'],
                          **kwargs)
 
         self.possible_elements = possible_elements

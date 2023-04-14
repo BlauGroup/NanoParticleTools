@@ -15,7 +15,7 @@ class FeatureProcessor(DataProcessor):
         :param possible_elements:
         """
         
-        super().__init__(fields = ['formula_by_constraint', 'dopant_concentration', 'input'], **kwargs)
+        super().__init__(fields = ['formula_by_constraint', 'dopant_concentration', 'input', 'metadata'], **kwargs)
         
         self.max_layers = max_layers
         self.possible_elements = possible_elements
@@ -63,7 +63,7 @@ class VolumeFeatureProcessor(DataProcessor):
         :param possible_elements:
         """
         
-        super().__init__(fields = ['formula_by_constraint', 'dopant_concentration', 'input'], **kwargs)
+        super().__init__(fields = ['formula_by_constraint', 'dopant_concentration', 'input', 'metadata'], **kwargs)
         
         self.max_layers = max_layers
         self.possible_elements = possible_elements
