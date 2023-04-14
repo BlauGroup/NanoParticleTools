@@ -444,7 +444,7 @@ def tune_npmc(model_cls,
               save_dir='./',
               wandb_config={},
               use_gpu=True,
-              algo='asha',
+              algo='full',
               num_samples=100):
 
     date = ''.join([
@@ -500,7 +500,7 @@ def tune_npmc(model_cls,
                             local_dir=save_dir,
                             search_alg=algo,
                             name="tune_npmc_bohb")
-    else:
+    elif algo.lower() == 'asha':
         # Default to asha
         scheduler = ASHAScheduler(
             metric =
@@ -518,6 +518,15 @@ def tune_npmc(model_cls,
                             reuse_actors=False,
                             local_dir=save_dir,
                             name="tune_npmc_asha")
+    else:
+        analysis = tune.run(train_fn_with_parameters,
+                            resources_per_trial=resources_per_trial,
+                            config=config,
+                            num_samples=num_samples,
+                            reuse_actors=False,
+                            local_dir=save_dir,
+                            name="tune_npmc_full")
+
 
     print("Best hyperparameters found were: ", analysis.best_config)
 
