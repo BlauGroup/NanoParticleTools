@@ -1,4 +1,4 @@
-from fireworks import Firework, Workflow, FiretaskBase
+from fireworks import Firework, Workflow, FiretaskBase, explicit_serialize
 import json
 import os
 from typing import Sequence, Tuple, Optional, Union, List
@@ -17,11 +17,7 @@ from NanoParticleTools.species_data.species import Dopant
 from NanoParticleTools.inputs.util import get_all_interactions
 import sqlite3
 
-
-def get_npmc_workflow(**kwargs):
-    return Workflow([Firework(NPMCFiretask(**kwargs))])
-
-
+@explicit_serialize
 class NPMCFiretask(FiretaskBase):
     required_params = ['constraints', 'dopant_specifications', "doping_seed"]
 
@@ -185,3 +181,4 @@ class NPMCFiretask(FiretaskBase):
         #     result_docs[i]['trajectory_doc']['metadata'] = metadata
 
         # return result_docs
+
