@@ -4,6 +4,21 @@ from typing import Optional, List, Union
 import numpy as np
 
 
+class ParallelModule(nn.Sequential):
+    """
+    A module that runs multiple modules in parallel and concatenates the output
+    """
+
+    def __init__(self, *args):
+        super(ParallelModule, self).__init__(*args)
+
+    def forward(self, input):
+        output = []
+        for module in self:
+            output.append(module(input))
+        return torch.cat(output, dim=1)
+    
+
 class NonLinearMLP(torch.nn.Module):
 
     def __init__(self,
