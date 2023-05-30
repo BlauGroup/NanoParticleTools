@@ -449,6 +449,109 @@ class WavelengthLabelProcessor(LabelProcessor):
             f"log_constant = {self.log_constant}")
 
 
+class UVVisLabelProcessor(LabelProcessor):
+    """
+    This Label processor returns a spectrum that is binned uniformly with respect to energy (I(E))
+        Args:
+            spectrum_range (Tuple | List, optional): Range over which the spectrum should be
+                cropped. Defaults to (-40000, 20000).
+            output_size (int, optional): Number of bins in the resultant spectra.
+                This quantity will be used as the # of output does in the NN. Defaults to 600.
+            log_constant (float, optional): When applying the log function,
+                we use the form log_10(I+b). Since the intensity is always positive, this function
+                is easily invertible. min_log_val sets the minimum value of the label after
+                applying the log.
+
+                To make sure the values aren't clipped, it is recommended that the smallest b is
+                chosen at least 1 order of magnitude lower than 1/(# avg'd documents).
+
+                Example:
+                    With 16 documents averaged, the lowest (non-zero) observation is 0.0625(1/16),
+                    therefore choose 0.001 as the log_constant. . Defaults to 1e-3.
+            gaussian_filter (float, optional): Standard deviation over which to apply gaussian
+                filtering to smooth the otherwise very peaked spectrum. Defaults to 0.
+    """
+
+    def __init__(self,
+                 in_range: Tuple[float, float] = (-2000, 1000),
+                 in_bins: int = 600,
+                 log_constant: float = 1e-3,
+                 spectrum_ranges: dict = None,
+                 **kwargs):
+        super().__init__(fields=[
+            'output.wavelength_spectrum_x', 'output.wavelength_spectrum_y'
+        ], **kwargs)
+
+        self.in_range = in_range
+        self.in_bins = in_bins
+        self.log_constant = log_constant
+        if spectrum_ranges is None:
+            self.spectrum_ranges = dict(uv=(100, 400),
+                                        uva=(315, 400),
+                                        uvb=(280, 315),
+                                        uvc=(100, 280),
+                                        vis=(380, 750),
+                                        blue=(450, 485),
+                                        green=(500, 565),
+                                        red=(625, 750))
+        else:
+            self.spectrum_ranges = spectrum_ranges
+
+    @property
+    def spectrum_idxs(self):
+        spectrum_idxs = dict()
+        for key, mask in self.masks.items():
+            _range = torch.where(mask)[0]
+            spectrum_idxs[key] = (_range[0].item(), _range[-1].item())
+        return spectrum_idxs
+
+    @property
+    def x(self):
+        dx = (self.in_range[-1] - self.in_range[0]) / self.in_bins
+        return torch.linspace(self.in_range[0] + dx / 2,
+                              self.in_range[-1] - dx / 2, self.in_bins)
+
+    @property
+    def masks(self):
+        return {
+            k: self.get_mask(self.x, _range)
+            for k, _range in self.spectrum_ranges.items()
+        }
+
+    @staticmethod
+    def get_mask(x, range):
+        return torch.logical_and(x < (-range[0]), x > (-range[-1]))
+
+    def process_doc(self, doc: dict) -> torch.Tensor:
+        x = torch.tensor(
+            self.get_item_from_doc(doc, 'output.wavelength_spectrum_x'))
+        spectrum = torch.tensor(
+            self.get_item_from_doc(doc, 'output.wavelength_spectrum_y'))
+        step = x[1] - x[0]
+
+        # Sum up the spectrum for each light type
+        out = dict()
+        for key, _mask in self.masks.items():
+            out[key] = spectrum[_mask].sum().float()
+
+        y = torch.hstack(tuple(out.values()))
+        labels = list(out.keys())
+        return {
+            'intensities': out,
+            'labels': labels,
+            'y': y.unsqueeze(0),
+            'log_y': torch.log10(y + self.log_constant).unsqueeze(0),
+            'log_const': self.log_constant,
+        }
+
+    def __str__(self):
+        return (f"UV-Vis Label Processor - 8 bins, "
+                f"log_constant = {self.log_constant}")
+
+    def __repr__(self):
+        return str(self)
+
+
 class NPMCDataset(Dataset):
     """
     NPMC dataset
