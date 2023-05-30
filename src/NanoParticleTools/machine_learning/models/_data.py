@@ -570,7 +570,7 @@ class NPMCDataset(Dataset):
                  download: bool = False,
                  overwrite: bool = False,
                  use_cache: bool = False,
-                 dataset_size: int = None, 
+                 dataset_size: int = None,
                  use_metadata: bool = False):
         """
         :param feature_processor:
@@ -667,9 +667,9 @@ class NPMCDataset(Dataset):
         """
         feature_processor_match = self._check_hash(
             'feature_processor',
-            self.get_hash(self.feature_processor.__dict__))
+            self.get_hash(self.feature_processor.as_dict()))
         label_processor_match = self._check_hash(
-            'label_processor', self.get_hash(self.label_processor.__dict__))
+            'label_processor', self.get_hash(self.label_processor.as_dict()))
 
         return all(feature_processor_match, label_processor_match)
 
@@ -693,7 +693,7 @@ class NPMCDataset(Dataset):
     def download(self):
         required_fields = self.feature_processor.required_fields \
             + self.label_processor.required_fields
-            
+
         if self.use_metadata:
             required_fields += ['metadata']
 

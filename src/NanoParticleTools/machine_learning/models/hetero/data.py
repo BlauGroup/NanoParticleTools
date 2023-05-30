@@ -110,7 +110,7 @@ class HeteroFeatureProcessor(FeatureProcessor):
     @property
     def is_graph(self):
         return True
-    
+        
     @property
     def data_cls(self):
         return HeteroData
