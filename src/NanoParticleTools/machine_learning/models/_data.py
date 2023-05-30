@@ -5,7 +5,7 @@ from maggma.core import Store
 import torch
 import json
 import numpy as np
-from monty.json import MontyDecoder
+from monty.json import MontyDecoder, MSONable
 import os
 import pytorch_lightning as pl
 from NanoParticleTools.inputs.nanoparticle import NanoParticleConstraint, SphericalConstraint
@@ -17,7 +17,7 @@ import warnings
 from abc import ABC, abstractmethod
 
 
-class DataProcessor(ABC):
+class DataProcessor(ABC, MSONable):
     """
     Template for a data processor. The data processor allows modularity in definitions
     of how data is to be converted from a dictionary (typically a fireworks output document)
@@ -75,7 +75,51 @@ class DataProcessor(ABC):
         return Data
 
 
-class EnergyLabelProcessor(DataProcessor):
+class FeatureProcessor(DataProcessor):
+
+    def example(self):
+        n_elements = len(self.possible_elements)
+        dopant_specifications = [
+            (0, 0.2,
+             self.possible_elements[torch.randint(0, n_elements,
+                                                  (1, )).item()], 'Y'),
+            (0, 0.1,
+             self.possible_elements[torch.randint(0, n_elements,
+                                                  (1, )).item()], 'Y'),
+            (1, 0.1,
+             self.possible_elements[torch.randint(0, n_elements,
+                                                  (1, )).item()], 'Y')
+        ]
+        dopant_concentration = []
+        for layer_idx, dopant_conc, dopant, _ in dopant_specifications:
+            while layer_idx + 1 > len(dopant_concentration):
+                dopant_concentration.append({})
+            dopant_concentration[layer_idx][dopant] = dopant_conc
+        doc = {
+            'dopant_concentration': dopant_concentration,
+            'input': {
+                'constraints':
+                [SphericalConstraint(40),
+                 SphericalConstraint(65)],
+                'dopant_specifications': dopant_specifications
+            }
+        }
+        return self.process_doc(doc)
+
+
+class LabelProcessor(DataProcessor):
+
+    def example(self):
+        doc = {
+            'output': {
+                'wavelength_spectrum_x': list(self.x),
+                'wavelength_spectrum_y': list(torch.rand_like(self.x))
+            }
+        }
+        return self.process_doc(doc)
+
+
+class EnergyLabelProcessor(LabelProcessor):
     """
     This Label processor returns a spectrum that is binned uniformly with respect to energy (I(E))
         Args:
@@ -204,7 +248,7 @@ class EnergyLabelProcessor(DataProcessor):
                 " log_constant = {self.log_constant}")
 
 
-class TotalEnergyLabelProcessor(DataProcessor):
+class TotalEnergyLabelProcessor(LabelProcessor):
     """
     This Label processor returns a spectrum that is binned uniformly with respect to energy (I(E))
         Args:
@@ -278,12 +322,12 @@ class TotalEnergyLabelProcessor(DataProcessor):
         }
 
     def __str__(self):
-        return (f"Energy Label Processor - 1 bins, x_min ="
-                " {self.spectrum_range[0]}, x_max = {self.spectrum_range[1]},"
-                " log_constant = {self.log_constant}")
+        return ("Energy Label Processor - 1 bins, x_min ="
+                f" {self.spectrum_range[0]}, x_max = {self.spectrum_range[1]},"
+                f" log_constant = {self.log_constant}")
 
 
-class WavelengthLabelProcessor(DataProcessor):
+class WavelengthLabelProcessor(LabelProcessor):
     r"""
     This Label processor returns a spectrum that is binned uniformly with respect to
     wavelength $I(\lambda{})$
@@ -319,8 +363,7 @@ class WavelengthLabelProcessor(DataProcessor):
         super().__init__(fields=[
             'output.wavelength_spectrum_x', 'output.wavelength_spectrum_y',
             'output.summary', 'overall_dopant_concentration'
-        ],
-                         **kwargs)
+        ], **kwargs)
 
         self.spectrum_range = spectrum_range
         self.output_size = output_size

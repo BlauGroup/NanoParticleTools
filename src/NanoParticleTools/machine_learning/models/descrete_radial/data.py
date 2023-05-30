@@ -1,5 +1,5 @@
 from ....inputs.nanoparticle import NanoParticleConstraint, SphericalConstraint
-from .._data import DataProcessor
+from .._data import FeatureProcessor
 
 from typing import List, Union, Tuple, Optional, Any
 import torch
@@ -33,7 +33,7 @@ class CNNData(Data):
             return 0
         
 
-class GraphFeatureProcessor(DataProcessor):
+class GraphFeatureProcessor(FeatureProcessor):
     def __init__(self,
                  possible_elements: List[str] = ['Yb', 'Er', 'Nd'],
                  resolution: Optional[float] = 0.1,
@@ -162,7 +162,7 @@ class GraphFeatureProcessor(DataProcessor):
         return f"Discrete Graph Feature Processor - resolution = {self.resolution}A"
 
 
-class FeatureProcessor(DataProcessor):
+class FeatureProcessor(FeatureProcessor):
     def __init__(self,
                  possible_elements: List[str] = ['Yb', 'Er', 'Nd'],
                  resolution: Optional[float] = 0.1,
@@ -260,14 +260,19 @@ class FeatureProcessor(DataProcessor):
     def process_doc(self,
                     doc: dict) -> dict:
         constraints = doc['input']['constraints']
-        dopant_specifications = doc['input']['dopant_specifications']
+        dopant_concentration = doc['dopant_concentration']
         
         try:
             constraints = [SphericalConstraint.from_dict(c) for c in constraints]
         except:
             pass
+        _dopant_specifications = [
+            (layer_idx, conc, el, None)
+            for layer_idx, dopants in enumerate(dopant_concentration)
+            for el, conc in dopants.items() if el in self.possible_elements
+        ]
         
-        return self.get_data_graph(constraints, dopant_specifications)
+        return self.get_data_graph(constraints, _dopant_specifications)
 
     def volume(self,
                radius: Union[List, int, torch.Tensor], 

@@ -1,48 +1,55 @@
-from .._data import DataProcessor
+from NanoParticleTools.machine_learning.models._data import FeatureProcessor as BaseFeatureProcessor
 from typing import List
 from torch_geometric.data.data import Data
 
 import numpy as np
 import torch
 
-class FeatureProcessor(DataProcessor):
+
+class FeatureProcessor(BaseFeatureProcessor):
+
     def __init__(self,
                  max_layers: int = 4,
                  possible_elements: List[str] = ['Yb', 'Er', 'Nd'],
                  **kwargs):
         """
-        :param max_layers: 
+        :param max_layers:
         :param possible_elements:
         """
-        
-        super().__init__(fields = ['formula_by_constraint', 'dopant_concentration', 'input', 'metadata'], **kwargs)
-        
+
+        super().__init__(fields=[
+            'formula_by_constraint', 'dopant_concentration', 'input',
+            'metadata'
+        ], **kwargs)
+
         self.max_layers = max_layers
         self.possible_elements = possible_elements
-        
-    def process_doc(self, 
-                    doc: dict) -> torch.Tensor:
+
+    def process_doc(self, doc: dict) -> torch.Tensor:
         constraints = self.get_item_from_doc(doc, 'input.constraints')
-        dopant_concentration = self.get_item_from_doc(doc, 'dopant_concentration')
-        
+        dopant_concentration = self.get_item_from_doc(doc,
+                                                      'dopant_concentration')
+
         # Construct the feature array
         feature = []
         for layer in range(self.max_layers):
             _layer_feature = []
             try:
                 _layer_feature.append(constraints[layer]['radius'])
-            except:
+            except IndexError:
                 _layer_feature.append(0)
             for el in self.possible_elements:
                 try:
-                    _layer_feature.append(dopant_concentration[layer][el]*100)
-                except:
+                    _layer_feature.append(dopant_concentration[layer][el] *
+                                          100)
+                except KeyError:
                     _layer_feature.append(0)
             feature.append(_layer_feature)
         return {'x': torch.tensor(np.hstack(feature)).float()}
 
     def __str__(self):
-        return f"Feature Processor - {self.max_layers} x [radius, x_{', x_'.join(self.possible_elements)}]"
+        return (f"Feature Processor - {self.max_layers}"
+                f"x [radius, x_{', x_'.join(self.possible_elements)}]")
 
     @property
     def is_graph(self):
@@ -53,26 +60,31 @@ class FeatureProcessor(DataProcessor):
         return Data
 
 
-class VolumeFeatureProcessor(DataProcessor):
+class VolumeFeatureProcessor(BaseFeatureProcessor):
+
     def __init__(self,
                  max_layers: int = 4,
                  possible_elements: List[str] = ['Yb', 'Er', 'Nd'],
                  **kwargs):
         """
-        :param max_layers: 
-        :param possible_elements:
+        :param max_layers: Maximum number of layers to featurize.
+        :param possible_elements: The elements which are present in the
+            lanthanide nanoparticle dataset.
         """
-        
-        super().__init__(fields = ['formula_by_constraint', 'dopant_concentration', 'input', 'metadata'], **kwargs)
-        
+
+        super().__init__(fields=[
+            'formula_by_constraint', 'dopant_concentration', 'input',
+            'metadata'
+        ], **kwargs)
+
         self.max_layers = max_layers
         self.possible_elements = possible_elements
 
-    def process_doc(self, 
-                    doc: dict) -> torch.Tensor:
+    def process_doc(self, doc: dict) -> torch.Tensor:
         constraints = self.get_item_from_doc(doc, 'input.constraints')
-        dopant_concentration = self.get_item_from_doc(doc, 'dopant_concentration')
-        
+        dopant_concentration = self.get_item_from_doc(doc,
+                                                      'dopant_concentration')
+
         # Construct the feature array
         feature = []
         r_lower_bound = 0
@@ -83,24 +95,29 @@ class VolumeFeatureProcessor(DataProcessor):
                     radius = constraints[layer]['radius']
                 else:
                     radius = constraints[layer].radius
-                
-                volume = 4/3*np.pi*(radius**3-r_lower_bound**3)
+
+                volume = 4 / 3 * np.pi * (radius**3 - r_lower_bound**3)
                 r_lower_bound = radius
                 _layer_feature.append(radius)
-                _layer_feature.append(volume/1000000)
-            except:
+                _layer_feature.append(volume / 1000000)
+            except IndexError:
+                # This layer does not exist, its radius and volume are 0
                 _layer_feature.append(0)
                 _layer_feature.append(0)
             for el in self.possible_elements:
                 try:
-                    _layer_feature.append(dopant_concentration[layer][el]*100)
-                except:
+                    _layer_feature.append(dopant_concentration[layer][el] *
+                                          100)
+                except (KeyError, IndexError):
+                    # This element is not present in this layer or this
+                    # layer does not exist, its concentration is therefore 0
                     _layer_feature.append(0)
             feature.append(_layer_feature)
         return {'x': torch.tensor(np.hstack(feature)).unsqueeze(0).float()}
-    
+
     def __str__(self):
-        return f"Feature Processor - {self.max_layers} x [radius, volume, x_{', x_'.join(self.possible_elements)}]"
+        return (f"Feature Processor - {self.max_layers}"
+                f" x [radius, volume, x_{', x_'.join(self.possible_elements)}]")
 
     @property
     def is_graph(self):

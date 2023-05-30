@@ -1,5 +1,5 @@
 from NanoParticleTools.inputs.nanoparticle import NanoParticleConstraint, SphericalConstraint
-from NanoParticleTools.machine_learning.models._data import DataProcessor
+from NanoParticleTools.machine_learning.models._data import FeatureProcessor
 
 from monty.serialization import MontyDecoder
 from typing import List, Tuple, Any, Dict
@@ -38,7 +38,7 @@ class InteractionData(Data):
             return 0
 
 
-class GraphFeatureProcessor(DataProcessor):
+class GraphFeatureProcessor(FeatureProcessor):
     """_summary_
 
     Args:
@@ -155,12 +155,6 @@ class GraphFeatureProcessor(DataProcessor):
 
         Two interactions are only connected if they share a common dopant(layer dependent)
         """
-        # Slower python based version
-        # edge_index = []
-        # for _i, (i, j) in enumerate(node_dopant_ids):
-        #     for _j, (k, l) in enumerate(node_dopant_ids):
-        #         if i == k or i == l or j == k or j == l:
-        #             edge_index.append([_i, _j])
 
         x = torch.arange(0, num_nodes)
         i, j = torch.cartesian_prod(x, x).T
@@ -193,13 +187,19 @@ class GraphFeatureProcessor(DataProcessor):
 
     def process_doc(self, doc: dict) -> dict:
         constraints = doc['input']['constraints']
-        dopant_specifications = doc['input']['dopant_specifications']
+        dopant_concentration = doc['dopant_concentration']
 
         if not isinstance(constraints[0], NanoParticleConstraint):
             decoder = MontyDecoder()
             constraints = decoder.process_decoded(constraints)
 
-        return self.get_data_graph(constraints, dopant_specifications)
+        _dopant_specifications = [
+            (layer_idx, conc, el, None)
+            for layer_idx, dopants in enumerate(dopant_concentration)
+            for el, conc in dopants.items() if el in self.possible_elements
+        ]
+
+        return self.get_data_graph(constraints, _dopant_specifications)
 
     @property
     def is_graph(self):
@@ -214,29 +214,22 @@ class CompleteGraphFeatureProcessor(GraphFeatureProcessor):
 
     def process_doc(self, doc: dict) -> dict:
         constraints = doc['input']['constraints']
-        dopant_specifications = doc['input']['dopant_specifications']
+        dopant_concentration = doc['dopant_concentration']
 
         if not isinstance(constraints[0], NanoParticleConstraint):
             decoder = MontyDecoder()
             constraints = decoder.process_decoded(constraints)
 
         # Fill in the empty/missing dopants
-        _dopant_dict = {
-            i: {el: None
-                for el in self.possible_elements}
-            for i, _ in enumerate(constraints)
-        }
-        for spec in dopant_specifications:
-            _dopant_dict[spec[0]][spec[2]] = spec
+        for i, _ in enumerate(constraints):
+            for el in self.possible_elements:
+                if el not in dopant_concentration[i]:
+                    dopant_concentration[i][el] = 0
 
-        for layer_i in _dopant_dict:
-            for el in _dopant_dict[layer_i]:
-                if _dopant_dict[layer_i][el] is None:
-                    _dopant_dict[layer_i][el] = (layer_i, 0, el, 'Y')
-
-        dopant_specifications = [
-            _dopant_dict[k1][k2] for k1 in _dopant_dict.keys()
-            for k2 in _dopant_dict[k1].keys()
+        _dopant_specifications = [
+            (layer_idx, conc, el, None)
+            for layer_idx, dopants in enumerate(dopant_concentration)
+            for el, conc in dopants.items() if el in self.possible_elements
         ]
 
-        return self.get_data_graph(constraints, dopant_specifications)
+        return self.get_data_graph(constraints, _dopant_specifications)
