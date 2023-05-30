@@ -812,7 +812,8 @@ class NPMCDataModule(pl.LightningDataModule):
                  testing_size: Optional[int] = None,
                  loader_workers: Optional[int] = 0,
                  use_cache: Optional[bool] = False,
-                 calc_mean: bool = False):
+                 calc_mean: bool = False,
+                 split_seed: int = None):
         super().__init__()
 
         # We want to prepare the data on each node. That way each has access to the original data
@@ -837,6 +838,10 @@ class NPMCDataModule(pl.LightningDataModule):
         self.loader_workers = loader_workers
         self.use_cache = use_cache
         self.calc_mean = calc_mean
+        if split_seed is None:
+            # If no split seed is provided, generate one
+            split_seed = np.random.randint(0, 100000)
+        self.split_seed = split_seed
         # Initialize class variables that we will use later
         self.spectra_mean = None
         self.spectra_std = None
@@ -897,8 +902,7 @@ class NPMCDataModule(pl.LightningDataModule):
 
             self.npmc_train, self.npmc_val = torch.utils.data.random_split(
                 training_dataset, [train_size, validation_size],
-                generator=torch.Generator().manual_seed(
-                    torch.default_generator.seed()))
+                generator=torch.Generator().manual_seed(self.split_seed))
             self.npmc_test = testing_dataset
         else:
             # We don't have a testing dataset explicitly defined. We will split the training dataset
@@ -910,8 +914,7 @@ class NPMCDataModule(pl.LightningDataModule):
 
             self.npmc_train, self.npmc_val, self.npmc_test = torch.utils.data.random_split(
                 training_dataset, [train_size, validation_size, test_size],
-                generator=torch.Generator().manual_seed(
-                    torch.default_generator.seed()))
+                generator=torch.Generator().manual_seed(self.split_seed))
 
         if self.calc_mean:
             spectra = []
