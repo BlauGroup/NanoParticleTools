@@ -1,5 +1,5 @@
 from NanoParticleTools.inputs.nanoparticle import NanoParticleConstraint, SphericalConstraint
-from NanoParticleTools.machine_learning.models._data import FeatureProcessor
+from NanoParticleTools.machine_learning.data.processors import FeatureProcessor
 
 from monty.serialization import MontyDecoder
 from typing import List, Tuple, Any, Dict

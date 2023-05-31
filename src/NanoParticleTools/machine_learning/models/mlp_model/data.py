@@ -1,4 +1,4 @@
-from NanoParticleTools.machine_learning.models._data import FeatureProcessor as BaseFeatureProcessor
+from NanoParticleTools.machine_learning.data.processors import FeatureProcessor as BaseFeatureProcessor
 from typing import List
 from torch_geometric.data.data import Data
 

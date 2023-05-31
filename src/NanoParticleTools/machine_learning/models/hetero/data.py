@@ -1,4 +1,4 @@
-from NanoParticleTools.machine_learning.models._data import FeatureProcessor
+from NanoParticleTools.machine_learning.data.processors import FeatureProcessor
 from NanoParticleTools.inputs.nanoparticle import SphericalConstraint, NanoParticleConstraint
 import torch
 from itertools import product

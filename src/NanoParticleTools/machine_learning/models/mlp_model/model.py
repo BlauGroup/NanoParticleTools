@@ -5,27 +5,29 @@ import pytorch_lightning as pl
 import torch.nn.functional as F
 from typing import Callable, Optional, Union, List
 import numpy as np
-from .._model import SpectrumModelBase
+from ...core.model import SpectrumModelBase
+
 
 class MLPSpectrumModel(SpectrumModelBase):
-    def __init__(self, 
+
+    def __init__(self,
                  n_input_nodes: int,
                  n_output_nodes: Optional[int] = 600,
                  dopants: Union[list, dict] = ['Yb', 'Er', 'Nd'],
                  nn_layers: Optional[List[int]] = [128],
-                 dropout_probability: float = 0, 
+                 dropout_probability: float = 0,
                  **kwargs):
         super().__init__(**kwargs)
 
         self.dropout_probability = dropout_probability
 
         if isinstance(dopants, list):
-            self.dopant_map = {key:i for i, key in enumerate(dopants)}
+            self.dopant_map = {key: i for i, key in enumerate(dopants)}
         elif isinstance(dopants, dict):
             self.dopant_map = dopants
         else:
             raise ValueError('Expected dopants to be of type list or dict')
-        
+
         self.dopants = dopants
 
         self.n_input_nodes = n_input_nodes
@@ -45,13 +47,13 @@ class MLPSpectrumModel(SpectrumModelBase):
         self.nn = nn.Sequential(*layers)
 
         self.save_hyperparameters()
-    
+
     def _get_layer(self, n_input_nodes, n_output_nodes):
         _layers = []
         _layers.append(nn.Linear(n_input_nodes, n_output_nodes))
         _layers.append(nn.ReLU())
         if self.dropout_probability > 0:
-            _layers.append(nn.Dropout(self.dropout_probability))       
+            _layers.append(nn.Dropout(self.dropout_probability))
         return _layers
 
     def describe(self):
@@ -65,7 +67,7 @@ class MLPSpectrumModel(SpectrumModelBase):
             descriptors.append('sgd')
         else:
             descriptors.append('adam')
-        
+
         # Number of nodes/layers
         nodes = []
         nodes.append(self.n_input_nodes)
@@ -76,7 +78,7 @@ class MLPSpectrumModel(SpectrumModelBase):
         descriptors.append(f'lr-{self.learning_rate}')
         descriptors.append(f'dropout-{self.dropout_probability:.2f}')
         descriptors.append(f'l2_reg-{self.l2_regularization_weight:.2E}')
-        
+
         return '_'.join(descriptors)
 
     def forward(self, x, **kwargs):

@@ -17,7 +17,7 @@ class ParallelModule(nn.Sequential):
         for module in self:
             output.append(module(input))
         return torch.cat(output, dim=1)
-    
+
 
 class NonLinearMLP(torch.nn.Module):
 
@@ -117,72 +117,3 @@ class BatchScaling(nn.Module):
                     ) * self.running_mean + self.momentum * input.mean(0)
 
         return input / (self.running_mean + self.eps)
-
-
-class BesselBasis(torch.nn.Module):
-    """
-    Adapted from MACE Implementation
-
-    ###########################################################################################
-    # Radial basis and cutoff
-    # Authors: Ilyes Batatia, Gregor Simm
-    # This program is distributed under the MIT License (see MIT.md)
-    ###########################################################################################
-
-    Klicpera, J.; Groß, J.; Günnemann, S. Directional Message Passing for Molecular Graphs;
-    ICLR 2020. Equation (7)
-    """
-
-    def __init__(self, r_max: float, num_basis=8, trainable=False):
-        super().__init__()
-
-        bessel_weights = (np.pi / r_max * torch.linspace(
-            start=1.0,
-            end=num_basis,
-            steps=num_basis,
-            dtype=torch.get_default_dtype(),
-        ))
-        if trainable:
-            self.bessel_weights = torch.nn.Parameter(bessel_weights)
-        else:
-            self.register_buffer("bessel_weights", bessel_weights)
-
-        self.register_buffer(
-            "r_max", torch.tensor(r_max, dtype=torch.get_default_dtype()))
-        self.register_buffer(
-            "prefactor",
-            torch.tensor(np.sqrt(2.0 / r_max),
-                         dtype=torch.get_default_dtype()),
-        )
-
-    def forward(
-        self,
-        x: torch.Tensor,
-    ) -> torch.Tensor:  # [..., 1]
-        x = x + 0.01  # Shifted to ensure it is not inf at 0
-        numerator = torch.sin(self.bessel_weights * x)  # [..., num_basis]
-        return self.prefactor * (numerator / (x))
-
-    def __repr__(self):
-        return (
-            f"{self.__class__.__name__}(r_max={self.r_max}, num_basis={len(self.bessel_weights)}, "
-            f"trainable={self.bessel_weights.requires_grad})")
-
-
-class GeometricEmbedding(nn.Module):
-    r"""
-    Here, we treat the system as
-
-    It is possible to extend the Bessel Basis from 1D to 2D or 3D. In the DimeNet paper,
-    they obtain the 1D Bessel Basis from the simplfication of l=0, m=0. The 2D basis they
-    only propose restricts m=0. Therefore we can similarly get a 3D basis function without
-    any restrictions on l and m (in $\mathbf{\gamma}^l_m$)
-    """
-
-    def __init__(self, r_max, embed_dim):
-        super().__init__()
-        self.bessel_fn = BesselBasis(r_max, embed_dim)
-
-    def forward(self, r):
-        p = self.bessel_fn(r.reshape(-1, 1)).reshape(*r.shape, -1)
-        return p[:, 1] - p[:, 0]

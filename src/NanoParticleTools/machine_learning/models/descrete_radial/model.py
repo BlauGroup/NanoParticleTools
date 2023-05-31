@@ -5,7 +5,7 @@ from typing import Callable, Union, Optional, List
 import pytorch_lightning as pl
 from torch_geometric import nn as pyg_nn
 from torch_scatter.scatter import scatter
-from .._model import SpectrumModelBase
+from NanoParticleTools.machine_learning.core.model import SpectrumModelBase
 
 
 class CNNModel(SpectrumModelBase):

@@ -1,4 +1,4 @@
-from NanoParticleTools.machine_learning.models._data import DataProcessor
+from NanoParticleTools.machine_learning.data.processors import DataProcessor
 from NanoParticleTools.inputs.nanoparticle import SphericalConstraint
 from torch_geometric.data.data import Data
 import torch
