@@ -2,12 +2,16 @@ import torch
 from torch import nn
 import pytorch_lightning as pl
 import torch.nn.functional as F
-from typing import Callable, Optional, Union, List
+from typing import Any, Callable, Optional, Union, List
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch_geometric.data import Data, Batch
 
 
 class SpectrumModelBase(pl.LightningModule):
+    """
+    This is the base class for all spectrum models. It cannot be used directly,
+    since it does not implement the `forward` method.
+    """
     def __init__(self,
                  learning_rate: Optional[float] = 1e-5,
                  l2_regularization_weight: float = 0,
@@ -16,7 +20,6 @@ class SpectrumModelBase(pl.LightningModule):
                  loss_function: Optional[Callable[[List, List], float]] = F.mse_loss,
                  additional_metadata: Optional[dict] = {},
                  optimizer_type: Optional[str] = None,
-                 augment_loss: Optional[bool] = False,
                  **kwargs):
 
         super().__init__()
@@ -31,7 +34,6 @@ class SpectrumModelBase(pl.LightningModule):
         self.lr_scheduler = lr_scheduler
         self.loss_function = loss_function
         self.additional_metadata = additional_metadata
-        self.augment_loss = augment_loss
 
         self.save_hyperparameters()
 

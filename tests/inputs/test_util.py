@@ -5,8 +5,8 @@ from NanoParticleTools.inputs.util import (
     get_non_radiative_interactions, get_radiative_interactions,
     get_magnetic_dipole_interactions, get_energy_transfer_interactions,
     get_all_interactions, get_sites, get_species, get_formula_by_constraint)
-from NanoParticleTools.inputs.spectral_kinetics import SpectralKinetics
-from NanoParticleTools.inputs.nanoparticle import (DopedNanoparticle,
+from NanoParticleTools.inputs import (SpectralKinetics,
+                                                   DopedNanoparticle,
                                                    SphericalConstraint)
 
 from NanoParticleTools.species_data.species import Dopant

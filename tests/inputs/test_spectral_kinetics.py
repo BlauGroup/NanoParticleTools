@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 
 import numpy as np
-from NanoParticleTools.inputs.spectral_kinetics import SpectralKinetics
+from NanoParticleTools.inputs import SpectralKinetics
 
 from NanoParticleTools.species_data.species import Dopant
 

@@ -2,7 +2,7 @@ from typing import Union, Dict, List, Tuple, Optional
 import torch
 import numpy as np
 from monty.json import MSONable
-from NanoParticleTools.inputs.nanoparticle import NanoParticleConstraint, SphericalConstraint
+from NanoParticleTools.inputs import NanoParticleConstraint, SphericalConstraint
 from scipy.ndimage import gaussian_filter1d
 from torch_geometric.data import Data
 import warnings
@@ -102,16 +102,20 @@ class FeatureProcessor(DataProcessor):
 class LabelProcessor(DataProcessor):
 
     def example(self):
+        x = torch.linspace(*self.spectrum_range, 600)
+        y = torch.nn.functional.relu(torch.rand_like(x))
         doc = {
             'output': {
-                'wavelength_spectrum_x': list(self.x),
-                'wavelength_spectrum_y': list(torch.rand_like(self.x))
+                'wavelength_spectrum_x': list(x),
+                'wavelength_spectrum_y': list(y),
+                'energy_spectrum_x': list(x),
+                'energy_spectrum_y': list(y),
             }
         }
         return self.process_doc(doc)
 
 
-class EnergyLabelProcessor(LabelProcessor):
+class EnergySpectrumLabelProcessor(LabelProcessor):
     """
     This Label processor returns a spectrum that is binned uniformly with respect to energy (I(E))
         Args:
@@ -227,7 +231,6 @@ class EnergyLabelProcessor(LabelProcessor):
             'y': y.float().unsqueeze(0),
             'log_y': torch.log10(y + self.log_constant).float().unsqueeze(0),
             'log_const': self.log_constant,
-            'idx_zero': idx_zero,
             'n_absorbed': n_photons_absorbed,
             'n_emitted': n_photons_emitted,
             'e_absorbed': e_absorbed,
@@ -297,20 +300,13 @@ class TotalEnergyLabelProcessor(LabelProcessor):
             x = x[start:(end + 1)]
             y = y[start:(end + 1)]
 
-        # Keep track of where the spectrum changes from
-        # emission to absorption.
-        idx_zero = torch.tensor(
-            int(np.floor(0 - self.spectrum_range[0]) / step))
-
         y_sum = y.sum()
 
         return {
-            'spectra_x': x.unsqueeze(0),
             'y': y_sum.float().reshape(1, 1),
             'log_y':
             torch.log10(y_sum + self.log_constant).float().reshape(1, 1),
-            'log_const': self.log_constant,
-            'idx_zero': idx_zero
+            'log_const': self.log_constant
         }
 
     def __str__(self):
@@ -319,7 +315,7 @@ class TotalEnergyLabelProcessor(LabelProcessor):
                 f" log_constant = {self.log_constant}")
 
 
-class WavelengthLabelProcessor(LabelProcessor):
+class WavelengthSpectrumLabelProcessor(LabelProcessor):
     r"""
     This Label processor returns a spectrum that is binned uniformly with respect to
     wavelength $I(\lambda{})$
@@ -427,7 +423,6 @@ class WavelengthLabelProcessor(LabelProcessor):
             'y': y.float().unsqueeze(0),
             'log_y': torch.log10(y + self.log_constant).float().unsqueeze(0),
             'log_const': self.log_constant,
-            'idx_zero': idx_zero,
             'n_absorbed': n_photons_absorbed,
             'n_emitted': n_photons_emitted,
             'e_absorbed': e_absorbed,
@@ -441,7 +436,7 @@ class WavelengthLabelProcessor(LabelProcessor):
             f"log_constant = {self.log_constant}")
 
 
-class UVVisLabelProcessor(LabelProcessor):
+class SummedWavelengthRangeLabelProcessor(LabelProcessor):
     """
     This Label processor returns a spectrum that is binned uniformly with respect to energy (I(E))
         Args:
@@ -488,6 +483,19 @@ class UVVisLabelProcessor(LabelProcessor):
                                         red=(625, 750))
         else:
             self.spectrum_ranges = spectrum_ranges
+
+    def example(self):
+        x = torch.linspace(-2000, 1000, 600)
+        y = torch.nn.functional.relu(torch.rand_like(x))
+        doc = {
+            'output': {
+                'wavelength_spectrum_x': list(x),
+                'wavelength_spectrum_y': list(y),
+                'energy_spectrum_x': list(x),
+                'energy_spectrum_y': list(y),
+            }
+        }
+        return self.process_doc(doc)
 
     @property
     def spectrum_idxs(self):

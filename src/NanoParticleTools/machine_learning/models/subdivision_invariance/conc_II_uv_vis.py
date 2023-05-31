@@ -3,9 +3,9 @@ from NanoParticleTools.machine_learning.models.subdivision_invariance.conc_inter
 from typing import Optional
 from torch import nn
 import torch
-from NanoParticleTools.machine_learning.core.model import SpectrumModelBase
+from NanoParticleTools.machine_learning.core import SpectrumModelBase
 import torch_geometric as pyg
-from NanoParticleTools.machine_learning.modules.core import ParallelModule
+from NanoParticleTools.machine_learning.modules import ParallelModule
 
 
 class SubdivisionInvariantModel(SpectrumModelBase):

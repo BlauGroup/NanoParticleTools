@@ -9,9 +9,8 @@ from NanoParticleTools.analysis import SimulationReplayer
 from NanoParticleTools.core import (NPMCInput, NPMCRunner,
                                     create_interupt_state_sql,
                                     create_interupt_cutoff_sql)
-from NanoParticleTools.inputs.nanoparticle import (DopedNanoparticle,
-                                                   NanoParticleConstraint)
-from NanoParticleTools.inputs.spectral_kinetics import SpectralKinetics
+from NanoParticleTools.inputs import (SpectralKinetics, DopedNanoparticle,
+                                      NanoParticleConstraint)
 from NanoParticleTools.species_data.species import Dopant
 from NanoParticleTools.inputs.util import get_all_interactions
 import sqlite3

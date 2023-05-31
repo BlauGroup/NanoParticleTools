@@ -1,5 +1,5 @@
 from NanoParticleTools.machine_learning.data.processors import FeatureProcessor
-from NanoParticleTools.inputs.nanoparticle import SphericalConstraint, NanoParticleConstraint
+from NanoParticleTools.inputs import SphericalConstraint, NanoParticleConstraint
 import torch
 from itertools import product
 from monty.serialization import MontyDecoder

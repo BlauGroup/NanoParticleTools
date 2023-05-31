@@ -5,7 +5,7 @@ from typing import Callable, Union, Optional, List
 import pytorch_lightning as pl
 from torch_geometric import nn as pyg_nn
 from torch_scatter.scatter import scatter
-from NanoParticleTools.machine_learning.core.model import SpectrumModelBase
+from NanoParticleTools.machine_learning.core import SpectrumModelBase
 
 
 class CNNModel(SpectrumModelBase):
@@ -133,7 +133,8 @@ class DiscreteGraphModel(SpectrumModelBase):
             mlp_modules.append(nn.Dropout())
             mlp_modules.append(nn.Linear(*mlp_sizes[i:i + 2]))
             mlp_modules.append(activation_module(inplace=True))
-        mlp_modules = mlp_modules[:-1]  # Exclude the last activation, since this will inhibit learning
+        mlp_modules = mlp_modules[:
+                                  -1]  # Exclude the last activation, since this will inhibit learning
 
         ## Initialize the weights to the linear layers according to Xavier Uniform
         for lin in mlp_modules:

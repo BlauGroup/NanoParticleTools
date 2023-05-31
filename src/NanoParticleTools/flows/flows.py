@@ -3,7 +3,7 @@ from typing import Optional, Sequence, Tuple, Union, Dict
 from jobflow import Flow
 
 from NanoParticleTools.flows.jobs import npmc_job
-from NanoParticleTools.inputs.nanoparticle import NanoParticleConstraint
+from NanoParticleTools.inputs import NanoParticleConstraint
 
 
 def get_npmc_flow(constraints: Sequence[NanoParticleConstraint],

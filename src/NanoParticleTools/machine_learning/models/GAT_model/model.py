@@ -4,7 +4,7 @@ from torch import nn
 from torch_geometric import nn as pyg_nn
 import pytorch_lightning as pl
 
-from NanoParticleTools.machine_learning.core.model import SpectrumModelBase
+from NanoParticleTools.machine_learning.core import SpectrumModelBase
 from NanoParticleTools.machine_learning.models.mlp_model.model import MLPSpectrumModel
 from typing import Optional, Callable
 from torch_scatter.scatter import scatter

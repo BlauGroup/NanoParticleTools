@@ -1,4 +1,4 @@
-from NanoParticleTools.inputs.nanoparticle import NanoParticleConstraint, SphericalConstraint
+from NanoParticleTools.inputs import NanoParticleConstraint, SphericalConstraint
 from NanoParticleTools.machine_learning.data.processors import FeatureProcessor
 
 from typing import List, Union, Tuple, Optional, Any

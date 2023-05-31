@@ -1,5 +1,5 @@
-from NanoParticleTools.machine_learning.core.model import SpectrumModelBase
-from NanoParticleTools.machine_learning.modules.layer_interaction import InteractionConv
+from NanoParticleTools.machine_learning.core import SpectrumModelBase
+from NanoParticleTools.machine_learning.modules import InteractionConv
 from torch import nn
 import torch
 

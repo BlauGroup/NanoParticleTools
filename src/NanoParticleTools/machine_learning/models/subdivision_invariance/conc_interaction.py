@@ -1,10 +1,9 @@
 from typing import Optional
 from torch import nn
 import torch
-from NanoParticleTools.machine_learning.modules.core import BatchScaling
-from NanoParticleTools.machine_learning.modules.film import FiLMLayer
-from NanoParticleTools.machine_learning.modules.layer_interaction import InteractionBlock
-from NanoParticleTools.machine_learning.core.model import SpectrumModelBase
+
+from NanoParticleTools.machine_learning.modules import (InteractionBlock, BatchScaling, FiLMLayer)
+from NanoParticleTools.machine_learning.core import SpectrumModelBase
 import torch_geometric as pyg
 
 

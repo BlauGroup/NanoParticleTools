@@ -2,8 +2,7 @@ from functools import lru_cache
 
 import numpy as np
 
-from NanoParticleTools.inputs.spectral_kinetics import SpectralKinetics
-from NanoParticleTools.inputs.nanoparticle import DopedNanoparticle
+from NanoParticleTools.inputs import (DopedNanoparticle, SpectralKinetics)
 from NanoParticleTools.species_data.species import Dopant
 from pymatgen.core import Composition
 from collections import Counter
