@@ -17,6 +17,11 @@ setup(name='NanoParticleTools',
           "jobflow",
           "atomate2",
           "maggma",
-          "pytest"
+          "pytest",
+          "torch",
+          "pytorch-lightning",
+          "bayesian-optimization",
+          "ray",
+          "wandb",
       ]
       )

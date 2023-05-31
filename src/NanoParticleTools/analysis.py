@@ -287,7 +287,7 @@ class SimulationReplayer():
                 'dopant_concentration':
                 self.npmc_input.nanoparticle._dopant_concentration,
                 'overall_dopant_concentration':
-                self.npmc_input.nanoparticle.dopant_concentrations,
+                self.npmc_input.nanoparticle.dopant_concentrations(),
                 'excitation_power':
                 self.npmc_input.spectral_kinetics.excitation_power,
                 'excitation_wavelength':

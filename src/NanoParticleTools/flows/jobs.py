@@ -30,6 +30,7 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
              npmc_args: Optional[dict] = {},
              override: Optional[bool] = False,
              population_record_interval: Optional[float] = 1e-5,
+             metadata: Optional[dict] = {},
              **kwargs) -> List[dict]:
     """
     :param constraints: Constraints from which to build the Nanoparticle.
@@ -82,7 +83,7 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
     # Initialize Spectral Kinetics class to calculate transition rates
     dopants = [
         Dopant(key, concentration)
-        for key, concentration in nanoparticle.dopant_concentrations.items()
+        for key, concentration in nanoparticle.dopant_concentrations().items()
     ]
     spectral_kinetics = SpectralKinetics(dopants, **spectral_kinetics_args)
 
@@ -188,7 +189,11 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
 
     # Generate documents
     result_docs = simulation_replayer.generate_docs(data)
-    for doc in result_docs:
-        doc['initial_state_db_args'] = _initial_state_db_args
+    for i, _ in enumerate(result_docs):
+        result_docs[i]['initial_state_db_args'] = _initial_state_db_args
+        result_docs[i]['metadata'] = metadata
+
+        # Add metadata to trajectory doc
+        result_docs[i]['trajectory_doc']['metadata'] = metadata
 
     return result_docs
