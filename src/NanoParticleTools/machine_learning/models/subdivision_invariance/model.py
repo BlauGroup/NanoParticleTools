@@ -40,7 +40,7 @@ class SubdivisionInvariantRepresentation(nn.Module):
                                  heads=1,
                                  concat=False,
                                  dropout=0.1))
-        
+
         self.batch_norm_layers = torch.nn.ModuleList()
         self.batch_norm = batch_norm
         for i in range(n_message_passing):

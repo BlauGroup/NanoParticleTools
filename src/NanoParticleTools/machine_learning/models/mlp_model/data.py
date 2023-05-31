@@ -1,9 +1,10 @@
-from NanoParticleTools.machine_learning.data.processors import FeatureProcessor as BaseFeatureProcessor
+from NanoParticleTools.machine_learning.data import FeatureProcessor as BaseFeatureProcessor
 from typing import List
 from torch_geometric.data.data import Data
 
 import numpy as np
 import torch
+from monty.json import MontyDecoder
 
 
 class FeatureProcessor(BaseFeatureProcessor):
@@ -16,11 +17,12 @@ class FeatureProcessor(BaseFeatureProcessor):
         :param max_layers:
         :param possible_elements:
         """
-
+        # yapf: disable
         super().__init__(fields=[
             'formula_by_constraint', 'dopant_concentration', 'input',
             'metadata'
         ], **kwargs)
+        # yapf: enable
 
         self.max_layers = max_layers
         self.possible_elements = possible_elements
@@ -29,6 +31,8 @@ class FeatureProcessor(BaseFeatureProcessor):
         constraints = self.get_item_from_doc(doc, 'input.constraints')
         dopant_concentration = self.get_item_from_doc(doc,
                                                       'dopant_concentration')
+
+        constraints = MontyDecoder().process_decoded(constraints)
 
         # Construct the feature array
         feature = []
@@ -71,11 +75,12 @@ class VolumeFeatureProcessor(BaseFeatureProcessor):
         :param possible_elements: The elements which are present in the
             lanthanide nanoparticle dataset.
         """
-
+        # yapf: disable
         super().__init__(fields=[
             'formula_by_constraint', 'dopant_concentration', 'input',
             'metadata'
         ], **kwargs)
+        # yapf: enable
 
         self.max_layers = max_layers
         self.possible_elements = possible_elements
@@ -116,8 +121,9 @@ class VolumeFeatureProcessor(BaseFeatureProcessor):
         return {'x': torch.tensor(np.hstack(feature)).unsqueeze(0).float()}
 
     def __str__(self):
-        return (f"Feature Processor - {self.max_layers}"
-                f" x [radius, volume, x_{', x_'.join(self.possible_elements)}]")
+        return (
+            f"Feature Processor - {self.max_layers}"
+            f" x [radius, volume, x_{', x_'.join(self.possible_elements)}]")
 
     @property
     def is_graph(self):

@@ -189,9 +189,7 @@ class GraphFeatureProcessor(FeatureProcessor):
         constraints = doc['input']['constraints']
         dopant_concentration = doc['dopant_concentration']
 
-        if not isinstance(constraints[0], NanoParticleConstraint):
-            decoder = MontyDecoder()
-            constraints = decoder.process_decoded(constraints)
+        constraints = MontyDecoder().process_decoded(constraints)
 
         _dopant_specifications = [
             (layer_idx, conc, el, None)
@@ -216,9 +214,7 @@ class CompleteGraphFeatureProcessor(GraphFeatureProcessor):
         constraints = doc['input']['constraints']
         dopant_concentration = doc['dopant_concentration']
 
-        if not isinstance(constraints[0], NanoParticleConstraint):
-            decoder = MontyDecoder()
-            constraints = decoder.process_decoded(constraints)
+        constraints = MontyDecoder().process_decoded(constraints)
 
         # Fill in the empty/missing dopants
         for i, _ in enumerate(constraints):

@@ -2,6 +2,7 @@ from NanoParticleTools.machine_learning.data.processors import DataProcessor
 import torch
 from typing import List
 from torch_geometric.data.data import Data
+from monty.json import MontyDecoder
 
 
 class TransformerFeatureProcessor(DataProcessor):
@@ -33,6 +34,8 @@ class TransformerFeatureProcessor(DataProcessor):
         dopant_concentration = self.get_item_from_doc(doc,
                                                       'dopant_concentration')
 
+        constraints = MontyDecoder().process_decoded(constraints)
+
         types = torch.tensor([
             j for i in range(self.max_layers)
             for j in range(len(self.possible_elements))
@@ -52,14 +55,14 @@ class TransformerFeatureProcessor(DataProcessor):
                 r_lower_bound = radius
                 for _ in range(len(self.possible_elements)):
                     volumes.append(volume * self.volume_scale_factor)
-            except:
+            except IndexError:
                 for _ in range(len(self.possible_elements)):
                     volumes.append(0)
 
             for el in self.possible_elements:
                 try:
                     compositions.append(dopant_concentration[layer][el])
-                except:
+                except KeyError:
                     compositions.append(0)
 
         return {

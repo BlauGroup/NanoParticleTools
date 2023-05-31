@@ -40,9 +40,9 @@ class CNNModel(SpectrumModelBase):
         self.dropout_probability = dropout_probability
         self.activation_module = activation_module
         self.n_conv = len(conv_params)
-        self.channels = [l[0] for l in conv_params]
-        self.kernel_sizes = [l[1] for l in conv_params]
-        self.strides = [l[2] for l in conv_params]
+        self.channels = [layer[0] for layer in conv_params]
+        self.kernel_sizes = [layer[1] for layer in conv_params]
+        self.strides = [layer[2] for layer in conv_params]
         self.n_output_nodes = n_output_nodes
 
         # Build the CNN
@@ -133,10 +133,10 @@ class DiscreteGraphModel(SpectrumModelBase):
             mlp_modules.append(nn.Dropout())
             mlp_modules.append(nn.Linear(*mlp_sizes[i:i + 2]))
             mlp_modules.append(activation_module(inplace=True))
-        mlp_modules = mlp_modules[:
-                                  -1]  # Exclude the last activation, since this will inhibit learning
+        # Exclude the last activation, since this will inhibit learning
+        mlp_modules = mlp_modules[:-1]
 
-        ## Initialize the weights to the linear layers according to Xavier Uniform
+        # Initialize the weights to the linear layers according to Xavier Uniform
         for lin in mlp_modules:
             if isinstance(lin, nn.Linear):
                 if activation_module == nn.SiLU:
@@ -159,7 +159,8 @@ class DiscreteGraphModel(SpectrumModelBase):
                                                      nn=out_nn),
                        'x, batch -> x')
         elif readout_operation.lower() == 'set2set':
-            # Use the Set2Set aggregation method to pool the graph into a single global feature vector
+            # Use the Set2Set aggregation method to pool the
+            # graph into a single global feature vector
             readout = (pyg_nn.aggr.Set2Set(mpnn_channels[-1],
                                            processing_steps=10),
                        'x, batch -> x')

@@ -2,7 +2,8 @@ import os
 import datetime
 from ray import tune
 from ray.tune.schedulers import ASHAScheduler
-from NanoParticleTools.machine_learning.util.training import (train_spectrum_model, train_uv_model)
+from NanoParticleTools.machine_learning.util.training import (
+    train_spectrum_model, train_uv_model)
 
 
 def tune_npmc(model_cls,
@@ -74,6 +75,7 @@ def tune_npmc(model_cls,
                             name="tune_npmc_bohb")
     elif algo.lower() == 'asha':
         # Default to asha
+        # yapf: disable
         scheduler = ASHAScheduler(
             metric='loss',  # Metric refers to the one we have mapped to in the TuneReportCallback
             mode='min',
@@ -81,6 +83,7 @@ def tune_npmc(model_cls,
             grace_period=100,
             reduction_factor=2)
 
+        # yapf: enable
         analysis = tune.run(train_fn_with_parameters,
                             resources_per_trial=resources_per_trial,
                             config=config,

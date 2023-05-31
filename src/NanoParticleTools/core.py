@@ -1,8 +1,7 @@
 import sqlite3
 from typing import Optional, Sequence, Union
 import subprocess
-from NanoParticleTools.inputs.nanoparticle import DopedNanoparticle
-from NanoParticleTools.inputs.spectral_kinetics import SpectralKinetics
+from NanoParticleTools.inputs import SpectralKinetics, DopedNanoparticle
 from NanoParticleTools.inputs.util import get_all_interactions, get_sites, get_species
 import signal
 import time

@@ -16,6 +16,7 @@ class TestModel(SpectrumModelBase):
 
 
 def test_base_model():
+
     def get_step_lr(optimizer):
         return torch.optim.lr_scheduler.StepLR(optimizer,
                                                step_size=1,
@@ -43,7 +44,8 @@ def test_configure_optimizers():
     assert len(optimizers) == 1
     assert len(lr_schedulers) == 1
     assert isinstance(optimizers[0], torch.optim.Adam)
-    assert isinstance(lr_schedulers[0]['scheduler'], ReduceLROnPlateauWithWarmup)
+    assert isinstance(lr_schedulers[0]['scheduler'],
+                      ReduceLROnPlateauWithWarmup)
 
     x = torch.rand(10, 10)
     out = model(x)
@@ -67,12 +69,12 @@ def test_evaluate_step():
                       lr_scheduler=get_reduce_with_warmup,
                       loss_function=torch.nn.functional.mse_loss,
                       additional_metadata={})
-    
+
     x = torch.rand(10)
     log_y = torch.rand(4)
     data = Data(x=x, log_y=log_y)
     y_hat, loss = model._evaluate_step(data)
-    assert y_hat.shape == (4,)
+    assert y_hat.shape == (4, )
     assert loss.shape == ()
 
     x = torch.rand(1, 10)
@@ -89,7 +91,7 @@ def test_training_step():
                       lr_scheduler=get_reduce_with_warmup,
                       loss_function=torch.nn.functional.mse_loss,
                       additional_metadata={})
-    
+
     x = torch.rand(1, 10)
     log_y = torch.rand(1, 4)
     batch = Batch.from_data_list([Data(x=x, log_y=log_y) for _ in range(16)])
@@ -103,7 +105,7 @@ def test_validation_step():
                       lr_scheduler=get_reduce_with_warmup,
                       loss_function=torch.nn.functional.mse_loss,
                       additional_metadata={})
-    
+
     x = torch.rand(1, 10)
     log_y = torch.rand(1, 4)
     batch = Batch.from_data_list([Data(x=x, log_y=log_y) for _ in range(16)])
@@ -117,7 +119,7 @@ def test_test_step():
                       lr_scheduler=get_reduce_with_warmup,
                       loss_function=torch.nn.functional.mse_loss,
                       additional_metadata={})
-    
+
     x = torch.rand(1, 10)
     log_y = torch.rand(1, 4)
     batch = Batch.from_data_list([Data(x=x, log_y=log_y) for _ in range(16)])
@@ -131,9 +133,9 @@ def test_predict_step():
                       lr_scheduler=get_reduce_with_warmup,
                       loss_function=torch.nn.functional.mse_loss,
                       additional_metadata={})
-    
+
     x = torch.rand(10)
     log_y = torch.rand(4)
     data = Data(x=x, log_y=log_y)
     y_hat = model.predict_step(data)
-    assert y_hat.shape == (4,)
+    assert y_hat.shape == (4, )

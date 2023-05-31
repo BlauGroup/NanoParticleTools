@@ -49,8 +49,8 @@ class GATSpectrumModel(SpectrumModelBase):
             mlp_modules.append(nn.Dropout())
             mlp_modules.append(nn.Linear(*mlp_sizes[i:i + 2]))
             mlp_modules.append(activation_module(inplace=True))
-        mlp_modules = mlp_modules[:
-                                  -1]  # Exclude the last activation, since this will inhibit learning
+        # Exclude the last activation, since this will inhibit learning
+        mlp_modules = mlp_modules[:-1]
         self.nn = torch.nn.Sequential(*mlp_modules)
 
         if readout_operation.lower() == 'attn':
@@ -64,7 +64,8 @@ class GATSpectrumModel(SpectrumModelBase):
 
             readout = pyg_nn.AttentionalAggregation(gate_nn=gate_nn, nn=out_nn)
         elif readout_operation.lower() == 'set2set':
-            # Use the Set2Set aggregation method to pool the graph into a single global feature vector
+            # Use the Set2Set aggregation method to pool the graph
+            # into a single global feature vector
             readout = pyg_nn.aggr.Set2Set(n_dopants * 2 * embed_dim,
                                           processing_steps=7)
         elif readout_operation.lower() == 'sum':
@@ -100,4 +101,3 @@ class GATSpectrumModel(SpectrumModelBase):
         out = self.nn(out)
 
         return out
-        # return out

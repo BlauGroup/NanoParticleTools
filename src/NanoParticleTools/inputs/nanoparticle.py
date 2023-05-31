@@ -143,7 +143,7 @@ class SphericalConstraint(NanoParticleConstraint):
 
         distances_from_center = np.linalg.norm(np.subtract(site_coords, center), axis=1)
         return distances_from_center <= self.radius
-    
+
     def __str__(self) -> str:
         return f"SphericalConstraint(radius={self.radius})"
 

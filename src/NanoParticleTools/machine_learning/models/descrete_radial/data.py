@@ -6,6 +6,7 @@ import torch
 import itertools
 from torch_geometric.data.data import Data
 from torch_geometric.typing import SparseTensor
+from monty.json import MontyDecoder
 
 
 class CNNData(Data):
@@ -44,15 +45,16 @@ class GraphFeatureProcessor(FeatureProcessor):
                  shift_composition: Optional[bool] = False,
                  **kwargs):
         """
-        :param possible_elements:  
-        :param cutoff_distance: 
+        :param possible_elements:
+        :param cutoff_distance:
         :param resolution: Angstroms
         """
+        # yapf: disable
         super().__init__(fields=[
             'formula_by_constraint', 'dopant_concentration', 'input',
             'metadata'
-        ],
-                         **kwargs)
+        ], **kwargs)
+        # yapf: enable
 
         self.possible_elements = possible_elements
         self.n_possible_elements = len(possible_elements)
@@ -71,11 +73,11 @@ class GraphFeatureProcessor(FeatureProcessor):
         dopant_specifications: List[Tuple[int, float, str,
                                           str]]) -> torch.Tensor:
         # Generate the tensor of concentrations for the original constraints.
-        ## Initialize it to 0
+        # Initialize it to 0
         concentrations = torch.zeros(len(constraints),
                                      self.n_possible_elements)
 
-        ## Fill in the concentrations that are present
+        # Fill in the concentrations that are present
         for i, x, el, _ in dopant_specifications:
             if self.shift_composition:
                 concentrations[i][self.dopants_dict[el]] = x - 0.5
@@ -98,7 +100,7 @@ class GraphFeatureProcessor(FeatureProcessor):
                           n_possible_elements] = concentrations[constraint_i]
             start_i = end_i
 
-        ## Set the last index to volume
+        # Set the last index to volume
         volume = self.volume(
             torch.arange(0, constraints[-1].radius, self.resolution))
         if self.log_vol:
@@ -143,12 +145,7 @@ class GraphFeatureProcessor(FeatureProcessor):
         constraints = doc['input']['constraints']
         dopant_specifications = doc['input']['dopant_specifications']
 
-        try:
-            constraints = [
-                SphericalConstraint.from_dict(c) for c in constraints
-            ]
-        except:
-            pass
+        constraints = MontyDecoder().process_decoded(constraints)
 
         return self.get_data_graph(constraints, dopant_specifications)
 
@@ -191,16 +188,17 @@ class FeatureProcessor(FeatureProcessor):
                  full_nanoparticle: Optional[bool] = True,
                  **kwargs):
         """
-        :param possible_elements:  
-        :param cutoff_distance: 
+        :param possible_elements:
+        :param cutoff_distance:
         :param resolution: Angstroms
         :param max_np_size: Angstroms
         """
+        # yapf: disable
         super().__init__(fields=[
             'formula_by_constraint', 'dopant_concentration', 'input',
             'metadata'
-        ],
-                         **kwargs)
+        ], **kwargs)
+        # yapf: enable
 
         self.possible_elements = possible_elements
         self.n_possible_elements = len(possible_elements)
@@ -220,11 +218,11 @@ class FeatureProcessor(FeatureProcessor):
         dopant_specifications: List[Tuple[int, float, str,
                                           str]]) -> torch.Tensor:
         # Generate the tensor of concentrations for the original constraints.
-        ## Initialize it to 0
+        # Initialize it to 0
         concentrations = torch.zeros(len(constraints),
                                      self.n_possible_elements)
 
-        ## Fill in the concentrations that are present
+        # Fill in the concentrations that are present
         for i, x, el, _ in dopant_specifications:
             concentrations[i][self.dopants_dict[el]] = x
 
@@ -303,12 +301,8 @@ class FeatureProcessor(FeatureProcessor):
         constraints = doc['input']['constraints']
         dopant_concentration = doc['dopant_concentration']
 
-        try:
-            constraints = [
-                SphericalConstraint.from_dict(c) for c in constraints
-            ]
-        except:
-            pass
+        constraints = MontyDecoder().process_decoded(constraints)
+
         _dopant_specifications = [
             (layer_idx, conc, el, None)
             for layer_idx, dopants in enumerate(dopant_concentration)
@@ -335,7 +329,8 @@ class FeatureProcessor(FeatureProcessor):
         return 3 / 4 * torch.pi * torch.pow(radius, 3)
 
     def __str__(self) -> str:
-        return f"CNN Feature Processor - resolution = {self.resolution}A - max_np_size = {self.max_np_size}"
+        return (f"CNN Feature Processor - resolution = "
+                f"{self.resolution}A - max_np_size = {self.max_np_size}")
 
     @property
     def is_graph(self):

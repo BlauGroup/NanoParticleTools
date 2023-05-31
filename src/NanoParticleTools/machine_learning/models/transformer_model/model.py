@@ -1,11 +1,7 @@
 import torch
-from torch.utils import data
 from torch import nn
-import pytorch_lightning as pl
-import torch.nn.functional as F
-from typing import Callable, Optional, Union, List
-import numpy as np
-from ..mlp_model.model import MLPSpectrumModel
+from typing import Optional
+from NanoParticleTools.machine_learning.models.mlp_model.model import MLPSpectrumModel
 
 
 class TransformerSpectrumModel(MLPSpectrumModel):
@@ -58,14 +54,13 @@ class TransformerSpectrumModel(MLPSpectrumModel):
         # Use the TransformerEncoder to apply the attention mechanism
         attn_output = self.encoder(embedding)
 
-        # Apply a mask
-        ## First, compute the mask
+        # First, compute the mask
         mask = torch.where(embedding == 0,
                            torch.zeros(attn_output.size(), device=self.device),
                            torch.ones(attn_output.size(), device=self.device))
         mask.to(self.device)
 
-        ## Now we apply the mask
+        # Now we apply the mask
         masked_attn_output = attn_output * mask
 
         if self.sum_attention_output:
@@ -85,11 +80,17 @@ class SpectrumAttentionModel(MLPSpectrumModel):
                  embedding_dropout: float = 0,
                  sum_attention_output: Optional[bool] = False,
                  **kwargs):
-        """
-        :param nn_layers: 
-        :param dopants: List of Dopants in the model or a map of str->int
-        :param embedding_dimension: size of embedding vector
-        :param n_heads: Number of heads to use in the Multiheaded Attention step
+        """_summary_
+
+        Args:
+            embedding_dimension (Optional[int], optional): size of embedding vector.
+                Defaults to 12.
+            n_heads (Optional[int], optional): Number of heads to use in the
+                Multiheaded Attention step. Defaults to 4.
+            embedding_dropout (float, optional): _description_.
+                Defaults to 0.
+            sum_attention_output (Optional[bool], optional): Whether to sum the attention
+                outputs or concatenate (if False). Defaults to False.
         """
         if 'n_input_nodes' in kwargs:
             del kwargs['n_input_nodes']
@@ -112,10 +113,7 @@ class SpectrumAttentionModel(MLPSpectrumModel):
         self.save_hyperparameters()
 
     def forward(self, data):
-        types, volumes, compositions = data.x[:,
-                                              0].long(), data.x[:,
-                                                                1], data.x[:,
-                                                                           2]
+        types, volumes, compositions = data.x[:, 0].long(), data.x[:, 1], data.x[:, 2]
 
         # Perform the look-up to create the embedding vectors
         embedding = self.embedding(types)
@@ -133,14 +131,13 @@ class SpectrumAttentionModel(MLPSpectrumModel):
                                              embedding,
                                              need_weights=False)
 
-        # Apply a mask
-        ## First, compute the mask
+        # First, compute the mask
         mask = torch.where(embedding == 0,
                            torch.zeros(attn_output.size(), device=self.device),
                            torch.ones(attn_output.size(), device=self.device))
         mask.to(self.device)
 
-        ## Now we apply the mask
+        # Now we apply the mask
         masked_attn_output = attn_output * mask
 
         if self.sum_attention_output:

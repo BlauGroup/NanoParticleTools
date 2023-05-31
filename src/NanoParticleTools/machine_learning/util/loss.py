@@ -3,8 +3,8 @@ import torch
 
 
 class QuantileLoss(torch.nn.Module):
-    def __init__(self, 
-                 p: Union[torch.Tensor, float]) -> None:
+
+    def __init__(self, p: Union[torch.Tensor, float]) -> None:
         super().__init__()
 
         self.p = p
@@ -21,17 +21,17 @@ class QuantileLoss(torch.nn.Module):
 
 
 @torch.jit.script
-def quantile_loss(prediction: torch.FloatTensor,
-                  target: torch.FloatTensor,
+def quantile_loss(prediction: torch.FloatTensor, target: torch.FloatTensor,
                   p: float):
     """
     The quantile loss
-    
+
     p = 0.5 will set the MAE as the target
     p < 0.5 will incentivize underpredictions
     p > 0.5 will incentivize overpredictions
     """
-    return torch.max(p * (target - prediction), (1 - p) * (prediction - target))
+    return torch.max(p * (target - prediction),
+                     (1 - p) * (prediction - target))
 
 
 @torch.jit.script
@@ -40,10 +40,11 @@ def multi_quantile_loss(prediction: torch.FloatTensor,
                         p: torch.FloatTensor) -> torch.BoolTensor:
     """
     The quantile loss using multiple quantiles. This is used for multi-output regression.
-    
+
     p = 0.5 will set the MAE as the target
     p < 0.5 will incentivize underpredictions
     p > 0.5 will incentivize overpredictions
     """
     return torch.max(p * (target - prediction).unsqueeze(-1),
-                     (torch.ones_like(p) - p) * (prediction - target).unsqueeze(-1))
+                     (torch.ones_like(p) - p) *
+                     (prediction - target).unsqueeze(-1))

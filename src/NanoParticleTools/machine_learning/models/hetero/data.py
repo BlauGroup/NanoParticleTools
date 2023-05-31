@@ -11,12 +11,17 @@ from typing import List, Tuple, Any, Dict, Optional
 
 class HeteroFeatureProcessor(FeatureProcessor):
 
-    def __init__(self, possible_elements=['Yb', 'Er', 'Nd'], 
-                 include_global_node = False, **kwargs):
+    def __init__(self,
+                 possible_elements=['Yb', 'Er', 'Nd'],
+                 include_global_node=False,
+                 **kwargs):
+        # yapf: disable
         super().__init__(fields=[
             'formula_by_constraint', 'dopant_concentration', 'input',
             'metadata'
         ], **kwargs)
+        # yapf: enable
+
         self.possible_elements = possible_elements
         self.elements_map = dict([(_t[1], _t[0])
                                   for _t in enumerate(possible_elements)])
@@ -37,9 +42,8 @@ class HeteroFeatureProcessor(FeatureProcessor):
             for layer_idx, dopants in enumerate(dopant_concentration)
             for el, conc in dopants.items() if el in self.possible_elements
         ]
-        if not isinstance(constraints[0], NanoParticleConstraint):
-            decoder = MontyDecoder()
-            constraints = decoder.process_decoded(constraints)
+
+        constraints = MontyDecoder().process_decoded(constraints)
 
         # Generate a map of layers which are occupied by dopants
         # This will be crucial in ensuring inactive layers are not explicitly included
@@ -110,7 +114,7 @@ class HeteroFeatureProcessor(FeatureProcessor):
     @property
     def is_graph(self):
         return True
-        
+
     @property
     def data_cls(self):
         return HeteroData

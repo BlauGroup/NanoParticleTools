@@ -39,18 +39,18 @@ class GATSpectrumModel(MLPSpectrumModel):
         There are a few ways in which we can add composition and volume information to the model:
         - Option 1: Multiply by composition
         - Option 2: Concatenate the additional information
-        - Option 3: Concatenate, then MLP        
-        - Option 3: MLP the additional information, then concatenate        
+        - Option 3: Concatenate, then MLP
+        - Option 3: MLP the additional information, then concatenate
         - Option 4: MLP the additional information, then concatenate, then MLP
         To achieve these, we can optionally apply 3 operations
         1) Optionally applying a MLP to the info
         2) Concatenating or Multiplying
         3) Optionally applying an MLP to the embedding
-        
+
         :param nonlinear_node_info: whether or not to apply operation 1
         :param concatenate: whether to concatenate or multiply (default) with the embedding
         :param mlp_embedding: whether or not to apply operation 2
-        
+
         """
         if out_feature_dim is None:
             out_feature_dim = in_feature_dim
@@ -115,7 +115,7 @@ class GATSpectrumModel(MLPSpectrumModel):
         x = self.embedder(pair_identity)
         additional_info = data.x[:, 1:]
 
-        ## Add composition and volume information to the embedding
+        # Add composition and volume information to the embedding
         # Step 1: MLP composition or not
         if self.nonlinear_node_info:
             additional_info = self.node_mlp(additional_info)

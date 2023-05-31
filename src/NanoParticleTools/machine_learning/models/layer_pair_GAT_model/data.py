@@ -6,6 +6,7 @@ from itertools import combinations_with_replacement
 from functools import lru_cache
 import torch
 from torch_geometric.data.data import Data
+from monty.json import MontyDecoder
 
 
 class GraphFeatureProcessor(DataProcessor):
@@ -15,15 +16,16 @@ class GraphFeatureProcessor(DataProcessor):
                  log_volume: Optional[bool] = False,
                  **kwargs):
         """
-        :param possible_elements: 
-        :param log_volume: Whether to apply a log10 to the volume to reduce orders of magnitude. 
+        :param possible_elements:
+        :param log_volume: Whether to apply a log10 to the volume to reduce orders of magnitude.
             defaults to False
         """
+        # yapf: disable
         super().__init__(fields=[
             'formula_by_constraint', 'dopant_concentration', 'input',
             'metadata'
-        ],
-                         **kwargs)
+        ], **kwargs)
+        # yapf: enable
 
         self.possible_elements = possible_elements
         self.dopants_dict = {
@@ -37,22 +39,24 @@ class GraphFeatureProcessor(DataProcessor):
     def edge_type_map(self):
         edge_type_map = {}
         for i, (el1, el2) in enumerate(
-                list(combinations_with_replacement(self.possible_elements,
-                                                   2))):
+                list(combinations_with_replacement(self.possible_elements, 2))):
             try:
                 edge_type_map[el1][el2] = i
-            except:
+            except KeyError:
                 edge_type_map[el1] = {el2: i}
 
             try:
                 edge_type_map[el2][el1] = i
-            except:
+            except KeyError:
                 edge_type_map[el2] = {el1: i}
         return edge_type_map
 
     def get_node_features(self, constraints,
                           dopant_specifications) -> torch.Tensor:
-        """Here, the node feature is simply the id of the element pair and the distance between the layers"""
+        """
+        Here, the node feature is simply the id of the element pair
+        and the distance between the layers
+        """
 
         node_features = []
 
@@ -110,13 +114,7 @@ class GraphFeatureProcessor(DataProcessor):
         constraints = doc['input']['constraints']
         dopant_specifications = doc['input']['dopant_specifications']
 
-        try:
-            ## Should use MontyDecoder to deserialize these
-            constraints = [
-                SphericalConstraint.from_dict(c) for c in constraints
-            ]
-        except:
-            pass
+        constraints = MontyDecoder().process_decoded(constraints)
 
         return self.get_data_graph(constraints, dopant_specifications)
 

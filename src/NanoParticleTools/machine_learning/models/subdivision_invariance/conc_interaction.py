@@ -2,7 +2,9 @@ from typing import Optional
 from torch import nn
 import torch
 
-from NanoParticleTools.machine_learning.modules import (InteractionBlock, BatchScaling, FiLMLayer)
+from NanoParticleTools.machine_learning.modules import (InteractionBlock,
+                                                        BatchScaling,
+                                                        FiLMLayer)
 from NanoParticleTools.machine_learning.core import SpectrumModelBase
 import torch_geometric as pyg
 
@@ -41,14 +43,15 @@ class SubdivisionInvariantRepresentation(nn.Module):
                                  heads=1,
                                  concat=False,
                                  dropout=0.1))
-        
+
         self.batch_norm_layers = torch.nn.ModuleList()
         self.batch_norm = batch_norm
         for i in range(n_message_passing):
             if batch_norm:
-                self.batch_norm_layers.append(pyg.nn.norm.BatchNorm(embed_dim,
-                                                                    affine=True,
-                                                                    allow_single_element=True))
+                self.batch_norm_layers.append(
+                    pyg.nn.norm.BatchNorm(embed_dim,
+                                          affine=True,
+                                          allow_single_element=True))
             else:
                 self.batch_norm_layers.append(nn.Identity())
         self.readout = pyg.nn.aggr.SumAggregation()
@@ -56,9 +59,8 @@ class SubdivisionInvariantRepresentation(nn.Module):
 
         self.norm_interaction = norm_interaction
         if norm_interaction:
-            self.interaction_norm = pyg.nn.norm.BatchNorm(n_sigma,
-                                                          affine=False,
-                                                          allow_single_element=True)
+            self.interaction_norm = pyg.nn.norm.BatchNorm(
+                n_sigma, affine=False, allow_single_element=True)
         else:
             # We use scaling, since the typical function for standardizing
             # data $\frac{x-\hat{x}}{\sigma}$ is not additive.
@@ -81,11 +83,15 @@ class SubdivisionInvariantRepresentation(nn.Module):
 
         radii = radii[x_layer_idx][node_dopant_index].double()
         # Cast back to a float, since we don't want to keep the whole model in double precision.
-        integrated_interaction = self.integrated_interaction(radii[:, 0, 0], radii[:, 0, 1],
-                                                             radii[:, 1, 0], radii[:, 1, 1]).float()
+        integrated_interaction = self.integrated_interaction(
+            radii[:, 0, 0], radii[:, 0, 1], radii[:, 1, 0], radii[:, 1,
+                                                                  1]).float()
         # Multiply by the concentrations
-        integrated_interaction = integrated_interaction * x_dopant[node_dopant_index][..., 0].unsqueeze(-1) * x_dopant[node_dopant_index][..., 1].unsqueeze(-1)
-        integrated_interaction = torch.nn.functional.relu(integrated_interaction)
+        integrated_interaction = integrated_interaction * x_dopant[
+            node_dopant_index][..., 0].unsqueeze(
+                -1) * x_dopant[node_dopant_index][..., 1].unsqueeze(-1)
+        integrated_interaction = torch.nn.functional.relu(
+            integrated_interaction)
 
         # Scale the integrated interaction values according to the mean Interaction values.
         I_scaled = self.interaction_norm(integrated_interaction)
@@ -94,7 +100,8 @@ class SubdivisionInvariantRepresentation(nn.Module):
         node_attr = self.interaction_bilin(I_scaled, x_embedding)
 
         # Message Passing
-        for message_layer, norm_layer in zip(self.message_layer, self.batch_norm_layers):
+        for message_layer, norm_layer in zip(self.message_layer,
+                                             self.batch_norm_layers):
             node_attr = message_layer(node_attr, edge_index)
             node_attr = norm_layer(node_attr)
 
