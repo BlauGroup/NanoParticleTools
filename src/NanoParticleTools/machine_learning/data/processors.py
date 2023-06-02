@@ -20,8 +20,6 @@ class DataProcessor(ABC, MSONable):
     Fields are specified to ensure they are present in documents
     """
 
-    fields: List[str]
-
     def __init__(self, fields: List[str]):
         """
         :param fields: fields required in the document(s) to be processed
@@ -43,28 +41,6 @@ class DataProcessor(ABC, MSONable):
         for key in keys:
             val = val[key]
         return val
-
-    @staticmethod
-    def get_radii(idx, constraints):
-        if idx == 0:
-            # The constraint was the first one, therefore the inner radius is 0
-            r_inner = 0
-        else:
-            r_inner = constraints[idx - 1].radius
-        r_outer = constraints[idx].radius
-        return r_inner, r_outer
-
-    @staticmethod
-    def get_volume(r):
-        return 4 / 3 * np.pi * (r**3)
-
-    @property
-    def is_graph(self):
-        pass
-
-    @property
-    def data_cls(self):
-        return Data
 
 
 class FeatureProcessor(DataProcessor):
@@ -97,6 +73,28 @@ class FeatureProcessor(DataProcessor):
             }
         }
         return self.process_doc(doc)
+
+    @staticmethod
+    def get_radii(idx, constraints):
+        if idx == 0:
+            # The constraint was the first one, therefore the inner radius is 0
+            r_inner = 0
+        else:
+            r_inner = constraints[idx - 1].radius
+        r_outer = constraints[idx].radius
+        return r_inner, r_outer
+
+    @staticmethod
+    def get_volume(r):
+        return 4 / 3 * np.pi * (r**3)
+
+    @property
+    def is_graph(self):
+        raise NotImplementedError
+
+    @property
+    def data_cls(self):
+        return Data
 
 
 class LabelProcessor(DataProcessor):
@@ -545,7 +543,7 @@ class SummedWavelengthRangeLabelProcessor(LabelProcessor):
         }
 
     def __str__(self):
-        return (f"UV-Vis Label Processor - 8 bins, "
+        return (f"Summed Ranges Label Processor - {len(self.spectrum_ranges)} bins, "
                 f"log_constant = {self.log_constant}")
 
     def __repr__(self):
