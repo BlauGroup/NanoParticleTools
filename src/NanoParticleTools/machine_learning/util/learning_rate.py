@@ -46,8 +46,6 @@ class ReduceLROnPlateauWithWarmup(ReduceLROnPlateau):
     first few steps.
     """
 
-    warmup_epochs: int
-
     def __init__(self, warmup_epochs: int, **kwargs):
         super().__init__(**kwargs)
         self.warmup_epochs = warmup_epochs
