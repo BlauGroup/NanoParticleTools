@@ -12,7 +12,6 @@ from monty.json import MontyDecoder
 class GraphFeatureProcessor(DataProcessor):
 
     def __init__(self,
-                 possible_elements: List[str] = ['Yb', 'Er', 'Nd'],
                  log_volume: Optional[bool] = False,
                  **kwargs):
         """
@@ -27,11 +26,6 @@ class GraphFeatureProcessor(DataProcessor):
         ], **kwargs)
         # yapf: enable
 
-        self.possible_elements = possible_elements
-        self.dopants_dict = {
-            key: i
-            for i, key in enumerate(self.possible_elements)
-        }
         self.log_volume = log_volume
 
     @property

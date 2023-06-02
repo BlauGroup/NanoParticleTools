@@ -13,7 +13,6 @@ class TransformerFeatureProcessor(DataProcessor):
 
     def __init__(self,
                  max_layers: int = 4,
-                 possible_elements: List[str] = ['Yb', 'Er', 'Nd'],
                  volume_scale_factor: float = 1e-6,
                  **kwargs):
         """
@@ -26,7 +25,6 @@ class TransformerFeatureProcessor(DataProcessor):
         ], **kwargs)
 
         self.max_layers = max_layers
-        self.possible_elements = possible_elements
         self.volume_scale_factor = volume_scale_factor
 
     def process_doc(self, doc: dict) -> torch.Tensor:

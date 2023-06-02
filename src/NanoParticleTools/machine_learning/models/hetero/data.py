@@ -12,7 +12,6 @@ from typing import List, Tuple, Any, Dict, Optional
 class HeteroFeatureProcessor(FeatureProcessor):
 
     def __init__(self,
-                 possible_elements=['Yb', 'Er', 'Nd'],
                  include_global_node=False,
                  **kwargs):
         # yapf: disable
@@ -22,9 +21,8 @@ class HeteroFeatureProcessor(FeatureProcessor):
         ], **kwargs)
         # yapf: enable
 
-        self.possible_elements = possible_elements
         self.elements_map = dict([(_t[1], _t[0])
-                                  for _t in enumerate(possible_elements)])
+                                  for _t in enumerate(self.possible_elements)])
 
     def process_doc(self, doc):
         data = {

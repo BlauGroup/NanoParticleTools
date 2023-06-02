@@ -11,7 +11,6 @@ class FeatureProcessor(BaseFeatureProcessor):
 
     def __init__(self,
                  max_layers: int = 4,
-                 possible_elements: List[str] = ['Yb', 'Er', 'Nd'],
                  **kwargs):
         """
         :param max_layers:
@@ -25,7 +24,6 @@ class FeatureProcessor(BaseFeatureProcessor):
         # yapf: enable
 
         self.max_layers = max_layers
-        self.possible_elements = possible_elements
 
     def process_doc(self, doc: dict) -> torch.Tensor:
         constraints = self.get_item_from_doc(doc, 'input.constraints')
@@ -68,7 +66,6 @@ class VolumeFeatureProcessor(BaseFeatureProcessor):
 
     def __init__(self,
                  max_layers: int = 4,
-                 possible_elements: List[str] = ['Yb', 'Er', 'Nd'],
                  **kwargs):
         """
         :param max_layers: Maximum number of layers to featurize.
@@ -83,12 +80,12 @@ class VolumeFeatureProcessor(BaseFeatureProcessor):
         # yapf: enable
 
         self.max_layers = max_layers
-        self.possible_elements = possible_elements
 
     def process_doc(self, doc: dict) -> torch.Tensor:
-        constraints = self.get_item_from_doc(doc, 'input.constraints')
-        dopant_concentration = self.get_item_from_doc(doc,
-                                                      'dopant_concentration')
+        constraints = doc['input']['constraints']
+        dopant_concentration = doc['dopant_concentration']
+
+        constraints = MontyDecoder().process_decoded(constraints)
 
         # Construct the feature array
         feature = []
@@ -96,10 +93,7 @@ class VolumeFeatureProcessor(BaseFeatureProcessor):
         for layer in range(self.max_layers):
             _layer_feature = []
             try:
-                if isinstance(constraints[layer], dict):
-                    radius = constraints[layer]['radius']
-                else:
-                    radius = constraints[layer].radius
+                radius = constraints[layer].radius
 
                 volume = 4 / 3 * np.pi * (radius**3 - r_lower_bound**3)
                 r_lower_bound = radius

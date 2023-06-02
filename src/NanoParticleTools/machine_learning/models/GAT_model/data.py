@@ -11,7 +11,6 @@ from monty.json import MontyDecoder
 class GraphFeatureProcessor(DataProcessor):
 
     def __init__(self,
-                 possible_elements: List[str] = ['Yb', 'Er', 'Nd'],
                  edge_attr_bias: Union[float, int] = 0.5,
                  single_edge_attr: Optional[bool] = True,
                  **kwargs):
@@ -31,12 +30,7 @@ class GraphFeatureProcessor(DataProcessor):
             'metadata'
         ], **kwargs)
         # yapf: enable
-
-        self.possible_elements = possible_elements
-        self.dopants_dict = {
-            key: i
-            for i, key in enumerate(self.possible_elements)
-        }
+        
         self.edge_attr_bias = edge_attr_bias
         self.single_edge_attr = single_edge_attr
 
@@ -141,7 +135,6 @@ class GraphFeatureProcessor(DataProcessor):
 class GraphInteractionFeatureProcessor(DataProcessor):
 
     def __init__(self,
-                 possible_elements: List[str] = ['Yb', 'Er', 'Nd'],
                  edge_attr_bias: Union[float, int] = 0.5,
                  interaction_sigma: Optional[float] = 20.0,
                  **kwargs):
@@ -161,12 +154,6 @@ class GraphInteractionFeatureProcessor(DataProcessor):
         ], **kwargs)
         # yapf: enable
 
-        self.possible_elements = possible_elements
-        self.n_possible_elements = len(possible_elements)
-        self.dopants_dict = {
-            key: i
-            for i, key in enumerate(self.possible_elements)
-        }
         self.edge_attr_bias = edge_attr_bias
         self.interaction_sigma = interaction_sigma
 

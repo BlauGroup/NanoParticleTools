@@ -52,7 +52,6 @@ class GraphFeatureProcessor(FeatureProcessor):
     fully_connected: bool
 
     def __init__(self,
-                 possible_elements: List[str] = ['Yb', 'Er', 'Nd'],
                  log_volume: bool = False,
                  fully_connected: bool = True,
                  **kwargs):
@@ -60,11 +59,6 @@ class GraphFeatureProcessor(FeatureProcessor):
             fields=['formula_by_constraint', 'dopant_concentration', 'input'],
             **kwargs)
 
-        self.possible_elements = possible_elements
-        self.dopants_dict = {
-            key: i
-            for i, key in enumerate(self.possible_elements)
-        }
         self.log_volume = log_volume
         self.fully_connected = fully_connected
 

@@ -45,6 +45,15 @@ class DataProcessor(ABC, MSONable):
 
 class FeatureProcessor(DataProcessor):
 
+    def __init__(self, possible_elements = ['Yb', 'Er', 'Nd'], **kwargs):
+        self.possible_elements = possible_elements
+        self.n_possible_elements = len(self.possible_elements)
+        self.dopants_dict = {
+            key: i
+            for i, key in enumerate(self.possible_elements)
+        }
+        super().__init__(**kwargs)
+
     def example(self):
         n_elements = len(self.possible_elements)
         dopant_specifications = [

@@ -37,7 +37,6 @@ class CNNData(Data):
 class GraphFeatureProcessor(FeatureProcessor):
 
     def __init__(self,
-                 possible_elements: List[str] = ['Yb', 'Er', 'Nd'],
                  resolution: Optional[float] = 0.1,
                  full_nanoparticle: Optional[bool] = True,
                  cutoff_distance: Optional[int] = 3,
@@ -56,12 +55,6 @@ class GraphFeatureProcessor(FeatureProcessor):
         ], **kwargs)
         # yapf: enable
 
-        self.possible_elements = possible_elements
-        self.n_possible_elements = len(possible_elements)
-        self.dopants_dict = {
-            key: i
-            for i, key in enumerate(self.possible_elements)
-        }
         self.resolution = resolution
         self.full_nanoparticle = full_nanoparticle
         self.cutoff_distance = cutoff_distance
@@ -181,7 +174,6 @@ class GraphFeatureProcessor(FeatureProcessor):
 class FeatureProcessor(FeatureProcessor):
 
     def __init__(self,
-                 possible_elements: List[str] = ['Yb', 'Er', 'Nd'],
                  resolution: Optional[float] = 0.1,
                  max_np_size: Optional[int] = 500,
                  dims: Optional[int] = 1,
@@ -200,8 +192,7 @@ class FeatureProcessor(FeatureProcessor):
         ], **kwargs)
         # yapf: enable
 
-        self.possible_elements = possible_elements
-        self.n_possible_elements = len(possible_elements)
+        self.n_possible_elements = len(self.possible_elements)
         self.dopants_dict = {
             key: i
             for i, key in enumerate(self.possible_elements)
