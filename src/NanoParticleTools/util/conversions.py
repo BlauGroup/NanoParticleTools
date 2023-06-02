@@ -1,8 +1,24 @@
-def wavenumber_to_wavelength(wavenumber):
-    return (299792458 * 6.62607004e-34) / (wavenumber * 1.60218e-19 /
-                                           8065.44) * 1e9
+def wavenumber_to_wavelength(wavenumber: float) -> float:
+    """
+    Convert a wavenumber in cm^-1 to a wavelength in nm.
+
+    Args:
+        wavenumber: A wavenumber in cm^-1
+
+    Returns:
+        The wavelength of the provided energy in nm
+    """
+    return 1 / wavenumber * 1e7
 
 
-def wavelength_to_wavenumber(wavelength):
-    return (8065.44 * 299792458 * 6.62607004e-34) / (wavelength * 1e-9 *
-                                                     1.60218e-19)
+def wavelength_to_wavenumber(wavelength: float) -> float:
+    """
+    Convert a wavelength in nm to a wavenumber in cm^-1.
+
+    Args:
+        wavelength: A wavelength in nm
+
+    Returns:
+        The wavenumber of the provided wavelength in cm^-1
+    """
+    return 1 / wavelength * 1e7
