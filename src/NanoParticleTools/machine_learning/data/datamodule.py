@@ -109,7 +109,7 @@ class NPMCDataModule(pl.LightningDataModule):
                                overwrite=False,
                                dataset_size=self.testing_size,
                                use_cache=self.use_cache,
-                               use_metadata=True)
+                               use_metadata=False)
         return None
 
     def prepare_data(self) -> None:
