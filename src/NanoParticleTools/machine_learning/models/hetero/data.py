@@ -213,8 +213,8 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
             edge_index_backward = []
             interaction_counter = 0
             for i, type_i in enumerate(dopant_types):
-                type_indices.append([type_i, type_i])
-                dopant_indices.append([i, i])
+                type_indices.append(type_i)
+                dopant_indices.append(i)
                 edge_index_forward.append([i, interaction_counter])
                 edge_index_backward.append([interaction_counter, i])
                 interaction_counter += 1
