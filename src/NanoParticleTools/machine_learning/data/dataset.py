@@ -202,7 +202,7 @@ class NPMCDataset(Dataset):
 
         _d['constraints'] = doc['input']['constraints']
         _d['dopant_specifications'] = doc['input']['dopant_specifications']
-        if 'metadata' in doc:
+        if 'metadata' in doc and self.use_metadata:
             _d['metadata'] = doc['metadata']
         if issubclass(self.feature_processor.data_cls, HeteroData):
             return self.feature_processor.data_cls(_d)
