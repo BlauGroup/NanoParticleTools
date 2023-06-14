@@ -8,3 +8,6 @@ scratch
 .coverage
 
 env/
+
+testing_data/
+training_data/
