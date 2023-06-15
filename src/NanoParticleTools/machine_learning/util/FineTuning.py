@@ -10,8 +10,8 @@ def FreezeMLP(model: MLPSpectrumModel,
     num_frozen_layers: the number of layers to freeze
     """
     iter_num = 0  
-    for param in model.parameters():
+    for name, param in model.named_parameters():
         iter_num+=1
-        if iter_num < num_frozen_layers:
+        if iter_num < num_frozen_layers*2:
             param.requires_grad = False
     return model
