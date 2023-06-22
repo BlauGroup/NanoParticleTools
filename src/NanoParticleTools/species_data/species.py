@@ -98,6 +98,10 @@ class Dopant(MSONable):
         if symbol in self.SURFACE_DOPANT_NAMES_TO_SYMBOLS:
             symbol = self.SURFACE_DOPANT_NAMES_TO_SYMBOLS[symbol]
         self.symbol = symbol
+
+        if molar_concentration < 0 or molar_concentration > 1:
+            raise ValueError(
+                'Error: The molar concentration must be between 0 and 1')
         self.molar_concentration = molar_concentration
 
         # If more levels are specified than possible, use the max
