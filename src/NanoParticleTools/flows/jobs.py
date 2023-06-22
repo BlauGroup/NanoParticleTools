@@ -76,7 +76,7 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
 
     # Generate Nanoparticle
     nanoparticle = DopedNanoparticle(constraints, dopant_specifications,
-                                     doping_seed)
+                                     doping_seed, prune_hosts=True)
     nanoparticle.generate()
 
     # Initialize Spectral Kinetics class to calculate transition rates
