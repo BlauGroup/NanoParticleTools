@@ -148,8 +148,8 @@ def test_self_interaction_processor(doc_one, doc_two, doc_three):
     assert data1['interaction'].type_indices.shape == (12, 2)
     assert data1['interaction'].dopant_indices.shape == (12, 2)
     assert data1['interaction'].num_nodes == 12
-    assert data1['self_interaction'].type_indices.shape == (4, 2)
-    assert data1['self_interaction'].dopant_indices.shape == (4, 2)
+    assert data1['self_interaction'].type_indices.shape == (4,)
+    assert data1['self_interaction'].dopant_indices.shape == (4,)
     assert data1['self_interaction'].num_nodes == 4
     assert data1['dopant', 'coupled_to',
                  'interaction'].edge_index.shape == (2, 12)
@@ -171,8 +171,8 @@ def test_self_interaction_processor(doc_one, doc_two, doc_three):
     assert data2['interaction'].type_indices.shape == (6, 2)
     assert data2['interaction'].dopant_indices.shape == (6, 2)
     assert data2['interaction'].num_nodes == 6
-    assert data2['self_interaction'].type_indices.shape == (3, 2)
-    assert data2['self_interaction'].dopant_indices.shape == (3, 2)
+    assert data2['self_interaction'].type_indices.shape == (3,)
+    assert data2['self_interaction'].dopant_indices.shape == (3,)
     assert data2['self_interaction'].num_nodes == 3
     assert data2['dopant', 'coupled_to',
                  'interaction'].edge_index.shape == (2, 6)
@@ -194,8 +194,8 @@ def test_self_interaction_processor(doc_one, doc_two, doc_three):
     assert data3['interaction'].type_indices.shape == (0, )
     assert data3['interaction'].dopant_indices.shape == (0, )
     assert data3['interaction'].num_nodes == 0
-    assert data3['self_interaction'].type_indices.shape == (1, 2)
-    assert data3['self_interaction'].dopant_indices.shape == (1, 2)
+    assert data3['self_interaction'].type_indices.shape == (1,)
+    assert data3['self_interaction'].dopant_indices.shape == (1,)
     assert data3['self_interaction'].num_nodes == 1
     assert data3['dopant', 'coupled_to',
                  'interaction'].edge_index.shape == (2, 0)
