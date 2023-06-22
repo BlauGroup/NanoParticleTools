@@ -50,9 +50,7 @@ class GraphFeatureProcessor(FeatureProcessor):
         """
         # yapf: disable
         super().__init__(fields=[
-            'formula_by_constraint', 'dopant_concentration', 'input',
-            'metadata'
-        ], **kwargs)
+            'formula_by_constraint', 'dopant_concentration', 'input'], **kwargs)
         # yapf: enable
 
         self.resolution = resolution
@@ -187,9 +185,7 @@ class FeatureProcessor(FeatureProcessor):
         """
         # yapf: disable
         super().__init__(fields=[
-            'formula_by_constraint', 'dopant_concentration', 'input',
-            'metadata'
-        ], **kwargs)
+            'formula_by_constraint', 'dopant_concentration', 'input'], **kwargs)
         # yapf: enable
 
         self.n_possible_elements = len(self.possible_elements)

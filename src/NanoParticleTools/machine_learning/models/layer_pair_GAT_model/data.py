@@ -21,9 +21,7 @@ class GraphFeatureProcessor(DataProcessor):
         """
         # yapf: disable
         super().__init__(fields=[
-            'formula_by_constraint', 'dopant_concentration', 'input',
-            'metadata'
-        ], **kwargs)
+            'formula_by_constraint', 'dopant_concentration', 'input'], **kwargs)
         # yapf: enable
 
         self.log_volume = log_volume

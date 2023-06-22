@@ -55,6 +55,14 @@ class NPMCDataset(Dataset):
         self.dataset_size = dataset_size
         self.use_metadata = use_metadata
 
+        # Check that metadata usage in label_processor is consistent with dataset
+        if self.use_metadata != self.label_processor.use_metadata:
+            warnings.warn(
+                "use_metadata is not consistent between NPMCDataset and label_processor"
+                " Automatically setting label_processor.use_metadata to match NPMCDataset"
+            )
+            self.label_processor.use_metadata = self.use_metadata
+
         if download:
             self.download()
 

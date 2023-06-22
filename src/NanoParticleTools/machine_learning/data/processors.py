@@ -20,7 +20,9 @@ class DataProcessor(ABC, MSONable):
     Fields are specified to ensure they are present in documents
     """
 
-    def __init__(self, fields: List[str]):
+    def __init__(self,
+                 fields: List[str],
+                 inc_metadata: bool = False):
         """
         :param fields: fields required in the document(s) to be processed
         """
@@ -108,6 +110,17 @@ class FeatureProcessor(DataProcessor):
 
 class LabelProcessor(DataProcessor):
 
+    def __init__(self, fields: List[str], use_metadata: bool = False):
+        super().__init__(fields)
+        self.use_metadata = use_metadata
+
+    @property
+    def required_fields(self) -> List[str]:
+        if self.use_metadata:
+            return super().required_fields + ['metadata']
+        else:
+            return super().required_fields
+    
     def example(self):
         x = torch.linspace(*self.spectrum_range, 600)
         y = torch.nn.functional.relu(torch.rand_like(x))

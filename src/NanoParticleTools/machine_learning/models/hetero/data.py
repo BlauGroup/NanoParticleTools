@@ -14,9 +14,7 @@ class HeteroFeatureProcessor(FeatureProcessor):
     def __init__(self, include_global_node=False, **kwargs):
         # yapf: disable
         super().__init__(fields=[
-            'formula_by_constraint', 'dopant_concentration', 'input',
-            'metadata'
-        ], **kwargs)
+            'formula_by_constraint', 'dopant_concentration', 'input'], **kwargs)
         # yapf: enable
 
         self.elements_map = dict([(_t[1], _t[0])
@@ -121,9 +119,7 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
     def __init__(self, separate_self_interaction=False, **kwargs):
         # yapf: disable
         super().__init__(fields=[
-            'formula_by_constraint', 'dopant_concentration', 'input',
-            'metadata'
-        ], **kwargs)
+            'formula_by_constraint', 'dopant_concentration', 'input'], **kwargs)
         # yapf: enable
 
         self.elements_map = dict([(_t[1], _t[0])
