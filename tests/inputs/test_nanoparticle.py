@@ -61,12 +61,21 @@ def test_cube_constraint():
 
 
 def test_doped_nanoparticle():
-    constraint = [SphericalConstraint(10), SphericalConstraint(15)]
-    dopants = [(0, 0.1, 'Yb', 'Y'), (1, 0.2, 'Er', 'Y')]
+    # Test simple structure generation
+    constraint = [SphericalConstraint(10)]
+    dopants = [(0, 0.1, 'Yb', 'Y')]
     dnp = DopedNanoparticle(constraint, dopants)
 
     # TODO: test this only if we want longer running test
     dnp.generate()
+    assert len(dnp.dopant_sites) == 6
+    assert len(dnp.sites) == 332
+
+    # Test accelerated generation
+    dnp = DopedNanoparticle(constraint, dopants, prune_hosts=True)
+    dnp.generate()
+    assert len(dnp.dopant_sites) == 6
+    assert len(dnp.sites) == 56
 
 
 def test_get_nayf4_structure():
