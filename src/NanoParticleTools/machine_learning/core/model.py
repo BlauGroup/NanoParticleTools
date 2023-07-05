@@ -142,5 +142,5 @@ class SpectrumModelBase(pl.LightningModule):
         Returns:
             torch.Tensor: _description_
         """
-        pred, _ = self._evaluate_step(batch)
-        return pred
+        y_hat = self(**batch.to_dict())
+        return y_hat
