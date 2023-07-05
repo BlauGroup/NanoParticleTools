@@ -74,34 +74,51 @@ class DopantInteractionHeteroRepresentationModule(torch.nn.Module):
                 edge_index_dict,
                 radii=None,
                 batch_dict=None):
+        # Embed the dopant types
         dopant_attr = self.dopant_embedder(dopant_types)
+
+        # Use a film layer to condition the dopant embedding on the dopant concentration
         dopant_attr = self.dopant_film_layer(dopant_attr,
                                              dopant_concs.unsqueeze(-1))
 
+        # Condition the dopant node attribute on the size of the dopant constraint
         dopant_node_radii = radii[dopant_constraint_indices]
         dopant_attr = self.dopant_constraint_film_layer(
             dopant_attr, dopant_node_radii)
+
+        # Normalize the dopant node attribute
         dopant_attr = self.dopant_norm(dopant_attr)
 
+        # Embed the interaction nodes, using the pair of dopant types
         interaction_attr = self.interaction_embedder(
-            dopant_types[interaction_type_indices].float())
-        interaction_node_conc = dopant_concs[interaction_dopant_indices]
+            interaction_type_indices.float())
+        
+        # Index the radii and compute the integrated interaction
         interaction_node_radii = radii[dopant_constraint_indices][
             interaction_dopant_indices].flatten(-2)
         integrated_interaction = self.integrated_interaction(
             *interaction_node_radii.T)
+        
+        # Multiply the concentration into the integrated_interaction
+        interaction_node_conc = dopant_concs[interaction_dopant_indices]
         integrated_interaction = (
             interaction_node_conc[:, 0] *
             interaction_node_conc[:, 1]).unsqueeze(-1) * integrated_interaction
+        
+        # Normalize the integrated interaction
         integrated_interaction = self.interaction_norm(integrated_interaction)
+
+        # Condition the interaction node attribute on the integrated interaction
         interaction_attr = self.interaction_film_layer(interaction_attr,
                                                        integrated_interaction)
 
+        # Create an dictionary to allow for heterogenous message passing
         intermediate_x_dict = {
             'dopant': dopant_attr,
             'interaction': interaction_attr
         }
 
+        # Apply the message passing operator(s)
         for conv in self.convs:
             intermediate_x_dict = conv(intermediate_x_dict, edge_index_dict)
             intermediate_x_dict = {
@@ -140,7 +157,7 @@ class DopantInteractionHeteroModel(SpectrumModelBase):
             self.embed_dim, self.n_message_passing, self.self_interaction,
             self.nsigma)
 
-        self.readout = NonLinearMLP(embed_dim, 1, [16, 16], 0.25, nn.SiLU)
+        self.readout = NonLinearMLP(embed_dim, 1, [128], 0.25, nn.SiLU)
 
     def forward(self,
                 dopant_types,
@@ -182,6 +199,30 @@ class DopantInteractionHeteroModel(SpectrumModelBase):
             batch_dict=data.batch_dict)
         loss = self.loss_function(y_hat, data.log_y)
         return y_hat, loss
+
+    def predict_step(self,
+                     batch: Data | Batch,
+                     batch_idx: int | None = None) -> torch.Tensor:
+        """
+        Make a prediction for a batch of data.
+
+        Args:
+            batch (_type_): _description_
+            batch_idx (int | None, optional): _description_. Defaults to None.
+
+        Returns:
+            torch.Tensor: _description_
+        """
+        y_hat = self(
+            dopant_types=batch['dopant'].types,
+            dopant_concs=batch['dopant'].x,
+            dopant_constraint_indices=batch['dopant'].constraint_indices,
+            interaction_type_indices=batch['interaction'].type_indices,
+            interaction_dopant_indices=batch['interaction'].dopant_indices,
+            edge_index_dict=batch.edge_index_dict,
+            radii=batch.constraint_radii,
+            batch_dict=batch.batch_dict)
+        return y_hat
 
     def _step(self,
               prefix: str,
