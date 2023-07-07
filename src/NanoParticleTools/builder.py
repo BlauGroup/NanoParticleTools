@@ -314,6 +314,13 @@ class PartialAveragingBuilder(UCNPBuilder):
 
     def __init__(self,
                  n_docs_filter: int,
+                 source: Store,
+                 target: Store,
+                 docs_filter: Optional[Dict] = {},
+                 chunk_size=1,
+                 grouped_ids=None,
+                 energy_spectrum_args=None,
+                 wavelength_spectrum_args=None,
                  n_orderings: int = 4,
                  n_sims: int = 4,
                  **kwargs):
@@ -332,7 +339,14 @@ class PartialAveragingBuilder(UCNPBuilder):
             n_orderings: The number of dopant placements to use in averaging.
             n_sims: The number of simulation random seeds to use in averaging.
         """
-        super().__init__(**kwargs)
+        super().__init__(source=source,
+                         target=target,
+                         docs_filter=docs_filter,
+                         chunk_size=chunk_size,
+                         grouped_ids=grouped_ids,
+                         energy_spectrum_args=energy_spectrum_args,
+                         wavelength_spectrum_args=wavelength_spectrum_args,
+                         **kwargs)
         self.n_docs_filter = n_docs_filter
         self.n_orderings = n_orderings
         self.n_sims = n_sims
