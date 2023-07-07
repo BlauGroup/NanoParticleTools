@@ -85,53 +85,55 @@ class UCNPBuilder(Builder):
         # Prune duplicates based on dopant and simulation seed
         unduplicated_dict = {}
         for i, doc in enumerate(items):
-            unduplicated_dict[f"{doc['data']['simulation_seed']}-{doc['data']['dopant_seed']}"] = i
+            unduplicated_dict[
+                f"{doc['data']['simulation_seed']}-{doc['data']['dopant_seed']}"] = i
 
         if len(unduplicated_dict) != len(items):
             items = [items[i] for i in unduplicated_dict.values()]
 
-            self.logger.info(f"Pruned duplicates, resulting in {len(items)} to process")
+            self.logger.info(
+                f"Pruned duplicates, resulting in {len(items)} to process")
 
         # Create/Populate a new document for the average
         avg_doc = {
             "uuid":
             uuid.uuid4(),
             "avg_simulation_length":
-                np.mean([i["data"]["simulation_length"] for i in items]),
+            np.mean([i["data"]["simulation_length"] for i in items]),
             "avg_simulation_time":
-                np.mean([i["data"]["simulation_time"] for i in items]),
+            np.mean([i["data"]["simulation_time"] for i in items]),
             "n_constraints":
-                items[0]["data"]["n_constraints"],
+            items[0]["data"]["n_constraints"],
             "n_dopant_sites":
-                items[0]["data"]["n_dopant_sites"],
+            items[0]["data"]["n_dopant_sites"],
             "n_dopants":
-                items[0]["data"]["n_dopants"],
+            items[0]["data"]["n_dopants"],
             "formula":
-                items[0]["data"]["formula"],
+            items[0]["data"]["formula"],
             "nanostructure":
-                items[0]["data"]["nanostructure"],
+            items[0]["data"]["nanostructure"],
             "nanostructure_size":
-                items[0]["data"]["nanostructure_size"],
+            items[0]["data"]["nanostructure_size"],
             "total_n_levels":
-                items[0]["data"]["total_n_levels"],
+            items[0]["data"]["total_n_levels"],
             "formula_by_constraint":
-                items[0]["data"]["formula_by_constraint"],
+            items[0]["data"]["formula_by_constraint"],
             "dopants":
-                items[0]["data"]["dopants"],
+            items[0]["data"]["dopants"],
             "dopant_concentration":
-                items[0]["data"]["dopant_concentration"],
+            items[0]["data"]["dopant_concentration"],
             "overall_dopant_concentration":
-                items[0]["data"]["overall_dopant_concentration"],
+            items[0]["data"]["overall_dopant_concentration"],
             "excitation_power":
-                items[0]["data"]["excitation_power"],
+            items[0]["data"]["excitation_power"],
             "excitation_wavelength":
-                items[0]["data"]["excitation_wavelength"],
+            items[0]["data"]["excitation_wavelength"],
             "dopant_composition":
-                items[0]["data"]["dopant_composition"],
+            items[0]["data"]["dopant_composition"],
             "input":
-                items[0]["data"]["input"],
+            items[0]["data"]["input"],
             "num_averaged":
-                len(items)
+            len(items)
         }
         if 'metadata' in items[0]["data"]:
             avg_doc["metadata"] = items[0]["data"]["metadata"]
@@ -306,3 +308,57 @@ class UCNPBuilder(Builder):
             ])
             avg_dndt.append(arr)
         return avg_dndt
+
+
+class PartialAveragingBuilder(UCNPBuilder):
+
+    def __init__(self,
+                 n_docs_filter: int,
+                 n_orderings: int = 4,
+                 n_sims: int = 4,
+                 **kwargs):
+        """
+        A partial builder that only averages over a set of documents if
+        there are a certain number of documents.
+
+        This is primarily used to build collections to compare performance
+        with (e.g.) 16 averaged simulations vs 4 averaged simulations.
+
+        Note:
+            The total number of averaged simulations is n_orderings * n_sims
+
+        Args:
+            n_docs_filter: The nanoparticle must have a minimum of this many simulations
+            n_orderings: The number of dopant placements to use in averaging.
+            n_sims: The number of simulation random seeds to use in averaging.
+        """
+        super().__init__(**kwargs)
+        self.n_docs_filter = n_docs_filter
+        self.n_orderings = n_orderings
+        self.n_sims = n_sims
+
+    def get_items(self):
+        for docs_to_avg in super().get_items():
+            # prune duplicates
+            unduplicated_dict = {}
+            for i, doc in enumerate(docs_to_avg):
+                try:
+                    unduplicated_dict[doc['data']['simulation_seed']][
+                        doc['data']['dopant_seed']] = i
+                except KeyError:
+                    unduplicated_dict[doc['data']['simulation_seed']] = {
+                        doc['data']['dopant_seed']: i
+                    }
+
+            # count the total items in the dict
+            total_items = sum([len(v) for v in unduplicated_dict.values()])
+            if total_items != self.n_docs_filter:
+                continue
+
+            # collect all the items in a single list
+            items = []
+            for i in sorted(unduplicated_dict.keys())[:self.n_orderings]:
+                for j in sorted(unduplicated_dict[i].keys())[:self.n_sims]:
+                    items.append(docs_to_avg[unduplicated_dict[i][j]])
+
+            yield items
