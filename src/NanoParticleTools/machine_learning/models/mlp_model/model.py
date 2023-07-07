@@ -5,7 +5,7 @@ import pytorch_lightning as pl
 import torch.nn.functional as F
 from typing import Callable, Optional, Union, List
 import numpy as np
-from ...core.model import SpectrumModelBase
+from NanoParticleTools.machine_learning.core.model import SpectrumModelBase
 
 
 class MLPSpectrumModel(SpectrumModelBase):

@@ -331,7 +331,7 @@ def train_spectrum_model(config,
                          swa: Optional[bool] = False,
                          save_checkpoints: Optional[bool] = True,
                          wandb_config: Optional[dict] = None,
-                         trainer_device_config: Optional[dict] = None,
+                         trainer_device_config: Optional[dict] = None, 
                          additional_callbacks: Optional[List] = None):
     """
         params
@@ -438,6 +438,7 @@ def train_uv_model(config,
                    model_cls,
                    data_module,
                    lr_scheduler,
+                   initial_model: Optional[pl.LightningModule] = None,
                    num_epochs: Optional[int] = 2000,
                    augment_loss=False,
                    ray_tune: Optional[bool] = False,
@@ -465,10 +466,12 @@ def train_uv_model(config,
         wandb_config = {'name': None}
 
     # Make the model
-    model = model_cls(lr_scheduler=lr_scheduler,
-                      optimizer_type='adam',
-                      **config)
-
+    if initial_model is None: 
+        model = model_cls(lr_scheduler=lr_scheduler,
+                          optimizer_type='adam',
+                          **config)
+    else: 
+        model = initial_model
     # Make WandB logger
     wandb_logger = WandbLogger(log_model=True, **wandb_config)
 
