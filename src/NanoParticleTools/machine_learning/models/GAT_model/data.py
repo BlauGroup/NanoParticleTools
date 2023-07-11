@@ -26,11 +26,9 @@ class GraphFeatureProcessor(DataProcessor):
         """
         # yapf: disable
         super().__init__(fields=[
-            'formula_by_constraint', 'dopant_concentration', 'input',
-            'metadata'
-        ], **kwargs)
+            'formula_by_constraint', 'dopant_concentration', 'input',], **kwargs)
         # yapf: enable
-        
+
         self.edge_attr_bias = edge_attr_bias
         self.single_edge_attr = single_edge_attr
 
@@ -149,9 +147,7 @@ class GraphInteractionFeatureProcessor(DataProcessor):
         """
         # yapf: disable
         super().__init__(fields=[
-            'formula_by_constraint', 'dopant_concentration', 'input',
-            'metadata'
-        ], **kwargs)
+            'formula_by_constraint', 'dopant_concentration', 'input',], **kwargs)
         # yapf: enable
 
         self.edge_attr_bias = edge_attr_bias

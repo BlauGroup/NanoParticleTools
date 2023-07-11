@@ -21,8 +21,7 @@ class TransformerFeatureProcessor(DataProcessor):
         """
         super().__init__(fields=[
             'formula_by_constraint', 'dopant_concentration',
-            'input.constraints', 'metadata'
-        ], **kwargs)
+            'input.constraints'], **kwargs)
 
         self.max_layers = max_layers
         self.volume_scale_factor = volume_scale_factor

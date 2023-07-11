@@ -7,6 +7,7 @@ from monty.serialization import MontyDecoder
 from torch_geometric.data.hetero_data import HeteroData
 
 from typing import List, Tuple, Any, Dict, Optional
+import warnings
 
 
 class HeteroFeatureProcessor(FeatureProcessor):
@@ -14,9 +15,7 @@ class HeteroFeatureProcessor(FeatureProcessor):
     def __init__(self, include_global_node=False, **kwargs):
         # yapf: disable
         super().__init__(fields=[
-            'formula_by_constraint', 'dopant_concentration', 'input',
-            'metadata'
-        ], **kwargs)
+            'formula_by_constraint', 'dopant_concentration', 'input'], **kwargs)
         # yapf: enable
 
         self.elements_map = dict([(_t[1], _t[0])
@@ -118,17 +117,19 @@ class HeteroFeatureProcessor(FeatureProcessor):
 
 class DopantInteractionFeatureProcessor(FeatureProcessor):
 
-    def __init__(self, separate_self_interaction=False, **kwargs):
+    def __init__(self,
+                 separate_self_interaction=False,
+                 include_zeros=False,
+                 **kwargs):
         # yapf: disable
         super().__init__(fields=[
-            'formula_by_constraint', 'dopant_concentration', 'input',
-            'metadata'
-        ], **kwargs)
+            'formula_by_constraint', 'dopant_concentration', 'input'], **kwargs)
         # yapf: enable
 
         self.elements_map = dict([(_t[1], _t[0])
                                   for _t in enumerate(self.possible_elements)])
         self.separate_self_interaction = separate_self_interaction
+        self.include_zeros = include_zeros
 
     def process_doc(self, doc):
         data = {
@@ -142,9 +143,15 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
             data[('dopant', 'coupled_to', 'self_interaction')] = {}
             data[('self_interaction', 'coupled_to', 'dopant')] = {}
 
-        dopant_concentration = [
-            el for el in doc['dopant_concentration'] if len(el) > 0
-        ]
+        # Build the dopant concentration in reverse order
+        dopant_concentration = []
+        for constraint in doc['dopant_concentration']:
+            dopant_concentration.append({})
+            for el in self.possible_elements:
+                _conc = constraint.get(el, 0)
+                if _conc > 0 or self.include_zeros:
+                    dopant_concentration[-1][el] = _conc
+
         dopant_specifications = [
             (layer_idx, conc, el, None)
             for layer_idx, dopants in enumerate(dopant_concentration)
@@ -157,7 +164,6 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
         # use the constraints to build a radii tensor
         _radii = [
             self.get_radii(i, constraints) for i in range(len(constraints))
-            if len(doc['dopant_concentration'][i]) > 0
         ]
         radii = torch.tensor(_radii, dtype=torch.float32, requires_grad=True)
         data['constraint_radii'] = radii

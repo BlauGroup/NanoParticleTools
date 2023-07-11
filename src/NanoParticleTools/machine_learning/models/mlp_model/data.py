@@ -18,9 +18,7 @@ class FeatureProcessor(BaseFeatureProcessor):
         """
         # yapf: disable
         super().__init__(fields=[
-            'formula_by_constraint', 'dopant_concentration', 'input',
-            'metadata'
-        ], **kwargs)
+            'formula_by_constraint', 'dopant_concentration', 'input'], **kwargs)
         # yapf: enable
 
         self.max_layers = max_layers
@@ -74,9 +72,7 @@ class VolumeFeatureProcessor(BaseFeatureProcessor):
         """
         # yapf: disable
         super().__init__(fields=[
-            'formula_by_constraint', 'dopant_concentration', 'input',
-            'metadata'
-        ], **kwargs)
+            'formula_by_constraint', 'dopant_concentration', 'input'], **kwargs)
         # yapf: enable
 
         self.max_layers = max_layers
