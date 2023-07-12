@@ -1,5 +1,5 @@
-from NanoParticleTools.machine_learning.data.processors import DataProcessor
-
+from NanoParticleTools.machine_learning.data.processors import (
+    DataProcessor, FeatureProcessor, LabelProcessor)
 
 import numpy as np
 from maggma.core import Store
@@ -8,196 +8,52 @@ from monty.serialization import MontyEncoder
 from torch.utils.data import Dataset
 from torch_geometric.data import HeteroData
 
-
-import hashlib
 import json
 import os
-import warnings
 from typing import Any, Dict
 
 
 class NPMCDataset(Dataset):
-    """
-    NPMC dataset
-    TODO: 1) Figure out a more elegant way to check if the data should be redownloaded
-             (if the store has been updated)
-          2) More elegant way to enforce size of dataset and redownload if the size is incorrect
-          3) We are currently not caching the data to file. Should look into whether or not it
-             is worth it to do so. There are some features already implemented to do this, such
-             as saving the hash of the data processors and checking if they have changed.
-    """
 
     def __init__(self,
-                 root: str,
+                 file_path: str,
                  feature_processor: DataProcessor,
                  label_processor: DataProcessor,
-                 data_store: Store,
-                 doc_filter: dict = None,
-                 download: bool = False,
-                 overwrite: bool = False,
-                 use_cache: bool = False,
-                 dataset_size: int = None,
-                 use_metadata: bool = False):
-        """
-        :param feature_processor:
-        :param label_processor:
-        """
-        if doc_filter is None:
-            doc_filter = {}
+                 use_metadata: bool = False,
+                 cache_in_memory: bool = False):
 
-        self.root = root
+        self.file_path = file_path
         self.feature_processor = feature_processor
         self.label_processor = label_processor
-        self.data_store = data_store
-        self.doc_filter = doc_filter
-        self.overwrite = overwrite
-        self.use_cache = use_cache
-        self.dataset_size = dataset_size
         self.use_metadata = use_metadata
+        self.cache_in_memory = cache_in_memory
 
-        # Check that metadata usage in label_processor is consistent with dataset
-        if self.use_metadata != self.label_processor.use_metadata:
-            warnings.warn(
-                "use_metadata is not consistent between NPMCDataset and label_processor"
-                " Automatically setting label_processor.use_metadata to match NPMCDataset"
-            )
-            self.label_processor.use_metadata = self.use_metadata
+        self._docs = None
+        self._cached_data = None
 
-        if download:
-            self.download()
+    @property
+    def docs(self):
+        if self._docs is None:
+            self._docs = self._load_data()
+        return self._docs
 
-        if not self._check_exists():
-            raise RuntimeError("Dataset not downloaded")
-
-        self.docs = self._load_data()
-
-        if self.dataset_size == -1:
-            warnings.warn(
-                "dataset_size set to -1, no check was performed on the currently"
-                " downloaded dataset. It may be out of date")
-        elif self.dataset_size is None:
-            self.data_store.connect()
-            if len(self.docs) != self.data_store.count(self.doc_filter):
-                warnings.warn(
-                    "Length of dataset is not of the desired length. Automatically setting"
-                    " 'overwrite=True' to redownload the data")
-                self.overwrite = True
-                self.download()
-                self.docs = self._load_data()
-        elif len(self.docs) != self.dataset_size:
-            warnings.warn(
-                "Length of dataset is not of the desired length. Automatically setting"
-                " 'overwrite=True' to redownload the data")
-            self.data_store.connect()
-            self.overwrite = True
-            self.download()
-            self.docs = self._load_data()
-
-        self.cached_data = [False for _ in self.docs]
-        self.item_cache = [None for _ in self.docs]
+    @property
+    def cached_data(self):
+        if self._cached_data is None:
+            self._cached_data = [None for _ in self.docs]
+        return self._cached_data
 
     def _load_data(self):
-        with open(os.path.join(self.raw_folder, 'data.json'), 'r') as f:
+        with open(self.file_path, 'r') as f:
             docs = json.load(f, cls=MontyDecoder)
         return docs
 
-    @property
-    def raw_folder(self) -> str:
-        return os.path.join(self.root, self.__class__.__name__, "raw")
+    def __len__(self):
+        return len(self.docs)
 
-    @property
-    def processed_folder(self) -> str:
-        return os.path.join(self.root, self.__class__.__name__, "processed")
-
-    @property
-    def hash_file(self) -> str:
-        return os.path.join(self.processed_folder, 'hashes.json')
-
-    @staticmethod
-    def get_hash(dictionary: Dict[str, Any]) -> str:
-        """
-        MD5 hash of a dictionary.
-        Adapted from: https://www.doc.ic.ac.uk/~nuric/coding/how-to-hash-a-dictionary-in-python.html
-        """
-        dhash = hashlib.md5()
-        # We need to sort arguments so {'a': 1, 'b': 2} is
-        # the same as {'b': 2, 'a': 1}
-        encoded = json.dumps(dictionary, sort_keys=True,
-                             cls=MontyEncoder).encode()
-        dhash.update(encoded)
-        return dhash.hexdigest()
-
-    def _check_exists(self):
-        if os.path.isfile(os.path.join(self.raw_folder, 'data.json')):
-            return True
-        else:
-            return False
-
-    def _check_processors(self):
-        """
-        We only redownload the data if the feature_processor or label_processor has changed
-        If using a new data store or a new set of data, use the 'overwrite=True' arg
-        """
-        feature_processor_match = self._check_hash(
-            'feature_processor',
-            self.get_hash(self.feature_processor.as_dict()))
-        label_processor_match = self._check_hash(
-            'label_processor', self.get_hash(self.label_processor.as_dict()))
-
-        return all(feature_processor_match, label_processor_match)
-
-    def _check_hash(self, fname: str, hash: int):
-        if not os.path.isfile(self.hash_file):
-            return False
-
-        with open(self.hash_file, 'r') as f:
-            hashes = json.load(f)
-
-        return hashes[fname] == hash
-
-    def log_processors(self):
-        _d = {}
-        _d['feature_processor'] = self.get_hash(
-            self.feature_processor.__dict__)
-        _d['label_processor'] = self.get_hash(self.label_processor.__dict__)
-        with open(os.path.join(self.raw_folder, 'hashes.json'), 'w') as f:
-            json.dump(_d, f)
-
-    def download(self):
-        required_fields = self.feature_processor.required_fields \
-            + self.label_processor.required_fields
-
-        if self.use_metadata:
-            required_fields += ['metadata']
-
-        if 'input' not in required_fields:
-            required_fields.append('input')
-
-        if self._check_exists() and not self.overwrite:
-            return
-
-        os.makedirs(self.raw_folder, exist_ok=True)
-        os.makedirs(self.raw_folder, exist_ok=True)
-
-        # Download the data
-        with self.data_store:
-            documents = list(
-                self.data_store.query(self.doc_filter,
-                                      properties=required_fields))
-
-        if self.dataset_size is not None:
-            # Choose a subset of the total documents
-            documents = list(
-                np.random.choice(documents,
-                                 size=min(len(documents), self.dataset_size),
-                                 replace=False))
-
-        # Write the data to the raw directory
-        with open(os.path.join(self.raw_folder, 'data.json'), 'w') as f:
-            json.dump(documents, f, cls=MontyEncoder)
-
-        # Log the processor hashes
-        self.log_processors()
+    @classmethod
+    def collate_fn(cls):
+        raise NotImplementedError("Must override collate_fn")
 
     def process_single_doc(self, idx: int):
         """
@@ -217,27 +73,20 @@ class NPMCDataset(Dataset):
         else:
             return self.feature_processor.data_cls(**_d)
 
-    @classmethod
-    def collate_fn(cls):
-        raise NotImplementedError("Must override collate_fn")
-
-    def __len__(self):
-        return len(self.docs)
-
     def __getitem__(self, idx):
-        if self.use_cache:
+        if self.cache_in_memory:
             # Check if this index is cached
-            if self.cached_data[idx]:
+            if self.cached_data[idx] is not None:
                 # Retrieve cached item from memory
-                data = self.item_cache[idx]
+                data = self.cached_data[idx]
             else:
                 # generate the point
                 data = self.process_single_doc(idx)
 
-                self.cached_data[idx] = True
-                self.item_cache[idx] = data
-                self.docs[
-                    idx] = None  # We have cached the output of this document, free up memory
+                self.cached_data[idx] = data
+
+                # We have cached the output of this document, free up memory
+                self.docs[idx] = None
         else:
             data = self.process_single_doc(idx)
         return data
@@ -246,3 +95,72 @@ class NPMCDataset(Dataset):
         _idx = np.random.choice(range(len(self)))
 
         return self[_idx]
+
+    @classmethod
+    def from_store(cls,
+                   feature_processor: DataProcessor,
+                   label_processor: DataProcessor,
+                   data_store: Store,
+                   doc_filter: dict = None,
+                   overwrite: bool = False,
+                   use_metadata: bool = False,
+                   file_path: str = './dataset.json',
+                   cache_in_memory: bool = False):
+        # Check if the file exists
+        if os.path.isfile(file_path):
+            if overwrite:
+                download(feature_processor, label_processor, data_store,
+                         doc_filter, file_path, use_metadata)
+        else:
+            # Download the data from the store and write to file
+            download(feature_processor, label_processor, data_store,
+                     doc_filter, file_path, use_metadata)
+
+        return cls(file_path, feature_processor, label_processor, use_metadata,
+                   cache_in_memory)
+
+
+def get_required_fields(feature_processor: FeatureProcessor,
+                        label_processor: LabelProcessor,
+                        use_metadata: bool = False):
+    required_fields = feature_processor.required_fields \
+        + label_processor.required_fields
+
+    if use_metadata:
+        required_fields += ['metadata']
+
+    if 'input' not in required_fields:
+        required_fields.append('input')
+    return required_fields
+
+
+def download(feature_processor: FeatureProcessor,
+             label_processor: LabelProcessor,
+             data_store: Store,
+             doc_filter: dict,
+             file_path: str = './dataset.json',
+             use_metadata: bool = False):
+    required_fields = get_required_fields(feature_processor, label_processor,
+                                          use_metadata)
+
+    # Download the data
+    data_store.connect()
+    documents = list(data_store.query(doc_filter, properties=required_fields))
+    data_store.close()
+
+    # Write the data to the raw directory
+    if file_path.split('.')[-1] == 'json':
+
+        with open(file_path, 'w') as f:
+            json.dump(documents, f, cls=MontyEncoder)
+    else:
+        raise NotImplementedError("Only json files are currently supported")
+        # Create the hdf5 file
+        # This route needs some exploration. The documents don't play nicely with h5py,
+        # Therefore, we'd need to think about preprocessing and storing as tensors/np arrays
+        # with h5py.File(file, 'w') as f:
+        #     f['required_fields'] = required_fields
+        #     data = f.create_group('data')
+        #     for i, doc in enumerate(documents):
+        #         group = data.create_group(f'{i}')
+        #         group["doc"] = json.dumps(doc, cls=MontyEncoder)

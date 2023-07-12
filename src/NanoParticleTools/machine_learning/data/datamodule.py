@@ -1,6 +1,5 @@
-from NanoParticleTools.machine_learning.data.dataset import NPMCDataset
+from NanoParticleTools.machine_learning.data.dataset import NPMCDataset, Dataset
 from NanoParticleTools.machine_learning.data.processors import DataProcessor
-
 
 import numpy as np
 import pytorch_lightning as pl
@@ -10,158 +9,85 @@ from torch.utils.data import DataLoader
 from torch_geometric.data import Data
 from torch_geometric.loader import DataLoader as pyg_DataLoader
 
-
 from typing import List, Optional
 
 
 class NPMCDataModule(pl.LightningDataModule):
-    """_summary_
-    Args:
-        feature_processor (DataProcessor): _description_
-        label_processor (DataProcessor): _description_
-        training_data_store (Store): _description_
-        testing_data_store (Optional[Store], optional): _description_. Defaults to None.
-        training_doc_filter (Optional[dict], optional): _description_. Defaults to {}.
-        testing_doc_filter (Optional[dict], optional): _description_. Defaults to {}.
-        training_data_dir (Optional[str], optional): _description_. Defaults to './training_data'.
-        testing_data_dir (Optional[str], optional): _description_. Defaults to './testing_data'.
-        batch_size (Optional[int], optional): _description_. Defaults to 16.
-        validation_split (Optional[float], optional): _description_. Defaults to 0.15.
-        test_split (Optional[float], optional): _description_. Defaults to 0.15.
-        training_size (Optional[int], optional): _description_. Defaults to None.
-        testing_size (Optional[int], optional): _description_. Defaults to None.
-        loader_workers (Optional[int], optional): _description_. Defaults to 0.
-        use_cache (Optional[bool], optional): _description_. Defaults to False.
-    """
-
     def __init__(self,
-                 feature_processor: DataProcessor,
-                 label_processor: DataProcessor,
-                 training_data_store: Store,
-                 testing_data_store: Optional[Store] = None,
-                 training_doc_filter: Optional[dict] = {},
-                 testing_doc_filter: Optional[dict] = {},
-                 training_data_dir: Optional[str] = './training_data',
-                 testing_data_dir: Optional[str] = './testing_data',
-                 batch_size: Optional[int] = 16,
-                 validation_split: Optional[float] = 0.15,
-                 test_split: Optional[float] = 0.15,
-                 training_size: Optional[int] = None,
-                 testing_size: Optional[int] = None,
-                 loader_workers: Optional[int] = 0,
-                 use_cache: Optional[bool] = False,
-                 calc_mean: bool = False,
-                 split_seed: int = None):
+                 train_dataset,
+                 val_dataset: Optional[Dataset] = None,
+                 test_dataset: Optional[Dataset] = None,
+                 split_seed: int = None,
+                 data_is_graph: bool = False,
+                 batch_size: int = 16,
+                 loader_workers: int = 0,
+                 **kwargs) -> None:
         super().__init__()
-
-        # We want to prepare the data on each node. That way each has access to the original data
-        self.prepare_data_per_node = True
-
-        if testing_data_store:
-            test_split = 0
-
-        self.feature_processor = feature_processor
-        self.label_processor = label_processor
-        self.training_doc_filter = training_doc_filter
-        self.testing_doc_filter = testing_doc_filter
-        self.training_data_store = training_data_store
-        self.testing_data_store = testing_data_store
-        self.training_data_dir = training_data_dir
-        self.testing_data_dir = testing_data_dir
-        self.batch_size = batch_size
-        self.validation_split = validation_split
-        self.test_split = test_split
-        self.training_size = training_size
-        self.testing_size = testing_size
-        self.loader_workers = loader_workers
-        self.use_cache = use_cache
-        self.calc_mean = calc_mean
-        if split_seed is None:
-            # If no split seed is provided, generate one
-            split_seed = np.random.randint(0, 100000)
+        self.train_dataset = train_dataset
+        self.val_dataset = val_dataset
+        self.test_dataset = test_dataset
         self.split_seed = split_seed
-        # Initialize class variables that we will use later
-        self.spectra_mean = None
-        self.spectra_std = None
+        self.data_is_graph = data_is_graph
+        self.batch_size = batch_size
+        self.loader_workers = loader_workers
 
         self.save_hyperparameters()
 
-    def get_training_dataset(self, download=False):
-        return NPMCDataset(root=self.training_data_dir,
-                           feature_processor=self.feature_processor,
-                           label_processor=self.label_processor,
-                           data_store=self.training_data_store,
-                           doc_filter=self.training_doc_filter,
-                           download=download,
-                           overwrite=False,
-                           dataset_size=self.training_size,
-                           use_cache=self.use_cache,
-                           use_metadata=False)
-
-    def get_testing_dataset(self, download=False):
-        if self.testing_data_store is not None:
-            return NPMCDataset(root=self.testing_data_dir,
-                               feature_processor=self.feature_processor,
-                               label_processor=self.label_processor,
-                               data_store=self.testing_data_store,
-                               doc_filter=self.testing_doc_filter,
-                               download=download,
-                               overwrite=False,
-                               dataset_size=self.testing_size,
-                               use_cache=self.use_cache,
-                               use_metadata=False)
-        return None
-
-    def prepare_data(self) -> None:
+    @classmethod
+    def from_train_dataset(cls,
+                           train_dataset,
+                           val_split=0.15,
+                           test_split=0.15,
+                           split_seed: int = None,
+                           **kwargs):
         """
-        We only want to download the data in this method.
-        Since this function is only called once in the main process, assigning state variables
-        here will result in only the main process having access to those states (data).
-        i.e. It should not contain the following:
-        ```
-        self.training_dataset = self.get_training_dataset()
-        self.testing_dataset = self.get_testing_dataset()
-        ```
+        Construct a data module from a single dataset.
+        The dataset will be split into training, validation,
+        and testing according to the specified splits
+
+        Args:
+            train_dataset (_type_): _description_
+            val_split (float, optional): _description_. Defaults to 0.15.
+            test_split (float, optional): _description_. Defaults to 0.15.
+            split_seed (int, optional): _description_. Defaults to None.
+
+        Returns:
+            _type_: _description_
         """
+        if split_seed is None:
+            split_seed = np.random.randint(0, 100000)
 
-        self.get_training_dataset(download=True)
-        self.get_testing_dataset(download=True)
+        test_size = int(len(train_dataset) * test_split)
+        validation_size = int(len(train_dataset) * val_split)
+        train_size = len(train_dataset) - validation_size - test_size
 
-    def setup(self, stage: Optional[str] = None):
+        train_subset, val_subset, test_subset = torch.utils.data.random_split(
+            train_dataset, [train_size, validation_size, test_size],
+            generator=torch.Generator().manual_seed(split_seed))
+        
+        data_is_graph = train_dataset.feature_processor.is_graph
+        return cls(train_subset, val_subset, test_subset, split_seed, data_is_graph, **kwargs)
 
-        training_dataset = self.get_training_dataset(download=False)
+    @classmethod
+    def from_train_and_test_dataset(cls,
+                                    train_dataset,
+                                    test_dataset,
+                                    val_split=0.15,
+                                    split_seed: int = None,
+                                    **kwargs):
+        if split_seed is None:
+            split_seed = np.random.randint(0, 100000)
 
-        if self.testing_data_store is not None:
-            # We have a separate testing data set, defined by its own store
-            testing_dataset = self.get_testing_dataset(download=False)
-            validation_size = int(
-                len(training_dataset) * self.validation_split)
-            train_size = len(training_dataset) - validation_size
+        # We have a separate testing data set, defined by its own store
+        validation_size = int(len(train_dataset) * val_split)
+        train_size = len(train_dataset) - validation_size
 
-            self.npmc_train, self.npmc_val = torch.utils.data.random_split(
-                training_dataset, [train_size, validation_size],
-                generator=torch.Generator().manual_seed(self.split_seed))
-            self.npmc_test = testing_dataset
-        else:
-            # We don't have a testing dataset explicitly defined. We will split the training dataset
-            # into the training, validation, and testing dataset
-            test_size = int(len(training_dataset) * self.test_split)
-            validation_size = int(
-                len(training_dataset) * self.validation_split)
-            train_size = len(training_dataset) - validation_size - test_size
+        train_subset, val_subset = torch.utils.data.random_split(
+            train_dataset, [train_size, validation_size],
+            generator=torch.Generator().manual_seed(split_seed))
 
-            self.npmc_train, self.npmc_val, self.npmc_test = torch.utils.data.random_split(
-                training_dataset, [train_size, validation_size, test_size],
-                generator=torch.Generator().manual_seed(self.split_seed))
-
-        if self.calc_mean:
-            spectra = []
-            # Leave out test data, since we aren't supposed to have knowledge of that in our model
-            for data in self.npmc_train + self.npmc_test:
-                spectra.append(data.log_y)
-            spectra = torch.cat(spectra, dim=0)
-            self.spectra_mean = spectra.mean(0)
-            self.spectra_std = spectra.std(0)
+        data_is_graph = train_dataset.feature_processor.is_graph
+        return cls(train_subset, val_subset, test_dataset, split_seed, data_is_graph, **kwargs)
 
     @staticmethod
     def collate(data_list: List[Data]):
@@ -181,16 +107,16 @@ class NPMCDataModule(pl.LightningDataModule):
         return Data(**_data)
 
     def train_dataloader(self) -> DataLoader:
-        if self.feature_processor.is_graph:
+        if self.data_is_graph:
             # The data is graph structured
-            return pyg_DataLoader(self.npmc_train,
+            return pyg_DataLoader(self.train_dataset,
                                   batch_size=self.batch_size,
                                   shuffle=True,
                                   num_workers=self.loader_workers,
                                   drop_last=True)
         else:
             # The data is in an image representation
-            return DataLoader(self.npmc_train,
+            return DataLoader(self.train_dataset,
                               batch_size=self.batch_size,
                               collate_fn=self.collate,
                               shuffle=True,
@@ -198,16 +124,16 @@ class NPMCDataModule(pl.LightningDataModule):
                               drop_last=True)
 
     def val_dataloader(self) -> DataLoader:
-        if self.feature_processor.is_graph:
+        if self.data_is_graph:
             # The data is graph structured
-            return pyg_DataLoader(self.npmc_val,
+            return pyg_DataLoader(self.val_dataset,
                                   batch_size=self.batch_size,
                                   shuffle=False,
                                   num_workers=self.loader_workers,
                                   drop_last=True)
         else:
             # The data is in an image representation
-            return DataLoader(self.npmc_val,
+            return DataLoader(self.val_dataset,
                               batch_size=self.batch_size,
                               collate_fn=self.collate,
                               shuffle=False,
@@ -215,16 +141,16 @@ class NPMCDataModule(pl.LightningDataModule):
                               drop_last=True)
 
     def test_dataloader(self) -> DataLoader:
-        if self.feature_processor.is_graph:
+        if self.data_is_graph:
             # The data is graph structured
-            return pyg_DataLoader(self.npmc_test,
+            return pyg_DataLoader(self.test_dataset,
                                   batch_size=self.batch_size,
                                   shuffle=False,
                                   num_workers=self.loader_workers,
                                   drop_last=True)
         else:
             # The data is in an image representation
-            return DataLoader(self.npmc_test,
+            return DataLoader(self.test_dataset,
                               batch_size=self.batch_size,
                               collate_fn=self.collate,
                               shuffle=False,
