@@ -20,9 +20,7 @@ class DataProcessor(ABC, MSONable):
     Fields are specified to ensure they are present in documents
     """
 
-    def __init__(self,
-                 fields: List[str],
-                 inc_metadata: bool = False):
+    def __init__(self, fields: List[str], inc_metadata: bool = False):
         """
         :param fields: fields required in the document(s) to be processed
         """
@@ -47,7 +45,7 @@ class DataProcessor(ABC, MSONable):
 
 class FeatureProcessor(DataProcessor):
 
-    def __init__(self, possible_elements = ['Yb', 'Er', 'Nd'], **kwargs):
+    def __init__(self, possible_elements=['Yb', 'Er', 'Nd'], **kwargs):
         self.possible_elements = possible_elements
         self.n_possible_elements = len(self.possible_elements)
         self.dopants_dict = {
@@ -120,7 +118,7 @@ class LabelProcessor(DataProcessor):
             return super().required_fields + ['metadata']
         else:
             return super().required_fields
-    
+
     def example(self):
         x = torch.linspace(*self.spectrum_range, 600)
         y = torch.nn.functional.relu(torch.rand_like(x))
@@ -547,7 +545,6 @@ class SummedWavelengthRangeLabelProcessor(LabelProcessor):
             self.get_item_from_doc(doc, 'output.wavelength_spectrum_x'))
         spectrum = torch.tensor(
             self.get_item_from_doc(doc, 'output.wavelength_spectrum_y'))
-        step = x[1] - x[0]
 
         # Sum up the spectrum for each light type
         out = dict()
@@ -565,8 +562,141 @@ class SummedWavelengthRangeLabelProcessor(LabelProcessor):
         }
 
     def __str__(self):
-        return (f"Summed Ranges Label Processor - {len(self.spectrum_ranges)} bins, "
-                f"log_constant = {self.log_constant}")
+        return (
+            f"Summed Ranges Label Processor - {len(self.spectrum_ranges)} bins, "
+            f"log_constant = {self.log_constant}")
+
+    def __repr__(self):
+        return str(self)
+
+
+class MultiFidelitySummedWavelengthRangeLabelProcessor(LabelProcessor):
+    """
+    This Label processor returns a spectrum that is binned uniformly with respect to energy (I(E))
+        Args:
+            spectrum_range (Tuple | List, optional): Range over which the spectrum should be
+                cropped. Defaults to (-40000, 20000).
+            output_size (int, optional): Number of bins in the resultant spectra.
+                This quantity will be used as the # of output does in the NN. Defaults to 600.
+            log_constant (float, optional): When applying the log function,
+                we use the form log_10(I+b). Since the intensity is always positive, this function
+                is easily invertible. min_log_val sets the minimum value of the label after
+                applying the log.
+
+                To make sure the values aren't clipped, it is recommended that the smallest b is
+                chosen at least 1 order of magnitude lower than 1/(# avg'd documents).
+
+                Example:
+                    With 16 documents averaged, the lowest (non-zero) observation is 0.0625(1/16),
+                    therefore choose 0.001 as the log_constant. . Defaults to 1e-3.
+            gaussian_filter (float, optional): Standard deviation over which to apply gaussian
+                filtering to smooth the otherwise very peaked spectrum. Defaults to 0.
+    """
+
+    def __init__(self,
+                 in_range: Tuple[float, float] = (-2000, 1000),
+                 in_bins: int = 600,
+                 log_constant: float = 1e-3,
+                 spectrum_ranges: dict = None,
+                 **kwargs):
+        super().__init__(fields=[
+            'output.wavelength_spectrum_x', 'output.wavelength_spectrum_y'
+        ], **kwargs)
+
+        self.in_range = in_range
+        self.in_bins = in_bins
+        self.log_constant = log_constant
+        if spectrum_ranges is None:
+            self.spectrum_ranges = dict(uv=(100, 400),
+                                        uva=(315, 400),
+                                        uvb=(280, 315),
+                                        uvc=(100, 280),
+                                        vis=(380, 750),
+                                        blue=(450, 485),
+                                        green=(500, 565),
+                                        red=(625, 750))
+        else:
+            self.spectrum_ranges = spectrum_ranges
+
+    def example(self):
+        x = torch.linspace(-2000, 1000, 600)
+        y = {
+            (1, 1): list(torch.nn.functional.relu(torch.rand_like(x))),
+            (2, 2): list(torch.nn.functional.relu(torch.rand_like(x))),
+            (1, 4): list(torch.nn.functional.relu(torch.rand_like(x))),
+            (4, 1): list(torch.nn.functional.relu(torch.rand_like(x))),
+            (4, 4): list(torch.nn.functional.relu(torch.rand_like(x)))
+        }
+        doc = {
+            'output': {
+                'wavelength_spectrum_x': list(x),
+                'wavelength_spectrum_y': y,
+                'energy_spectrum_x': list(x),
+                'energy_spectrum_y': y,
+            }
+        }
+        return self.process_doc(doc)
+
+    @property
+    def spectrum_idxs(self):
+        spectrum_idxs = dict()
+        for key, mask in self.masks.items():
+            _range = torch.where(mask)[0]
+            spectrum_idxs[key] = (_range[0].item(), _range[-1].item())
+        return spectrum_idxs
+
+    @property
+    def x(self):
+        dx = (self.in_range[-1] - self.in_range[0]) / self.in_bins
+        return torch.linspace(self.in_range[0] + dx / 2,
+                              self.in_range[-1] - dx / 2, self.in_bins)
+
+    @property
+    def masks(self):
+        return {
+            k: self.get_mask(self.x, _range)
+            for k, _range in self.spectrum_ranges.items()
+        }
+
+    @staticmethod
+    def get_mask(x, range):
+        return torch.logical_and(x < (-range[0]), x > (-range[-1]))
+
+    def process_doc(self, doc: dict) -> torch.Tensor:
+        x = torch.tensor(
+            self.get_item_from_doc(doc, 'output.wavelength_spectrum_x'))
+
+        spectrum = self.get_item_from_doc(doc, 'output.wavelength_spectrum_y')
+        for avg_key in spectrum.keys():
+            spectrum[avg_key] = torch.tensor(spectrum[avg_key])
+
+        overall_out = []
+        overall_y = []
+        overall_logy = []
+        for avg_key in spectrum.keys():
+            out = dict()
+            for key, _mask in self.masks.items():
+                out[key] = spectrum[avg_key][_mask].sum().float()
+            overall_out.append(out)
+
+            y = torch.hstack(tuple(out.values()))
+            overall_y.append(y.unsqueeze(0))
+            overall_logy.append(torch.log10(y + self.log_constant).unsqueeze(0))
+        
+        labels = list(out.keys())
+        out = {key: torch.tensor([_out[key] for _out in overall_out]) for key in labels}
+        return {
+            'intensities': out,
+            'labels': labels,
+            'y': torch.stack(overall_y, dim=1),
+            'log_y': torch.stack(overall_logy, dim=1),
+            'log_const': self.log_constant,
+        }
+
+    def __str__(self):
+        return (
+            f"Summed Ranges Label Processor - {len(self.spectrum_ranges)} bins, "
+            f"log_constant = {self.log_constant}")
 
     def __repr__(self):
         return str(self)
