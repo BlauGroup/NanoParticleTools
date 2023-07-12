@@ -3,7 +3,7 @@ from NanoParticleTools.inputs.nanoparticle import Dopant
 from maggma.core import Builder
 from maggma.core import Store
 from maggma.utils import grouper
-from typing import Iterator, List, Dict, Optional, Iterable
+from typing import Iterator, List, Dict, Optional, Iterable, Tuple
 from bson import uuid
 import numpy as np
 import random
@@ -376,3 +376,161 @@ class PartialAveragingBuilder(UCNPBuilder):
                     items.append(docs_to_avg[unduplicated_dict[i][j]])
 
             yield items
+
+
+class MultiFidelityAveragingBuilder(UCNPBuilder):
+
+    def __init__(self,
+                 n_docs_filter: int,
+                 source: Store,
+                 target: Store,
+                 docs_filter: Optional[Dict] = {},
+                 chunk_size=1,
+                 grouped_ids=None,
+                 energy_spectrum_args=None,
+                 wavelength_spectrum_args=None,
+                 n_orderings: int = 4,
+                 n_sims: int = 4,
+                 **kwargs):
+        """
+        A builder that only averages over a set of documents
+        using multiple averaging schemes.
+
+        Averaging schemes such as 1 ordering and 1 simulation seed,
+        2 orderings and 2 simulation seeds, etc.
+
+        Args:
+            n_docs_filter: The nanoparticle must have a minimum of this many simulations
+            n_orderings: The number of dopant placements to use in averaging.
+            n_sims: The number of simulation random seeds to use in averaging.
+        """
+        super().__init__(source=source,
+                         target=target,
+                         docs_filter=docs_filter,
+                         chunk_size=chunk_size,
+                         grouped_ids=grouped_ids,
+                         energy_spectrum_args=energy_spectrum_args,
+                         wavelength_spectrum_args=wavelength_spectrum_args,
+                         **kwargs)
+        self.n_docs_filter = n_docs_filter
+        self.n_orderings = n_orderings
+        self.n_sims = n_sims
+
+    def get_items(self):
+        for docs_to_avg in super().get_items():
+            # prune duplicates
+            unduplicated_dict = {}
+            for i, doc in enumerate(docs_to_avg):
+                try:
+                    unduplicated_dict[doc['data']['simulation_seed']][
+                        doc['data']['dopant_seed']] = i
+                except KeyError:
+                    unduplicated_dict[doc['data']['simulation_seed']] = {
+                        doc['data']['dopant_seed']: i
+                    }
+
+            # count the total items in the dict
+            total_items = sum([len(v) for v in unduplicated_dict.values()])
+            if total_items != self.n_docs_filter:
+                continue
+
+            yield unduplicated_dict, docs_to_avg
+
+    def process_item(self, input: Tuple[Dict, List[Dict]]) -> Dict:
+        unduplicated_dict, items = input
+
+        all_idx = list(collect_values(unduplicated_dict))
+        first_item_idx = list(list(unduplicated_dict.values())[0].values())[0]
+        first_item = items[first_item_idx]
+
+        # Create/Populate a new document for the average
+        avg_doc = {
+            "uuid":
+            uuid.uuid4(),
+            "avg_simulation_length":
+            np.mean([items[i]["data"]["simulation_length"] for i in all_idx]),
+            "avg_simulation_time":
+            np.mean([items[i]["data"]["simulation_time"] for i in all_idx]),
+            "n_constraints":
+            first_item["data"]["n_constraints"],
+            "n_dopant_sites":
+            first_item["data"]["n_dopant_sites"],
+            "n_dopants":
+            first_item["data"]["n_dopants"],
+            "formula":
+            first_item["data"]["formula"],
+            "nanostructure":
+            first_item["data"]["nanostructure"],
+            "nanostructure_size":
+            first_item["data"]["nanostructure_size"],
+            "total_n_levels":
+            first_item["data"]["total_n_levels"],
+            "formula_by_constraint":
+            first_item["data"]["formula_by_constraint"],
+            "dopants":
+            first_item["data"]["dopants"],
+            "dopant_concentration":
+            first_item["data"]["dopant_concentration"],
+            "overall_dopant_concentration":
+            first_item["data"]["overall_dopant_concentration"],
+            "excitation_power":
+            first_item["data"]["excitation_power"],
+            "excitation_wavelength":
+            first_item["data"]["excitation_wavelength"],
+            "dopant_composition":
+            first_item["data"]["dopant_composition"],
+            "input":
+            first_item["data"]["input"],
+            "num_averaged":
+            len(items)
+        }
+        if 'metadata' in first_item["data"]:
+            avg_doc["metadata"] = first_item["data"]["metadata"]
+
+        avg_doc["output"] = {}
+
+        # Compute the spectrum
+        dopants = [
+            Dopant(key, val)
+            for key, val in avg_doc["overall_dopant_concentration"].items()
+        ]
+        energy_spectra_y = {}
+        wavelength_spectra_y = {}
+        for n_orderings, n_sims in [(1, 1), (2, 2), (4, 1), (1, 4), (4, 4)]:
+            _items = []
+            if len(unduplicated_dict) < n_orderings:
+                print(f'not enough orderings for {n_orderings}, {n_sims}')
+                continue
+            if len(unduplicated_dict[sorted(
+                    unduplicated_dict.keys())[0]]) < n_sims:
+                print(f'not enough sims seeds for {n_orderings}, {n_sims}')
+                continue
+
+            for i in sorted(unduplicated_dict.keys())[:n_orderings]:
+                for j in sorted(unduplicated_dict[i].keys())[:n_sims]:
+                    _items.append(items[unduplicated_dict[i][j]])
+            avg_dndt = self.average_dndt(_items)
+            energy_spectra_x, y = self.get_spectrum_energy(
+                avg_dndt, dopants, **self.energy_spectrum_args)
+            energy_spectra_y[(n_orderings, n_sims)] = y
+            wavelength_spectra_x, y = self.get_spectrum_wavelength(
+                avg_dndt, dopants, **self.wavelength_spectrum_args)
+            wavelength_spectra_y[(n_orderings, n_sims)] = y
+
+        avg_doc["output"]["energy_spectrum_x"] = energy_spectra_x
+        avg_doc["output"]["energy_spectrum_y"] = energy_spectra_y
+        avg_doc["output"]["wavelength_spectrum_x"] = wavelength_spectra_x
+        avg_doc["output"]["wavelength_spectrum_y"] = y
+
+        return avg_doc
+
+
+def collect_values(d):
+    """
+    Utility function to get all values from a nested dict
+    """
+    for k, v in d.items():
+        if isinstance(v, dict):
+            yield from collect_values(v)
+        else:
+            yield v
