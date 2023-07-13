@@ -73,8 +73,7 @@ class NPMCDataModule(pl.LightningDataModule):
         train_subset, val_subset, test_subset = torch.utils.data.random_split(
             train_dataset, [train_size, validation_size, test_size],
             generator=torch.Generator().manual_seed(split_seed))
-        
-        
+
         return cls(train_subset, val_subset, test_subset, split_seed, data_is_graph, **kwargs)
 
     @classmethod

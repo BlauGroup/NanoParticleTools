@@ -366,10 +366,12 @@ class WavelengthSpectrumLabelProcessor(LabelProcessor):
         if gaussian_filter is None:
             gaussian_filter = 0
 
+        # yapf: disable
         super().__init__(fields=[
             'output.wavelength_spectrum_x', 'output.wavelength_spectrum_y',
             'output.summary', 'overall_dopant_concentration'
         ], **kwargs)
+        # yapf: enable
 
         self.spectrum_range = spectrum_range
         self.output_size = output_size
@@ -456,25 +458,25 @@ class WavelengthSpectrumLabelProcessor(LabelProcessor):
 
 class SummedWavelengthRangeLabelProcessor(LabelProcessor):
     """
-    This Label processor returns a spectrum that is binned uniformly with respect to energy (I(E))
-        Args:
-            spectrum_range (Tuple | List, optional): Range over which the spectrum should be
-                cropped. Defaults to (-40000, 20000).
-            output_size (int, optional): Number of bins in the resultant spectra.
-                This quantity will be used as the # of output does in the NN. Defaults to 600.
-            log_constant (float, optional): When applying the log function,
-                we use the form log_10(I+b). Since the intensity is always positive, this function
-                is easily invertible. min_log_val sets the minimum value of the label after
-                applying the log.
+    This Label processor returns a tensor of spectra with custom bins.
 
-                To make sure the values aren't clipped, it is recommended that the smallest b is
-                chosen at least 1 order of magnitude lower than 1/(# avg'd documents).
+    Args:
+        in_range: Range over which the spectrum should be
+            cropped. Defaults to (-40000, 20000).
+        in_bins: The number of bins in the input spectrum. Defaults to 600.
+        log_constant: When applying the log function,
+            we use the form log_10(I+b). Since the intensity is always positive, this function
+            is easily invertible. min_log_val sets the minimum value of the label after
+            applying the log.
 
-                Example:
-                    With 16 documents averaged, the lowest (non-zero) observation is 0.0625(1/16),
-                    therefore choose 0.001 as the log_constant. . Defaults to 1e-3.
-            gaussian_filter (float, optional): Standard deviation over which to apply gaussian
-                filtering to smooth the otherwise very peaked spectrum. Defaults to 0.
+            To make sure the values aren't clipped, it is recommended that the smallest b is
+            chosen at least 1 order of magnitude lower than 1/(# avg'd documents).
+
+            Example:
+                With 16 documents averaged, the lowest (non-zero) observation is 0.0625(1/16),
+                therefore choose 0.001 as the log_constant. . Defaults to 1e-3.
+        spectrum_ranges: Tuples specifying the range of wavelengths to sum over. The key is carried
+            over to the output.
     """
 
     def __init__(self,
@@ -483,9 +485,11 @@ class SummedWavelengthRangeLabelProcessor(LabelProcessor):
                  log_constant: float = 1e-3,
                  spectrum_ranges: dict = None,
                  **kwargs):
+        # yapf: disable
         super().__init__(fields=[
             'output.wavelength_spectrum_x', 'output.wavelength_spectrum_y'
         ], **kwargs)
+        # yapf: enable
 
         self.in_range = in_range
         self.in_bins = in_bins
@@ -572,25 +576,29 @@ class SummedWavelengthRangeLabelProcessor(LabelProcessor):
 
 class MultiFidelitySummedWavelengthRangeLabelProcessor(LabelProcessor):
     """
-    This Label processor returns a spectrum that is binned uniformly with respect to energy (I(E))
-        Args:
-            spectrum_range (Tuple | List, optional): Range over which the spectrum should be
-                cropped. Defaults to (-40000, 20000).
-            output_size (int, optional): Number of bins in the resultant spectra.
-                This quantity will be used as the # of output does in the NN. Defaults to 600.
-            log_constant (float, optional): When applying the log function,
-                we use the form log_10(I+b). Since the intensity is always positive, this function
-                is easily invertible. min_log_val sets the minimum value of the label after
-                applying the log.
+    This Label processor returns a tensor of spectra with custom bins.
 
-                To make sure the values aren't clipped, it is recommended that the smallest b is
-                chosen at least 1 order of magnitude lower than 1/(# avg'd documents).
+    When using this data processor, a tensor of size (1, 5, len(spectrum_ranges)) is returned for
+    `y` and `log_y`. The first dimension corresponds to a nanoparticle/graph, the second dimension
+    is the averaging dimension [(1, 1), (2, 2), (1, 4), (4, 1), (4, 4)].
 
-                Example:
-                    With 16 documents averaged, the lowest (non-zero) observation is 0.0625(1/16),
-                    therefore choose 0.001 as the log_constant. . Defaults to 1e-3.
-            gaussian_filter (float, optional): Standard deviation over which to apply gaussian
-                filtering to smooth the otherwise very peaked spectrum. Defaults to 0.
+    Args:
+        in_range: Range over which the spectrum should be
+            cropped. Defaults to (-40000, 20000).
+        in_bins: The number of bins in the input spectrum. Defaults to 600.
+        log_constant: When applying the log function,
+            we use the form log_10(I+b). Since the intensity is always positive, this function
+            is easily invertible. min_log_val sets the minimum value of the label after
+            applying the log.
+
+            To make sure the values aren't clipped, it is recommended that the smallest b is
+            chosen at least 1 order of magnitude lower than 1/(# avg'd documents).
+
+            Example:
+                With 16 documents averaged, the lowest (non-zero) observation is 0.0625(1/16),
+                therefore choose 0.001 as the log_constant. . Defaults to 1e-3.
+        spectrum_ranges: Tuples specifying the range of wavelengths to sum over. The key is carried
+            over to the output.
     """
 
     def __init__(self,
@@ -599,9 +607,11 @@ class MultiFidelitySummedWavelengthRangeLabelProcessor(LabelProcessor):
                  log_constant: float = 1e-3,
                  spectrum_ranges: dict = None,
                  **kwargs):
+        # yapf: disable
         super().__init__(fields=[
             'output.wavelength_spectrum_x', 'output.wavelength_spectrum_y'
         ], **kwargs)
+        # yapf: enable
 
         self.in_range = in_range
         self.in_bins = in_bins
@@ -681,10 +691,14 @@ class MultiFidelitySummedWavelengthRangeLabelProcessor(LabelProcessor):
 
             y = torch.hstack(tuple(out.values()))
             overall_y.append(y.unsqueeze(0))
-            overall_logy.append(torch.log10(y + self.log_constant).unsqueeze(0))
-        
+            overall_logy.append(
+                torch.log10(y + self.log_constant).unsqueeze(0))
+
         labels = list(out.keys())
-        out = {key: torch.tensor([_out[key] for _out in overall_out]) for key in labels}
+        out = {
+            key: torch.tensor([_out[key] for _out in overall_out])
+            for key in labels
+        }
         return {
             'intensities': out,
             'labels': labels,
