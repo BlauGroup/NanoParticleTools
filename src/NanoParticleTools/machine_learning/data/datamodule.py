@@ -12,13 +12,22 @@ from torch_geometric.loader import DataLoader as pyg_DataLoader
 from typing import List, Optional
 
 
+def data_is_graph(dataset):
+    """
+    Helper function to determine if a dataset is graph structured
+    """
+    if isinstance(dataset, torch.utils.data.Subset):
+        return data_is_graph(dataset.dataset)
+    else:
+        return dataset.feature_processor.is_graph
+
+
 class NPMCDataModule(pl.LightningDataModule):
     def __init__(self,
                  train_dataset,
                  val_dataset: Optional[Dataset] = None,
                  test_dataset: Optional[Dataset] = None,
                  split_seed: int = None,
-                 data_is_graph: bool = False,
                  batch_size: int = 16,
                  loader_workers: int = 0,
                  **kwargs) -> None:
@@ -27,7 +36,7 @@ class NPMCDataModule(pl.LightningDataModule):
         self.val_dataset = val_dataset
         self.test_dataset = test_dataset
         self.split_seed = split_seed
-        self.data_is_graph = data_is_graph
+        self.data_is_graph = data_is_graph(train_dataset)
         self.batch_size = batch_size
         self.loader_workers = loader_workers
 
@@ -65,7 +74,7 @@ class NPMCDataModule(pl.LightningDataModule):
             train_dataset, [train_size, validation_size, test_size],
             generator=torch.Generator().manual_seed(split_seed))
         
-        data_is_graph = train_dataset.feature_processor.is_graph
+        
         return cls(train_subset, val_subset, test_subset, split_seed, data_is_graph, **kwargs)
 
     @classmethod
