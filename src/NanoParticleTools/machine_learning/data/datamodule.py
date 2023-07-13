@@ -12,7 +12,7 @@ from torch_geometric.loader import DataLoader as pyg_DataLoader
 from typing import List, Optional
 
 
-def data_is_graph(dataset):
+def data_is_graph(dataset) -> bool:
     """
     Helper function to determine if a dataset is graph structured
     """
@@ -32,15 +32,17 @@ class NPMCDataModule(pl.LightningDataModule):
                  loader_workers: int = 0,
                  **kwargs) -> None:
         super().__init__()
+
         self.train_dataset = train_dataset
         self.val_dataset = val_dataset
         self.test_dataset = test_dataset
+
         self.split_seed = split_seed
         self.data_is_graph = data_is_graph(train_dataset)
         self.batch_size = batch_size
         self.loader_workers = loader_workers
 
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=['train_dataset', 'val_dataset', 'test_dataset'])
 
     @classmethod
     def from_train_dataset(cls,
@@ -74,7 +76,7 @@ class NPMCDataModule(pl.LightningDataModule):
             train_dataset, [train_size, validation_size, test_size],
             generator=torch.Generator().manual_seed(split_seed))
 
-        return cls(train_subset, val_subset, test_subset, split_seed, data_is_graph, **kwargs)
+        return cls(train_subset, val_subset, test_subset, split_seed, **kwargs)
 
     @classmethod
     def from_train_and_test_dataset(cls,
@@ -94,8 +96,7 @@ class NPMCDataModule(pl.LightningDataModule):
             train_dataset, [train_size, validation_size],
             generator=torch.Generator().manual_seed(split_seed))
 
-        data_is_graph = train_dataset.feature_processor.is_graph
-        return cls(train_subset, val_subset, test_dataset, split_seed, data_is_graph, **kwargs)
+        return cls(train_subset, val_subset, test_dataset, split_seed, **kwargs)
 
     @staticmethod
     def collate(data_list: List[Data]):
