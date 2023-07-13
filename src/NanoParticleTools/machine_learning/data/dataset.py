@@ -20,7 +20,7 @@ class NPMCDataset(Dataset):
                  feature_processor: DataProcessor,
                  label_processor: DataProcessor,
                  use_metadata: bool = False,
-                 cache_in_memory: bool = False):
+                 cache_in_memory: bool = True):
 
         self.file_path = file_path
         self.feature_processor = feature_processor
@@ -105,7 +105,7 @@ class NPMCDataset(Dataset):
                    overwrite: bool = False,
                    use_metadata: bool = False,
                    file_path: str = './dataset.json',
-                   cache_in_memory: bool = False):
+                   cache_in_memory: bool = True):
         # Check if the file exists
         if os.path.isfile(file_path):
             if overwrite:
