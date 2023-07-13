@@ -8,6 +8,8 @@ from torch_geometric.data import Data
 import warnings
 from abc import ABC, abstractmethod
 
+from ast import literal_eval
+
 
 class DataProcessor(ABC, MSONable):
     """
@@ -689,8 +691,11 @@ class MultiFidelitySummedWavelengthRangeLabelProcessor(LabelProcessor):
             overall_out.append(out)
 
             y = torch.hstack(tuple(out.values()))
-            output_dict[f'{avg_key[0]}{avg_key[1]}_y'] = y.unsqueeze(0)
-            output_dict[f'{avg_key[0]}{avg_key[1]}_log_y'] = torch.log10(
+
+            if isinstance(avg_key, str):
+                avg_key_tuple = literal_eval(avg_key)
+            output_dict[f'{avg_key_tuple[0]}{avg_key_tuple[1]}_y'] = y.unsqueeze(0)
+            output_dict[f'{avg_key_tuple[0]}{avg_key_tuple[1]}_log_y'] = torch.log10(
                 y + self.log_constant).unsqueeze(0)
 
         labels = list(out.keys())
