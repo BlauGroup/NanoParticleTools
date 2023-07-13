@@ -681,8 +681,7 @@ class MultiFidelitySummedWavelengthRangeLabelProcessor(LabelProcessor):
             spectrum[avg_key] = torch.tensor(spectrum[avg_key])
 
         overall_out = []
-        overall_y = []
-        overall_logy = []
+        output_dict = {}
         for avg_key in spectrum.keys():
             out = dict()
             for key, _mask in self.masks.items():
@@ -690,22 +689,14 @@ class MultiFidelitySummedWavelengthRangeLabelProcessor(LabelProcessor):
             overall_out.append(out)
 
             y = torch.hstack(tuple(out.values()))
-            overall_y.append(y.unsqueeze(0))
-            overall_logy.append(
-                torch.log10(y + self.log_constant).unsqueeze(0))
+            output_dict[f'{avg_key[0]}{avg_key[1]}_y'] = y.unsqueeze(0)
+            output_dict[f'{avg_key[0]}{avg_key[1]}_log_y'] = torch.log10(
+                y + self.log_constant).unsqueeze(0)
 
         labels = list(out.keys())
-        out = {
-            key: torch.tensor([_out[key] for _out in overall_out])
-            for key in labels
-        }
-        return {
-            'intensities': out,
-            'labels': labels,
-            'y': torch.stack(overall_y, dim=1),
-            'log_y': torch.stack(overall_logy, dim=1),
-            'log_const': self.log_constant,
-        }
+        output_dict['labels'] = labels
+        output_dict['log_const'] = self.log_constant
+        return output_dict
 
     def __str__(self):
         return (

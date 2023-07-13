@@ -499,11 +499,17 @@ class MultiFidelityAveragingBuilder(UCNPBuilder):
         for n_orderings, n_sims in [(1, 1), (2, 2), (4, 1), (1, 4), (4, 4)]:
             _items = []
             if len(unduplicated_dict) < n_orderings:
-                print(f'not enough orderings for {n_orderings}, {n_sims}')
+                # not enough dopant orderings
+                # print(f'not enough orderings for {n_orderings}, {n_sims}')
+                # energy_spectra_y[(n_orderings, n_sims)] = None
+                # wavelength_spectra_y[(n_orderings, n_sims)] = None
                 continue
             if len(unduplicated_dict[sorted(
                     unduplicated_dict.keys())[0]]) < n_sims:
-                print(f'not enough sims seeds for {n_orderings}, {n_sims}')
+                # not enough simulation seeds
+                # print(f'not enough sims seeds for {n_orderings}, {n_sims}')
+                # energy_spectra_y[(n_orderings, n_sims)] = None
+                # wavelength_spectra_y[(n_orderings, n_sims)] = None
                 continue
 
             for i in sorted(unduplicated_dict.keys())[:n_orderings]:
@@ -520,7 +526,7 @@ class MultiFidelityAveragingBuilder(UCNPBuilder):
         avg_doc["output"]["energy_spectrum_x"] = energy_spectra_x
         avg_doc["output"]["energy_spectrum_y"] = energy_spectra_y
         avg_doc["output"]["wavelength_spectrum_x"] = wavelength_spectra_x
-        avg_doc["output"]["wavelength_spectrum_y"] = y
+        avg_doc["output"]["wavelength_spectrum_y"] = wavelength_spectra_y
 
         return avg_doc
 
