@@ -129,9 +129,7 @@ class SphericalConstraint(NanoParticleConstraint):
         if center is None:
             center = [0, 0, 0]
 
-        distances_from_center = np.linalg.norm(np.subtract(
-            site_coords, center),
-                                               axis=1)
+        distances_from_center = np.linalg.norm(np.subtract(site_coords, center), axis=1)
         return distances_from_center <= self.radius
 
     def __str__(self) -> str:
@@ -318,8 +316,17 @@ class DopedNanoparticle(MSONable):
                  dopant_specification: Sequence[Tuple],
                  seed: Optional[int] = 0,
                  prune_hosts: Optional[bool] = False):
+
+        # Check if there are zero constraints
+        assert len(constraints) > 0, (
+            'There are no constraints, this particle is empty')
         self.constraints = constraints
+
         self.seed = seed if seed is not None else 0
+
+        # Check if there are no dopant specifications
+        assert len(dopant_specification) > 0, (
+            'There are no dopant specifications')
         self.dopant_specification = dopant_specification
 
         # Check to ensure that the dopant specifications
@@ -340,11 +347,17 @@ class DopedNanoparticle(MSONable):
                     conc_by_layer_and_species[i] = {replace_el: dopant_conc}
 
         # Check if all concentrations are valid
+        dopants_present = False
         for layer_i, layer in enumerate(conc_by_layer_and_species):
             for replaced_el, total_replaced_conc in layer.items():
+                if total_replaced_conc > 0:
+                    dopants_present = True
                 assert total_replaced_conc < 1, (
                     f"Dopant concentration in constraint {layer_i}"
                     f" on {replaced_el} sites exceeds 100%")
+        assert dopants_present, (
+            'There are no dopants being placed, this is an empty particle.'
+            'The result will be zero intensity for everything')
 
         if prune_hosts:
             for dopants_dict, constraint in zip(conc_by_layer_and_species,
