@@ -318,15 +318,15 @@ class DopedNanoparticle(MSONable):
                  prune_hosts: Optional[bool] = False):
 
         # Check if there are zero constraints
-        assert len(constraints) > 0, (
-            'There are no constraints, this particle is empty')
+        if len(constraints) == 0:
+            raise ValueError('There are no constraints, this particle is empty')
         self.constraints = constraints
 
         self.seed = seed if seed is not None else 0
 
         # Check if there are no dopant specifications
-        assert len(dopant_specification) > 0, (
-            'There are no dopant specifications')
+        if len(dopant_specification) == 0:
+            raise ValueError('There are no dopant specifications')
         self.dopant_specification = dopant_specification
 
         # Check to ensure that the dopant specifications
@@ -334,10 +334,12 @@ class DopedNanoparticle(MSONable):
         # Bin the dopant concentration
         conc_by_layer_and_species = [{} for _ in self.constraints]
         for i, dopant_conc, _, replace_el in dopant_specification:
-            assert dopant_conc >= 0, (
-                'Dopant concentration cannot be negative')
-            assert dopant_conc <= 1, (
-                'Dopant concentration cannot be greater than 1')
+            if dopant_conc < 0:
+                raise ValueError(
+                    'Dopant concentration cannot be negative')
+            if dopant_conc > 1:
+                raise ValueError(
+                    'Dopant concentration cannot be greater than 1')
             try:
                 conc_by_layer_and_species[i][replace_el] += dopant_conc
             except KeyError:
@@ -352,12 +354,14 @@ class DopedNanoparticle(MSONable):
             for replaced_el, total_replaced_conc in layer.items():
                 if total_replaced_conc > 0:
                     dopants_present = True
-                assert total_replaced_conc < 1, (
-                    f"Dopant concentration in constraint {layer_i}"
-                    f" on {replaced_el} sites exceeds 100%")
-        assert dopants_present, (
-            'There are no dopants being placed, this is an empty particle.'
-            'The result will be zero intensity for everything')
+                if total_replaced_conc > 1:
+                    raise ValueError(
+                        f"Dopant concentration in constraint {layer_i}"
+                        f" on {replaced_el} sites exceeds 100%")
+
+        if not dopants_present:
+            raise ValueError('There are no dopants being placed, this is an empty particle.'
+                             'The result will be zero intensity for everything')
 
         if prune_hosts:
             for dopants_dict, constraint in zip(conc_by_layer_and_species,
