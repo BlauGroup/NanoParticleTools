@@ -340,7 +340,7 @@ class DopedNanoparticle(MSONable):
         # Check if all concentrations are valid
         for layer_i, layer in enumerate(conc_by_layer_and_species):
             for replaced_el, total_replaced_conc in layer.items():
-                assert total_replaced_conc <= 1, (
+                assert total_replaced_conc < 1, (
                     f"Dopant concentration in constraint {layer_i}"
                     f" on {replaced_el} sites exceeds 100%")
                 assert total_replaced_conc >= 0, (
