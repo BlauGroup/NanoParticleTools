@@ -1,4 +1,7 @@
 from NanoParticleTools.inputs.nanoparticle import Dopant
+from NanoParticleTools.analysis import (get_spectrum_energy_from_dndt,
+                                        get_spectrum_wavelength_from_dndt,
+                                        average_dndt, intensities_from_docs)
 
 from maggma.core import Builder
 from maggma.core import Store
@@ -149,7 +152,7 @@ class UCNPBuilder(Builder):
             "occurences", "std_dev_occurences", "occurences per atom",
             "std_dev_occurences per atom"
         ]
-        avg_dndt = self.average_dndt(items)
+        avg_dndt = average_dndt(items)
         avg_doc["output"]["summary"] = avg_dndt
 
         # Compute the spectrum
@@ -157,13 +160,13 @@ class UCNPBuilder(Builder):
             Dopant(key, val)
             for key, val in avg_doc["overall_dopant_concentration"].items()
         ]
-        x, y = self.get_spectrum_energy(avg_dndt, dopants,
-                                        **self.energy_spectrum_args)
+        x, y = get_spectrum_energy_from_dndt(avg_dndt, dopants,
+                                             **self.energy_spectrum_args)
         avg_doc["output"]["energy_spectrum_x"] = x
         avg_doc["output"]["energy_spectrum_y"] = y
 
-        x, y = self.get_spectrum_wavelength(avg_dndt, dopants,
-                                            **self.wavelength_spectrum_args)
+        x, y = get_spectrum_wavelength_from_dndt(
+            avg_dndt, dopants, **self.wavelength_spectrum_args)
         avg_doc["output"]["wavelength_spectrum_x"] = x
         avg_doc["output"]["wavelength_spectrum_y"] = y
 
@@ -185,129 +188,114 @@ class UCNPBuilder(Builder):
         for split in grouper(grouped_ids, N):
             yield {"grouped_ids": list(split)}
 
-    def get_spectrum_energy(self,
-                            avg_dndt,
-                            dopants,
-                            lower_bound=-40000,
-                            upper_bound=20000,
-                            step=100):
-        _x = np.arange(lower_bound, upper_bound + step, step)
-        x = (_x[:-1] + _x[1:]) / 2  # middle point of each bin
 
-        spectrum = np.zeros(x.shape)
+class UCNPPopBuilder(UCNPBuilder):
 
-        for interaction in [_d for _d in avg_dndt if _d[8] == "Rad"]:
-            species_id = interaction[2]
-            left_state_1 = interaction[4]
-            right_state_1 = interaction[6]
-            ei = dopants[species_id].energy_levels[left_state_1]
-            ef = dopants[species_id].energy_levels[right_state_1]
+    def process_item(self, items: List[Dict]) -> Dict:
+        self.logger.info(f"Got {len(items)} to process")
 
-            de = ef.energy - ei.energy
-            if de > lower_bound and de < upper_bound:
-                index = int(np.floor((de - lower_bound) / step))
-                spectrum[index] += interaction[10]
+        # Prune duplicates based on dopant and simulation seed
+        unduplicated_dict = {}
+        for i, doc in enumerate(items):
+            unduplicated_dict[
+                f"{doc['data']['simulation_seed']}-{doc['data']['dopant_seed']}"] = i
 
-        return x, spectrum
+        if len(unduplicated_dict) != len(items):
+            items = [items[i] for i in unduplicated_dict.values()]
 
-    def get_spectrum_wavelength(self,
-                                avg_dndt,
-                                dopants,
-                                lower_bound=-2000,
-                                upper_bound=1000,
-                                step=5):
-        _x = np.arange(lower_bound, upper_bound + step, step)
-        x = (_x[:-1] + _x[1:]) / 2  # middle point of each bin
+            self.logger.info(
+                f"Pruned duplicates, resulting in {len(items)} to process")
 
-        spectrum = np.zeros(x.shape)
+        # Create/Populate a new document for the average
+        avg_doc = {
+            "uuid":
+            uuid.uuid4(),
+            "avg_simulation_length":
+            np.mean([i["data"]["simulation_length"] for i in items]),
+            "avg_simulation_time":
+            np.mean([i["data"]["simulation_time"] for i in items]),
+            "n_constraints":
+            items[0]["data"]["n_constraints"],
+            "n_dopant_sites":
+            items[0]["data"]["n_dopant_sites"],
+            "n_dopants":
+            items[0]["data"]["n_dopants"],
+            "formula":
+            items[0]["data"]["formula"],
+            "nanostructure":
+            items[0]["data"]["nanostructure"],
+            "nanostructure_size":
+            items[0]["data"]["nanostructure_size"],
+            "total_n_levels":
+            items[0]["data"]["total_n_levels"],
+            "formula_by_constraint":
+            items[0]["data"]["formula_by_constraint"],
+            "dopants":
+            items[0]["data"]["dopants"],
+            "dopant_concentration":
+            items[0]["data"]["dopant_concentration"],
+            "overall_dopant_concentration":
+            items[0]["data"]["overall_dopant_concentration"],
+            "excitation_power":
+            items[0]["data"]["excitation_power"],
+            "excitation_wavelength":
+            items[0]["data"]["excitation_wavelength"],
+            "dopant_composition":
+            items[0]["data"]["dopant_composition"],
+            "input":
+            items[0]["data"]["input"],
+            "num_averaged":
+            len(items)
+        }
+        if 'metadata' in items[0]["data"]:
+            avg_doc["metadata"] = items[0]["data"]["metadata"]
 
-        for interaction in [_d for _d in avg_dndt if _d[8] == "Rad"]:
-            species_id = interaction[2]
-            left_state_1 = interaction[4]
-            right_state_1 = interaction[6]
-            ei = dopants[species_id].energy_levels[left_state_1]
-            ef = dopants[species_id].energy_levels[right_state_1]
+        avg_doc["output"] = {}
 
-            de = ef.energy - ei.energy
-            wavelength = (299792458 * 6.62607004e-34) / (de * 1.60218e-19 /
-                                                         8065.44) * 1e9
-            if wavelength > lower_bound and wavelength < upper_bound:
-                index = int(np.floor((wavelength - lower_bound) / step))
-                spectrum[index] += interaction[10]
-        return x, spectrum
+        avg_dndt = average_dndt(items)
 
-    def average_dndt(self, docs: List[Dict]) -> Dict:
-        """
-        Compute the average dndt for all interactions
+        # Compute the spectrum using the average dndt (counts)
+        dopants = [
+            Dopant(key, val)
+            for key, val in avg_doc["overall_dopant_concentration"].items()
+        ]
+        x, y = get_spectrum_energy_from_dndt(avg_dndt, dopants,
+                                             **self.energy_spectrum_args)
+        avg_doc["output"]["energy_spectrum_x"] = x
+        avg_doc["output"]["energy_spectrum_y"] = y
 
-        Args:
-            docs (List[Dict]): List of taskdocs to average
+        x, y = get_spectrum_wavelength_from_dndt(
+            avg_dndt, dopants, **self.wavelength_spectrum_args)
+        avg_doc["output"]["wavelength_spectrum_x"] = x
+        avg_doc["output"]["wavelength_spectrum_y"] = y
 
-        Returns:
-            Dict: Output will have the following fields:
-                ["interaction_id", "number_of_sites", "species_id_1",
-                "species_id_2", "left_state_1", "left_state_2",
-                "right_state_1", "right_state_2", "interaction_type",
-                "rate_coefficient", "dNdT", "std_dev_dNdt",
-                "dNdT per atom", "std_dev_dNdT per atom", "occurences",
-                "std_dev_occurences", "occurences per atom",
-                "std_dev_occurences per atom"]
-        """
-        accumulated_dndt = {}
-        n_docs = 0
-        for doc in docs:
-            n_docs += 1
-            keys = doc["data"]["output"]["summary_keys"]
-            try:
-                search_keys = [
-                    "interaction_id", "number_of_sites", "species_id_1",
-                    "species_id_2", "left_state_1", "left_state_2",
-                    "right_state_1", "right_state_2", "interaction_type",
-                    'rate_coefficient', 'dNdT', 'dNdT per atom', 'occurences',
-                    'occurences per atom'
-                ]
-                indices = []
-                for key in search_keys:
-                    indices.append(keys.index(key))
-            except KeyError:
-                search_keys = [
-                    "interaction_id", "number_of_sites", "species_id_1",
-                    "species_id_2", "left_state_1", "left_state_2",
-                    "right_state_1", "right_state_2", "interaction_type",
-                    'rate', 'dNdT', 'dNdT per atom', 'occurences',
-                    'occurences per atom'
-                ]
-                indices = []
-                for key in search_keys:
-                    indices.append(keys.index(key))
+        # Compute the spectrum from the populations
 
-            dndt = doc["data"]["output"]["summary"]
+        # First, average the populations
+        # The populations are stored at descrete 0.0001ms intervals. It's possible
+        # that the simulations are not all the same length, so we need to
+        # average the populations over the same time interval for each simulation
+        min_length = min([
+            len(doc['data']['output']['y_overall_populations'])
+            for doc in items
+        ])
+        avg_total_pop = np.array([
+            np.array(doc['data']['output']['y_overall_populations'])
+            [:min_length] for doc in items
+        ]).mean(0)
+        avg_total_pop_by_constraint = np.array([
+            np.array(doc['data']['output']['y_overall_populations'])
+            [:min_length] for doc in items
+        ]).mean(0)
 
-            for interaction in dndt:
-                interaction_id = interaction[0]
-                if interaction_id not in accumulated_dndt:
-                    accumulated_dndt[interaction_id] = []
-                accumulated_dndt[interaction_id].append(
-                    [interaction[i] for i in indices])
+        avg_doc["output"]['avg_total_pop'] = avg_total_pop
+        avg_doc["output"][
+            'avg_total_pop_by_constraint'] = avg_total_pop_by_constraint
 
-        avg_dndt = []
-        for interaction_id in accumulated_dndt:
+        # Include average
+        avg_doc["output"]['avg_5ms_total_pop'] = avg_total_pop[-500:].mean(0)
 
-            arr = accumulated_dndt[interaction_id][-1][:-4]
-
-            _dndt = [_arr[-4:] for _arr in accumulated_dndt[interaction_id]]
-
-            while len(_dndt) < n_docs:
-                _dndt.append([0 for _ in range(4)])
-
-            mean = np.mean(_dndt, axis=0)
-            std = np.std(_dndt, axis=0)
-            arr.extend([
-                mean[0], std[0], mean[1], std[1], mean[2], std[2], mean[3],
-                std[3]
-            ])
-            avg_dndt.append(arr)
-        return avg_dndt
+        return avg_doc
 
 
 class PartialAveragingBuilder(UCNPBuilder):
@@ -515,11 +503,11 @@ class MultiFidelityAveragingBuilder(UCNPBuilder):
             for i in sorted(unduplicated_dict.keys())[:n_orderings]:
                 for j in sorted(unduplicated_dict[i].keys())[:n_sims]:
                     _items.append(items[unduplicated_dict[i][j]])
-            avg_dndt = self.average_dndt(_items)
-            energy_spectra_x, y = self.get_spectrum_energy(
+            avg_dndt = average_dndt(_items)
+            energy_spectra_x, y = get_spectrum_energy_from_dndt(
                 avg_dndt, dopants, **self.energy_spectrum_args)
             energy_spectra_y[(n_orderings, n_sims)] = y
-            wavelength_spectra_x, y = self.get_spectrum_wavelength(
+            wavelength_spectra_x, y = get_spectrum_wavelength_from_dndt(
                 avg_dndt, dopants, **self.wavelength_spectrum_args)
             wavelength_spectra_y[(n_orderings, n_sims)] = y
 
