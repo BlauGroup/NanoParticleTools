@@ -329,6 +329,8 @@ class DopedNanoparticle(MSONable):
         for i, dopant_conc, _, replace_el in dopant_specification:
             assert dopant_conc >= 0, (
                 'Dopant concentration cannot be negative')
+            assert dopant_conc <= 1, (
+                'Dopant concentration cannot be greater than 1')
             try:
                 conc_by_layer_and_species[i][replace_el] += dopant_conc
             except KeyError:
@@ -343,9 +345,6 @@ class DopedNanoparticle(MSONable):
                 assert total_replaced_conc < 1, (
                     f"Dopant concentration in constraint {layer_i}"
                     f" on {replaced_el} sites exceeds 100%")
-                assert total_replaced_conc >= 0, (
-                    f"Dopant concentration in constraint {layer_i}"
-                    f" on {replaced_el} sites is negative")
 
         if prune_hosts:
             for dopants_dict, constraint in zip(conc_by_layer_and_species,
