@@ -7,6 +7,7 @@ from NanoParticleTools.inputs.nanoparticle import (
     get_wse2_structure
 )
 import numpy as np
+import pytest
 
 
 def test_spherical_constraint():
@@ -61,12 +62,59 @@ def test_cube_constraint():
 
 
 def test_doped_nanoparticle():
-    constraint = [SphericalConstraint(10), SphericalConstraint(15)]
-    dopants = [(0, 0.1, 'Yb', 'Y'), (1, 0.2, 'Er', 'Y')]
-    dnp = DopedNanoparticle(constraint, dopants)
+    # Test simple structure generation
+    constraints = [SphericalConstraint(10)]
+    dopants = [(0, 0.1, 'Yb', 'Y')]
+    dnp = DopedNanoparticle(constraints, dopants)
 
     # TODO: test this only if we want longer running test
     dnp.generate()
+    assert len(dnp.dopant_sites) == 6
+    assert len(dnp.sites) == 332
+
+    # Test accelerated generation
+    dnp = DopedNanoparticle(constraints, dopants, prune_hosts=True)
+    dnp.generate()
+    assert len(dnp.dopant_sites) == 6
+    assert len(dnp.sites) == 56
+
+
+def test_empty_nanoparticle():
+    """
+    All of these tests are expected to throw an error
+    """
+    # Empty constraint list
+    constraints = []
+    dopants = [(0, 0.1, 'Yb', 'Y')]
+    with pytest.raises(ValueError):
+        dnp = DopedNanoparticle(constraints, dopants)
+
+    # No dopants specified
+    constraints = [SphericalConstraint(100)]
+    dopants = []
+    with pytest.raises(ValueError):
+        dnp = DopedNanoparticle(constraints, dopants)
+
+    constraints = [SphericalConstraint(100)]
+    dopants = [(0, 0.0, 'Er', 'Y'), (0, 0.0, 'Nd', 'Y'), (0, 0.0, 'Yb', 'Y')]
+    with pytest.raises(ValueError):
+        dnp = DopedNanoparticle(constraints, dopants)
+
+    constraints = [SphericalConstraint(100)]
+    dopants = [(0, 0, 'Er', 'Y')]
+    with pytest.raises(ValueError):
+        dnp = DopedNanoparticle(constraints, dopants)
+
+    # Too many dopants specified
+    constraints = [SphericalConstraint(100)]
+    dopants = [(0, 0.5, 'Er', 'Y'), (0, 0.5, 'Nd', 'Y'), (0, 0.5, 'Yb', 'Y')]
+    with pytest.raises(ValueError):
+        dnp = DopedNanoparticle(constraints, dopants)
+
+    constraints = [SphericalConstraint(100)]
+    dopants = [(0, 1.001, 'Er', 'Y')]
+    with pytest.raises(ValueError):
+        dnp = DopedNanoparticle(constraints, dopants)
 
 
 def test_get_nayf4_structure():
