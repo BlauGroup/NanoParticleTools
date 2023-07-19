@@ -1,20 +1,8 @@
-from typing import (
-    Optional,
-    Sequence,
-    Union,
-    Tuple,
-    List,
-    Dict
-)
+from typing import (Optional, Sequence, Union, Tuple, List, Dict)
 from abc import ABC, abstractmethod
 
 import numpy as np
-from pymatgen.core import (
-    Structure,
-    Site,
-    Lattice,
-    Molecule
-)
+from pymatgen.core import (Structure, Site, Lattice, Molecule)
 from monty.json import MSONable
 from NanoParticleTools.species_data.species import Dopant
 try:
@@ -62,8 +50,7 @@ class NanoParticleConstraint(ABC, MSONable):
         raise NotImplementedError
 
     @abstractmethod
-    def sites_in_bounds(self,
-                        site_coords: Union[np.array, List],
+    def sites_in_bounds(self, site_coords: Union[np.array, List],
                         center: List) -> np.array:
         """
         Checks a list of coordinates to check if they are within the bounds
@@ -102,6 +89,7 @@ class SphericalConstraint(NanoParticleConstraint):
         radius (float, int): Radius of this constraint volume
         host_structure (Structure, None): Structure of the host
     """
+
     def __init__(self,
                  radius: Union[float, int],
                  host_structure: Optional[Structure] = None):
@@ -159,6 +147,7 @@ class PrismConstraint(NanoParticleConstraint):
         c (float, int): Radius of this constraint volume
         host_structure (Structure, None): Structure of the host
     """
+
     def __init__(self,
                  a: Union[float, int],
                  b: Union[float, int],
@@ -247,8 +236,9 @@ class SphericalHarmonicsConstraint(NanoParticleConstraint):
                 Defaults to None.
         """
         if missing_ml_package:
-            raise ImportError("e3nn or torch is not installed. Please make sure both "
-                              "are installed to use SphericalHarmonicsConstraint")
+            raise ImportError(
+                "e3nn or torch is not installed. Please make sure both "
+                "are installed to use SphericalHarmonicsConstraint")
         self.sh_bounds = sh_bounds
         self.irreps = irreps
         super().__init__(host_structure)
@@ -320,21 +310,36 @@ class DopedNanoparticle(MSONable):
         seed (Optional[int], None): The seed used to determine dopant
             placement on the lattice. Defaults to 0.
     """
+
     def __init__(self,
                  constraints: Sequence[NanoParticleConstraint],
                  dopant_specification: Sequence[Tuple],
-                 seed: Optional[int] = 0):
+                 seed: Optional[int] = 0,
+                 prune_hosts: Optional[bool] = False):
+
+        # Check if there are zero constraints
+        if len(constraints) == 0:
+            raise ValueError('There are no constraints, this particle is empty')
         self.constraints = constraints
+
         self.seed = seed if seed is not None else 0
+
+        # Check if there are no dopant specifications
+        if len(dopant_specification) == 0:
+            raise ValueError('There are no dopant specifications')
         self.dopant_specification = dopant_specification
 
         # Check to ensure that the dopant specifications
         # are valid ( 0 <= x <= 1)
         # Bin the dopant concentration
-        conc_by_layer_and_species = {}
+        conc_by_layer_and_species = [{} for _ in self.constraints]
         for i, dopant_conc, _, replace_el in dopant_specification:
-            assert dopant_conc >= 0, (
-                'Dopant concentration cannot be negative')
+            if dopant_conc < 0:
+                raise ValueError(
+                    'Dopant concentration cannot be negative')
+            if dopant_conc > 1:
+                raise ValueError(
+                    'Dopant concentration cannot be greater than 1')
             try:
                 conc_by_layer_and_species[i][replace_el] += dopant_conc
             except KeyError:
@@ -344,14 +349,28 @@ class DopedNanoparticle(MSONable):
                     conc_by_layer_and_species[i] = {replace_el: dopant_conc}
 
         # Check if all concentrations are valid
-        for layer_i, layer in conc_by_layer_and_species.items():
+        dopants_present = False
+        for layer_i, layer in enumerate(conc_by_layer_and_species):
             for replaced_el, total_replaced_conc in layer.items():
-                assert total_replaced_conc <= 1, (
-                    f"Dopant concentration in constraint {layer_i}"
-                    f" on {replaced_el} sites exceeds 100%")
-                assert total_replaced_conc >= 0, (
-                    f"Dopant concentration in constraint {layer_i}"
-                    f" on {replaced_el} sites is negative")
+                if total_replaced_conc > 0:
+                    dopants_present = True
+                if total_replaced_conc > 1:
+                    raise ValueError(
+                        f"Dopant concentration in constraint {layer_i}"
+                        f" on {replaced_el} sites exceeds 100%")
+
+        if not dopants_present:
+            raise ValueError('There are no dopants being placed, this is an empty particle.'
+                             'The result will be zero intensity for everything')
+
+        if prune_hosts:
+            for dopants_dict, constraint in zip(conc_by_layer_and_species,
+                                                constraints):
+                _sites = [
+                    site for site in constraint.host_structure.sites
+                    if site.species_string in dopants_dict.keys()
+                ]
+                constraint.host_structure = Structure.from_sites(_sites)
 
         self._sites = None
         # Move to dopant area
@@ -439,8 +458,8 @@ class DopedNanoparticle(MSONable):
             in_another_constraint = np.full(sites_in_bounds.shape, False)
             for other_constraint in self.constraints[:i]:
                 in_another_constraint = (
-                    in_another_constraint |
-                    other_constraint.sites_in_bounds(translated_coords))
+                    in_another_constraint
+                    | other_constraint.sites_in_bounds(translated_coords))
 
             # Merge two boolean lists and identify sites within only
             # the current constraint
@@ -470,11 +489,8 @@ class DopedNanoparticle(MSONable):
         for spec in self.dopant_specification:
             self._apply_dopant(*spec, rng=rng)
 
-    def _apply_dopant(self,
-                      constraint_index: int,
-                      dopant_concentration: float,
-                      dopant_species: str,
-                      replaced_species: str,
+    def _apply_dopant(self, constraint_index: int, dopant_concentration: float,
+                      dopant_species: str, replaced_species: str,
                       rng: np.random.default_rng):
         """
         A helper function to apply a single dopant to the nanoparticle
@@ -519,9 +535,7 @@ class DopedNanoparticle(MSONable):
         # Keep track of sites with dopants
         self.dopant_indices[constraint_index].extend(dopant_sites)
 
-    def to_file(self,
-                fmt: str = "xyz",
-                name: str = "nanoparticle.xyz"):
+    def to_file(self, fmt: str = "xyz", name: str = "nanoparticle.xyz"):
         """
         Write the full nanoparticle structure to a file.
 
@@ -533,10 +547,8 @@ class DopedNanoparticle(MSONable):
             name (str, None): _description_. Defaults to "nanoparticle.xyz".
         """
         if self.has_structure is False:
-            raise RuntimeError(
-                'Nanoparticle not generated.'
-                ' Please use the generate() function'
-            )
+            raise RuntimeError('Nanoparticle not generated.'
+                               ' Please use the generate() function')
         _np = Molecule.from_sites(self.sites)
         _ = _np.to(fmt, name)
 
@@ -555,10 +567,8 @@ class DopedNanoparticle(MSONable):
 
         """
         if self.has_structure is False:
-            raise RuntimeError(
-                'Nanoparticle not generated.'
-                ' Please use the generate() function'
-            )
+            raise RuntimeError('Nanoparticle not generated.'
+                               ' Please use the generate() function')
         _np = Molecule.from_sites(self.dopant_sites)
         _ = _np.to(fmt, name)
 
@@ -571,10 +581,8 @@ class DopedNanoparticle(MSONable):
             Sequence[Site]: List of all the sites in the nanoparticle
         """
         if self.has_structure is False:
-            raise RuntimeError(
-                'Nanoparticle not generated.'
-                ' Please use the generate() function'
-            )
+            raise RuntimeError('Nanoparticle not generated.'
+                               ' Please use the generate() function')
         return [_site for sites in self._sites for _site in sites]
 
     @property
@@ -586,10 +594,8 @@ class DopedNanoparticle(MSONable):
             Sequence[Site]: List of all the dopant sites in the nanoparticle
         """
         if self.has_structure is False:
-            raise RuntimeError(
-                'Nanoparticle not generated.'
-                ' Please use the generate() function'
-            )
+            raise RuntimeError('Nanoparticle not generated.'
+                               ' Please use the generate() function')
         _sites = []
         for dopant_indices, sites in zip(self.dopant_indices, self._sites):
             for i in dopant_indices:
@@ -616,10 +622,8 @@ class DopedNanoparticle(MSONable):
                 their concentrations
         """
         if self.has_structure is False:
-            raise RuntimeError(
-                'Nanoparticle not generated.'
-                ' Please use the generate() function'
-            )
+            raise RuntimeError('Nanoparticle not generated.'
+                               ' Please use the generate() function')
         if constraint_index is None:
             num_replaced_sites = len([
                 i for i, site in enumerate(self.sites)
@@ -634,8 +638,10 @@ class DopedNanoparticle(MSONable):
                 except KeyError:
                     dopant_amount[str(dopant.specie)] = 1
 
-            return {key: (item / total_num_sites) for key, item in
-                    dopant_amount.items()}
+            return {
+                key: (item / total_num_sites)
+                for key, item in dopant_amount.items()
+            }
         return None
 
 
