@@ -16,6 +16,7 @@ from NanoParticleTools.species_data.species import Dopant
 from NanoParticleTools.inputs.util import get_all_interactions
 import sqlite3
 import warnings
+import shutil
 
 # Save 'trajectory_doc' to the trajectories store
 # (as specified in the JobStore)
@@ -137,7 +138,6 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
                 warnings.warn(
                     'Existing run found, num sites does not match.'
                     ' Simulation must begin from scratch')
-                fresh_start = True
 
             # Check the number of interactions
             num_interactions_db = len(
@@ -147,7 +147,6 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
                 warnings.warn(
                     'Existing run found, number of interactions does not '
                     'match. Simulation must begin from scratch')
-                fresh_start = True
 
             cur.close()
 
@@ -169,9 +168,12 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
             fresh_start = True
 
     if override or os.path.exists(output_dir) is False or fresh_start:
-        # Directories of written files
-        if not os.path.exists(output_dir):
-            os.mkdir(output_dir)
+        if os.path.exists(output_dir):
+            # delete the directory, so we can start from scratch
+            shutil.rmtree(output_dir)
+
+        # Make the directory
+        os.mkdir(output_dir)
 
         npmc_input.generate_initial_state_database(
             files['initial_state_db_path'], **_initial_state_db_args)
