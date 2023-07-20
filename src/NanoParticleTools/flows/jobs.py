@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Sequence, Tuple, Optional, Union, List
+from typing import Sequence, Tuple, Optional, Union, List, Set
 
 from jobflow import job
 from monty.json import MontyEncoder
@@ -15,7 +15,8 @@ from NanoParticleTools.inputs.spectral_kinetics import SpectralKinetics
 from NanoParticleTools.species_data.species import Dopant
 from NanoParticleTools.inputs.util import get_all_interactions
 import sqlite3
-
+import warnings
+import shutil
 
 # Save 'trajectory_doc' to the trajectories store
 # (as specified in the JobStore)
@@ -98,57 +99,81 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
     }
     _initial_state_db_args.update(initial_state_db_args)
 
-    # Check if output dir exists. If so, look for the
-    if override is False and os.path.exists(output_dir):
+    # Check if output dir exists. If so, check if the input files match
+    fresh_start = False
+    if os.path.exists(output_dir):
         # Check if the required files are in the directory
         # (inital_state.sqlite, np.sqlite, npmc_input.json)
         np_present = os.path.exists(files['np_db_path'])
         initial_state_present = os.path.exists(files['initial_state_db_path'])
         npmc_input_present = os.path.exists(files['npmc_input'])
 
+        # check if the initial_state db has all required tables
+        with sqlite3.connect(files['initial_state_db_path']) as con:
+            cur = con.cursor()
+            expected_tables = ['factors', 'initial_state']
+            all_tables_exist, missing = tables_exist(cur, expected_tables)
+            if not all_tables_exist:
+                warnings.warn(f'Existing run found, but missing {missing} table.'
+                              f'Re-initializing the simulation')
+                fresh_start = True
+
+            cur.close()
+
         # Check if the inputs match
         with sqlite3.connect(files['np_db_path']) as con:
             cur = con.cursor()
+            # Check if the sites and interaction table exists
+            expected_tables = ['metadata', 'species', 'sites', 'interactions']
+            all_tables_exist, missing = tables_exist(cur, expected_tables)
+            if not all_tables_exist:
+                warnings.warn(f'Existing run found, but missing {missing} table.'
+                              f'Re-initializing the simulation')
+                fresh_start = True
+
+            # Check the number of sites
             num_dopant_site_db = len(list(cur.execute('SELECT * from sites')))
             num_dopant_sites = len(nanoparticle.dopant_sites)
             if num_dopant_sites != num_dopant_site_db:
-                raise RuntimeError(
+                warnings.warn(
                     'Existing run found, num sites does not match.'
                     ' Simulation must begin from scratch')
 
-        # Check the number of interactions
-        with sqlite3.connect(files['np_db_path']) as con:
-            cur = con.cursor()
+            # Check the number of interactions
             num_interactions_db = len(
                 list(cur.execute('SELECT * from interactions')))
             num_interactions = len(get_all_interactions(spectral_kinetics))
             if num_interactions != num_interactions_db:
-                raise RuntimeError(
+                warnings.warn(
                     'Existing run found, number of interactions does not '
                     'match. Simulation must begin from scratch')
+
+            cur.close()
 
         if np_present and initial_state_present and npmc_input_present:
             # Check if the 'interupt_state' table is found in the sqlite.
             # If not, create it
             with sqlite3.connect(files['initial_state_db_path']) as con:
-
                 cur = con.cursor()
 
-                try:
-                    cur.execute('SELECT * from interupt_state')
-                except Exception:
+                table_exist, _ = tables_exist(cur, ['interupt_state'])
+                if not table_exist:
                     print('creating interupt_state and interupt_cutoff table')
                     cur.execute(create_interupt_state_sql)
                     cur.execute(create_interupt_cutoff_sql)
                 cur.close()
         else:
-            raise RuntimeError(
+            warnings.warn(
                 'Existing run found, but some files are missing. ')
+            fresh_start = True
 
-    elif override or os.path.exists(output_dir) is False:
-        # Directories of written files
-        if not os.path.exists(output_dir):
-            os.mkdir(output_dir)
+    if override or os.path.exists(output_dir) is False or fresh_start:
+        if os.path.exists(output_dir):
+            # delete the directory, so we can start from scratch
+            shutil.rmtree(output_dir)
+
+        # Make the directory
+        os.mkdir(output_dir)
 
         npmc_input.generate_initial_state_database(
             files['initial_state_db_path'], **_initial_state_db_args)
@@ -192,3 +217,17 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
         doc['initial_state_db_args'] = _initial_state_db_args
 
     return result_docs
+
+
+def tables_exist(cur, tables: Union[List, Set]):
+    if isinstance(tables, list):
+        expected_tables = set(tables)
+    sql_search = " OR ".join([f"name='{table}'" for table in expected_tables])
+    existing_tables = list(
+        cur.execute(
+            f"SELECT name FROM sqlite_master WHERE type='table' AND ({sql_search})"
+        ))
+    existing_tables = {table[0] for table in existing_tables}
+    if existing_tables != expected_tables:
+        return False, expected_tables - existing_tables
+    return True, {}
