@@ -74,7 +74,8 @@ def test_interaction_processor(doc_one, doc_two, doc_three):
     _data_dict = feature_processor.process_doc(doc_one)
     data1 = feature_processor.data_cls(_data_dict)
 
-    assert data1.constraint_radii.shape == (2, 2)
+    assert data1.radii.shape == (3, )
+    assert data1.constraint_radii_idx.shape == (2, 2)
     assert data1['dopant'].x.shape == (4, )
     assert data1['dopant'].types.shape == (4, )
     assert data1['dopant'].constraint_indices.shape == (4, )
@@ -94,7 +95,8 @@ def test_interaction_processor(doc_one, doc_two, doc_three):
     _data_dict = feature_processor.process_doc(doc_two)
     data2 = feature_processor.data_cls(_data_dict)
 
-    assert data2.constraint_radii.shape == (2, 2)
+    assert data2.radii.shape == (4, )
+    assert data2.constraint_radii_idx.shape == (3, 2)
     assert data2['dopant'].x.shape == (3, )
     assert data2['dopant'].types.shape == (3, )
     assert data2['dopant'].constraint_indices.shape == (3, )
@@ -109,12 +111,13 @@ def test_interaction_processor(doc_one, doc_two, doc_three):
 
     # Check the values
     assert torch.all(
-        data2['dopant'].constraint_indices == torch.tensor([0, 0, 1])).item()
+        data2['dopant'].constraint_indices == torch.tensor([0, 0, 2])).item()
 
     _data_dict = feature_processor.process_doc(doc_three)
     data3 = feature_processor.data_cls(_data_dict)
 
-    assert data3.constraint_radii.shape == (1, 2)
+    assert data3.radii.shape == (2, )
+    assert data3.constraint_radii_idx.shape == (1, 2)
     assert data3['dopant'].x.shape == (1, )
     assert data3['dopant'].types.shape == (1, )
     assert data3['dopant'].constraint_indices.shape == (1, )
@@ -130,81 +133,6 @@ def test_interaction_processor(doc_one, doc_two, doc_three):
     # Check the values
     assert torch.all(
         data3['dopant'].constraint_indices == torch.tensor([0])).item()
-
-
-def test_self_interaction_processor(doc_one, doc_two, doc_three):
-
-    feature_processor = DopantInteractionFeatureProcessor(
-        separate_self_interaction=True, possible_elements=['Yb', 'Er', 'Mg'])
-
-    _data_dict = feature_processor.process_doc(doc_one)
-    data1 = feature_processor.data_cls(_data_dict)
-
-    assert data1.constraint_radii.shape == (2, 2)
-    assert data1['dopant'].x.shape == (4, )
-    assert data1['dopant'].types.shape == (4, )
-    assert data1['dopant'].constraint_indices.shape == (4, )
-    assert data1['dopant'].num_nodes == 4
-    assert data1['interaction'].type_indices.shape == (12, 2)
-    assert data1['interaction'].dopant_indices.shape == (12, 2)
-    assert data1['interaction'].num_nodes == 12
-    assert data1['self_interaction'].type_indices.shape == (4, )
-    assert data1['self_interaction'].dopant_indices.shape == (4, )
-    assert data1['self_interaction'].num_nodes == 4
-    assert data1['dopant', 'coupled_to',
-                 'interaction'].edge_index.shape == (2, 12)
-    assert data1['interaction', 'coupled_to',
-                 'dopant'].edge_index.shape == (2, 12)
-    assert data1['dopant', 'coupled_to',
-                 'self_interaction'].edge_index.shape == (2, 4)
-    assert data1['self_interaction', 'coupled_to',
-                 'dopant'].edge_index.shape == (2, 4)
-
-    _data_dict = feature_processor.process_doc(doc_two)
-    data2 = feature_processor.data_cls(_data_dict)
-
-    assert data2.constraint_radii.shape == (2, 2)
-    assert data2['dopant'].x.shape == (3, )
-    assert data2['dopant'].types.shape == (3, )
-    assert data2['dopant'].constraint_indices.shape == (3, )
-    assert data2['dopant'].num_nodes == 3
-    assert data2['interaction'].type_indices.shape == (6, 2)
-    assert data2['interaction'].dopant_indices.shape == (6, 2)
-    assert data2['interaction'].num_nodes == 6
-    assert data2['self_interaction'].type_indices.shape == (3, )
-    assert data2['self_interaction'].dopant_indices.shape == (3, )
-    assert data2['self_interaction'].num_nodes == 3
-    assert data2['dopant', 'coupled_to',
-                 'interaction'].edge_index.shape == (2, 6)
-    assert data2['interaction', 'coupled_to',
-                 'dopant'].edge_index.shape == (2, 6)
-    assert data2['dopant', 'coupled_to',
-                 'self_interaction'].edge_index.shape == (2, 3)
-    assert data2['self_interaction', 'coupled_to',
-                 'dopant'].edge_index.shape == (2, 3)
-
-    _data_dict = feature_processor.process_doc(doc_three)
-    data3 = feature_processor.data_cls(_data_dict)
-
-    assert data3.constraint_radii.shape == (1, 2)
-    assert data3['dopant'].x.shape == (1, )
-    assert data3['dopant'].types.shape == (1, )
-    assert data3['dopant'].constraint_indices.shape == (1, )
-    assert data3['dopant'].num_nodes == 1
-    assert data3['interaction'].type_indices.shape == (0, )
-    assert data3['interaction'].dopant_indices.shape == (0, )
-    assert data3['interaction'].num_nodes == 0
-    assert data3['self_interaction'].type_indices.shape == (1, )
-    assert data3['self_interaction'].dopant_indices.shape == (1, )
-    assert data3['self_interaction'].num_nodes == 1
-    assert data3['dopant', 'coupled_to',
-                 'interaction'].edge_index.shape == (2, 0)
-    assert data3['interaction', 'coupled_to',
-                 'dopant'].edge_index.shape == (2, 0)
-    assert data3['dopant', 'coupled_to',
-                 'self_interaction'].edge_index.shape == (2, 1)
-    assert data3['self_interaction', 'coupled_to',
-                 'dopant'].edge_index.shape == (2, 1)
 
 
 def test_interaction_processor_batch(doc_one, doc_two, doc_three):
@@ -246,7 +174,8 @@ def test_interaction_processor_batch(doc_one, doc_two, doc_three):
     assert len(batch.log_const) == 3
 
     # Check the feature shapes
-    assert batch.constraint_radii.shape == (5, 2)
+    assert batch.radii.shape == (9, )
+    assert batch.constraint_radii_idx.shape == (6, 2)
     assert batch['dopant'].x.shape == (8, )
     assert batch['dopant'].types.shape == (8, )
     assert batch['dopant'].constraint_indices.shape == (8, )
@@ -262,16 +191,17 @@ def test_interaction_processor_batch(doc_one, doc_two, doc_three):
     # Check the values of the features
     assert torch.all(batch['dopant'].batch == torch.tensor(
         [0, 0, 0, 0, 1, 1, 1, 2])).item()
+    assert torch.allclose(batch.radii, torch.tensor([0, 10, 20, 0, 10, 20, 30, 0, 10]).float())
     assert torch.allclose(
-        batch.constraint_radii,
-        torch.tensor([[0, 10], [10, 20], [0, 10], [20, 30], [0, 10]]).float())
+        batch.constraint_radii_idx,
+        torch.tensor([[0, 1], [1, 2], [0, 1], [1, 2], [2, 3], [0, 1]]))
     assert torch.allclose(
         batch['dopant'].x,
         torch.tensor([0.499, 0.25, 0.2, 0.1, 0.499, 0.02, 0.25, 0.02]))
     assert torch.all(batch['dopant'].types == torch.tensor(
         [0, 1, 0, 1, 0, 1, 2, 2])).item()
     assert torch.all(batch['dopant'].constraint_indices == torch.tensor(
-        [0, 0, 1, 1, 2, 2, 3, 4])).item()
+        [0, 0, 1, 1, 2, 2, 4, 5])).item()
 
     # yapf: disable
     assert torch.all(batch['interaction'].batch == torch.cat((torch.zeros(16),

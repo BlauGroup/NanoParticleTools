@@ -1,5 +1,8 @@
-from NanoParticleTools.machine_learning.data.dataset import NPMCDataset
-from NanoParticleTools.machine_learning.data.processors import WavelengthSpectrumLabelProcessor
+from typing import Dict
+from NanoParticleTools.machine_learning.data.dataset import (
+    NPMCDataset, get_required_fields)
+from NanoParticleTools.machine_learning.data.processors import (
+    WavelengthSpectrumLabelProcessor, FeatureProcessor, LabelProcessor)
 from NanoParticleTools.machine_learning.models.mlp_model.data import VolumeFeatureProcessor
 import pytest
 from pathlib import Path
@@ -22,13 +25,27 @@ def feature_processor():
     return VolumeFeatureProcessor(3, possible_elements=['Yb', 'Nd', 'Mg'])
 
 
+def test_dataset(feature_processor, label_processor):
+    dataset = NPMCDataset(TEST_FILE_DIR / 'dataset/data.json',
+                          feature_processor=feature_processor,
+                          label_processor=label_processor,
+                          use_metadata=False,
+                          cache_in_memory=True)
+
+    assert len(dataset) == 16
+    assert dataset[0] != dataset[1]
+    assert dataset[0].x.shape == (1, 15)
+    assert dataset[0].y.shape == (1, 600)
+    assert dataset[0].log_y.shape == (1, 600)
+
+
 @pytest.fixture
 def data_store():
     store = MemoryStore()
     store.connect()
 
     # Add data from the test file to the store
-    with open(TEST_FILE_DIR / 'dataset/NPMCDataset/raw/data.json', 'r') as f:
+    with open(TEST_FILE_DIR / 'dataset/data.json', 'r') as f:
         docs = json.load(f)
 
     store.update(docs, key='_id')
@@ -41,8 +58,7 @@ def data_store_two():
     store.connect()
 
     # Add data from the test file to the store
-    with open(TEST_FILE_DIR / 'dataset_two/NPMCDataset/raw/data.json',
-              'r') as f:
+    with open(TEST_FILE_DIR / 'dataset_two/data.json', 'r') as f:
         docs = json.load(f)
 
     store.update(docs, key='_id')
@@ -51,131 +67,108 @@ def data_store_two():
 
 @pytest.fixture
 def dataset(feature_processor, label_processor):
-    with pytest.warns(UserWarning):
-        return NPMCDataset(root=TEST_FILE_DIR / 'dataset',
-                           feature_processor=feature_processor,
-                           label_processor=label_processor,
-                           data_store=None,
-                           doc_filter={},
-                           download=False,
-                           overwrite=False,
-                           use_cache=True,
-                           dataset_size=-1,
-                           use_metadata=True)
-
-
-def test_dataset(dataset):
-    assert len(dataset) == 16
-    assert os.path.normpath(dataset.raw_folder) == os.path.normpath(
-        TEST_FILE_DIR / 'dataset/NPMCDataset/raw')
+    dataset = NPMCDataset(TEST_FILE_DIR / 'dataset/data.json',
+                          feature_processor=feature_processor,
+                          label_processor=label_processor,
+                          use_metadata=False,
+                          cache_in_memory=True)
+    return dataset
 
 
 def test_store_download(tmp_path, feature_processor, label_processor,
                         data_store):
-    # check if pytest throws an error
-    with pytest.raises(RuntimeError):
-        dataset = NPMCDataset(tmp_path,
-                              feature_processor=feature_processor,
-                              label_processor=label_processor,
-                              data_store=data_store,
-                              doc_filter=None,
-                              download=False,
-                              overwrite=False,
-                              use_cache=False)
+    dataset = NPMCDataset.from_store(feature_processor,
+                                     label_processor,
+                                     data_store,
+                                     doc_filter=None,
+                                     overwrite=False,
+                                     use_metadata=False,
+                                     file_path=os.path.abspath(tmp_path /
+                                                               'dataset.json'))
 
-    dataset = NPMCDataset(tmp_path,
-                          feature_processor=feature_processor,
-                          label_processor=label_processor,
-                          data_store=data_store,
-                          doc_filter=None,
-                          download=True,
-                          overwrite=False,
-                          use_cache=False)
     assert len(dataset) == 16
-    assert os.path.normpath(dataset.raw_folder) == os.path.normpath(
-        tmp_path / 'NPMCDataset/raw')
-    assert os.path.normpath(dataset.processed_folder) == os.path.normpath(
-        tmp_path / 'NPMCDataset/processed')
+    assert dataset.feature_processor == feature_processor
+    assert dataset.label_processor == label_processor
+
+    with pytest.raises(NotImplementedError):
+        dataset.collate_fn()
+
+    with pytest.raises(NotImplementedError):
+        dataset = NPMCDataset.from_store(feature_processor,
+                                         label_processor,
+                                         data_store,
+                                         doc_filter=None,
+                                         overwrite=False,
+                                         use_metadata=False,
+                                         file_path=os.path.abspath(
+                                             tmp_path / 'dataset.hdf5'))
 
 
-def test_no_size_check(tmp_path, feature_processor, label_processor,
-                       data_store, data_store_two):
-    dataset = NPMCDataset(tmp_path,
-                          feature_processor=feature_processor,
-                          label_processor=label_processor,
-                          data_store=data_store,
-                          doc_filter=None,
-                          download=True,
-                          overwrite=False,
-                          use_cache=False)
-    assert len(dataset) == 16
-
-    with pytest.warns(UserWarning):
-        dataset = NPMCDataset(tmp_path,
-                              feature_processor=feature_processor,
-                              label_processor=label_processor,
-                              data_store=data_store_two,
-                              doc_filter=None,
-                              download=False,
-                              overwrite=False,
-                              use_cache=False,
-                              dataset_size=-1)
-    assert len(dataset) == 16
-
-
-def test_size_none(tmp_path, feature_processor, label_processor, data_store,
+def test_overwrite(tmp_path, feature_processor, label_processor, data_store,
                    data_store_two):
-    dataset = NPMCDataset(tmp_path,
-                          feature_processor=feature_processor,
-                          label_processor=label_processor,
-                          data_store=data_store,
-                          doc_filter=None,
-                          download=True,
-                          overwrite=False,
-                          use_cache=False)
+    dataset = NPMCDataset.from_store(feature_processor,
+                                     label_processor,
+                                     data_store,
+                                     doc_filter=None,
+                                     overwrite=False,
+                                     use_metadata=False,
+                                     file_path=os.path.abspath(tmp_path /
+                                                               'dataset.json'))
+
     assert len(dataset) == 16
 
-    with pytest.warns(UserWarning):
-        dataset = NPMCDataset(tmp_path,
-                              feature_processor=feature_processor,
-                              label_processor=label_processor,
-                              data_store=data_store_two,
-                              doc_filter=None,
-                              download=False,
-                              overwrite=False,
-                              use_cache=False,
-                              dataset_size=None)
+    # If the overwrite flag is set to False, the new dataset is not actually used
+    with pytest.warns():
+        dataset = NPMCDataset.from_store(feature_processor,
+                                         label_processor,
+                                         data_store_two,
+                                         doc_filter=None,
+                                         overwrite=False,
+                                         use_metadata=False,
+                                         file_path=os.path.abspath(
+                                             tmp_path / 'dataset.json'))
+
+    assert len(dataset) == 16
+
+    # If the overwrite flag is set to True, the new dataset is used
+    dataset = NPMCDataset.from_store(feature_processor,
+                                     label_processor,
+                                     data_store_two,
+                                     doc_filter=None,
+                                     overwrite=True,
+                                     use_metadata=True,
+                                     file_path=os.path.abspath(tmp_path /
+                                                               'dataset.json'))
+
     assert len(dataset) == 17
 
 
-def test_incorrect_dataset_size(tmp_path, feature_processor, label_processor,
-                                data_store, data_store_two):
-    dataset = NPMCDataset(tmp_path,
+def test_dataset_process_doc(dataset, feature_processor, label_processor):
+    dataset = NPMCDataset(TEST_FILE_DIR / 'dataset/data.json',
                           feature_processor=feature_processor,
                           label_processor=label_processor,
-                          data_store=data_store,
-                          doc_filter=None,
-                          download=True,
-                          overwrite=True,
-                          use_cache=False)
-    assert len(dataset) == 16
+                          use_metadata=True,
+                          cache_in_memory=False)
 
-    with pytest.warns(UserWarning):
-        dataset = NPMCDataset(tmp_path,
-                              feature_processor=feature_processor,
-                              label_processor=label_processor,
-                              data_store=data_store_two,
-                              doc_filter=None,
-                              download=False,
-                              overwrite=True,
-                              use_cache=False,
-                              dataset_size=17)
-    assert len(dataset) == 17
+    assert 'metadata' in dataset[0]
+    assert dataset.get_random() is not None
 
 
-def test_data_indexing(dataset):
-    assert len(dataset) == 16
-    assert dataset[0] != dataset[1]
-    assert dataset[0].x.shape == (1, 15)
-    assert dataset[0].y.shape == (1, 600)
-    assert dataset[0].log_y.shape == (1, 600)
+def test_get_required_fields():
+
+    class DummyFeatureProcessor(FeatureProcessor):
+
+        def process_doc(self, doc: Dict) -> Dict:
+            # do nothing
+            return doc
+
+    class DummyLabelProcessor(LabelProcessor):
+
+        def process_doc(self, doc: Dict) -> Dict:
+            # do nothing
+            return doc
+
+    feature_processor = DummyFeatureProcessor(fields=[])
+    label_processor = DummyLabelProcessor(fields=['output.summary'])
+    fields = get_required_fields(feature_processor, label_processor)
+    assert fields == ['output.summary', 'input']

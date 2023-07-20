@@ -11,7 +11,7 @@ from torch_geometric.data import HeteroData
 import json
 import os
 from typing import Any, Dict
-
+import warnings
 
 class NPMCDataset(Dataset):
 
@@ -111,6 +111,10 @@ class NPMCDataset(Dataset):
             if overwrite:
                 download(feature_processor, label_processor, data_store,
                          doc_filter, file_path, use_metadata)
+            else:
+                warnings.warn('File already exists. Skipping download. Please'
+                              ' double check that the dataset is the correct one,'
+                              ' else, set overwrite to true')
         else:
             # Download the data from the store and write to file
             download(feature_processor, label_processor, data_store,

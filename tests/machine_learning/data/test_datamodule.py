@@ -1,5 +1,5 @@
-from NanoParticleTools.machine_learning.data.datamodule import NPMCDataModule
-from NanoParticleTools.machine_learning.data.processors import WavelengthSpectrumLabelProcessor
+from NanoParticleTools.machine_learning.data import (
+    NPMCDataModule, NPMCDataset, WavelengthSpectrumLabelProcessor)
 from NanoParticleTools.machine_learning.models.mlp_model.data import VolumeFeatureProcessor
 import pytest
 from pathlib import Path
@@ -28,123 +28,66 @@ def graph_feature_processor():
 
 
 @pytest.fixture
-def train_store():
-    store = MemoryStore()
-    store.connect()
-
-    # Add data from the test file to the store
-    with open(TEST_FILE_DIR / 'dataset/NPMCDataset/raw/data.json', 'r') as f:
-        docs = json.load(f)
-    store.update(docs, key='_id')
-    return store
+def train_dataset(label_processor, feature_processor):
+    return NPMCDataset(TEST_FILE_DIR / 'dataset/data.json',
+                       feature_processor=feature_processor,
+                       label_processor=label_processor,
+                       use_metadata=False,
+                       cache_in_memory=True)
 
 
 @pytest.fixture
-def test_store():
-    store = MemoryStore()
-    store.connect()
-
-    # Add data from the test file to the store
-    with open(TEST_FILE_DIR / 'dataset/NPMCDataset/raw/data.json', 'r') as f:
-        docs = json.load(f)
-
-    store.update(docs, key='_id')
-    return store
+def test_dataset():
+    return NPMCDataset(TEST_FILE_DIR / 'dataset/data.json',
+                       feature_processor=feature_processor,
+                       label_processor=label_processor,
+                       use_metadata=False,
+                       cache_in_memory=True)
 
 
-def test_datamodule_init(label_processor, feature_processor, train_store,
-                         test_store):
-    datamodule = NPMCDataModule(feature_processor=feature_processor,
-                                label_processor=label_processor,
-                                training_data_store=train_store,
-                                testing_data_store=test_store,
-                                batch_size=16,
-                                split_seed=0)
+def test_datamodule_init(train_dataset, test_dataset):
+    datamodule = NPMCDataModule.from_train_and_test_dataset(train_dataset,
+                                                            test_dataset,
+                                                            val_split=0.15,
+                                                            batch_size=16,
+                                                            split_seed=0)
 
-    assert datamodule.feature_processor == feature_processor
-    assert datamodule.label_processor == label_processor
-    assert datamodule.training_data_store == train_store
-    assert datamodule.testing_data_store == test_store
+    assert datamodule.train_dataset is not None
+    assert datamodule.val_dataset is not None
+    assert datamodule.test_dataset is not None
     assert datamodule.batch_size == 16
     assert datamodule.split_seed == 0
 
-
-def test_datamodule_setup(tmp_path, label_processor, feature_processor,
-                          train_store, test_store):
-    datamodule = NPMCDataModule(
-        feature_processor=feature_processor,
-        label_processor=label_processor,
-        training_data_store=train_store,
-        testing_data_store=test_store,
-        training_data_dir=os.path.join(tmp_path, 'training_data'),
-        testing_data_dir=os.path.join(tmp_path, 'testing_data'),
-        batch_size=16)
-
-    with pytest.raises(RuntimeError):
-        datamodule.setup()
-
-    datamodule.prepare_data()
-    datamodule.setup()
-    assert datamodule.feature_processor == feature_processor
-    assert datamodule.label_processor == label_processor
-    assert datamodule.npmc_train is not None
-    assert datamodule.npmc_val is not None
-    assert datamodule.npmc_test is not None
-
-    assert len(datamodule.npmc_train) == 14
-    assert len(datamodule.npmc_val) == 2
-    assert len(datamodule.npmc_test) == 16
+    assert len(datamodule.train_dataset) == 14
+    assert len(datamodule.val_dataset) == 2
+    assert len(datamodule.test_dataset) == 16
 
 
-def test_datamodule_no_test_store(tmp_path, label_processor, feature_processor,
-                                  train_store):
-    datamodule = NPMCDataModule(feature_processor=feature_processor,
-                                label_processor=label_processor,
-                                training_data_store=train_store,
-                                training_data_dir=os.path.join(
-                                    tmp_path, 'training_data'),
-                                batch_size=16)
+def test_datamodule_no_test_set(label_processor, feature_processor,
+                                train_dataset, test_dataset):
+    datamodule = NPMCDataModule.from_train_dataset(train_dataset,
+                                                   val_split=0.15,
+                                                   test_split=0.15,
+                                                   split_seed=0,
+                                                   batch_size=16)
 
-    datamodule.prepare_data()
-    datamodule.setup()
-    assert datamodule.feature_processor == feature_processor
-    assert datamodule.label_processor == label_processor
-    assert datamodule.npmc_train is not None
-    assert datamodule.npmc_val is not None
-    assert datamodule.npmc_test is not None
+    assert datamodule.train_dataset is not None
+    assert datamodule.val_dataset is not None
+    assert datamodule.test_dataset is not None
+    assert datamodule.batch_size == 16
+    assert datamodule.split_seed == 0
 
-    assert len(datamodule.npmc_train) == 12
-    assert len(datamodule.npmc_val) == 2
-    assert len(datamodule.npmc_test) == 2
+    assert len(datamodule.train_dataset) == 12
+    assert len(datamodule.val_dataset) == 2
+    assert len(datamodule.test_dataset) == 2
 
 
-def test_datamodule_no_test_store(tmp_path, label_processor, feature_processor,
-                                  train_store):
-    datamodule = NPMCDataModule(feature_processor=feature_processor,
-                                label_processor=label_processor,
-                                training_data_store=train_store,
-                                training_data_dir=os.path.join(
-                                    tmp_path, 'training_data'),
-                                batch_size=16,
-                                calc_mean=True)
-
-    datamodule.prepare_data()
-    datamodule.setup()
-    assert datamodule.spectra_mean.shape == (600, )
-    assert datamodule.spectra_std.shape == (600, )
-
-
-def test_pyg_dataloader(tmp_path, label_processor, graph_feature_processor,
-                        train_store):
-    datamodule = NPMCDataModule(feature_processor=graph_feature_processor,
-                                label_processor=label_processor,
-                                training_data_store=train_store,
-                                training_data_dir=os.path.join(
-                                    tmp_path, 'training_data'),
-                                batch_size=2)
-
-    datamodule.prepare_data()
-    datamodule.setup()
+def test_pyg_dataloader(train_dataset):
+    datamodule = NPMCDataModule.from_train_dataset(train_dataset,
+                                                   val_split=0.15,
+                                                   test_split=0.15,
+                                                   split_seed=0,
+                                                   batch_size=2)
 
     train_dataloader = datamodule.train_dataloader()
     assert len(train_dataloader) == 6
