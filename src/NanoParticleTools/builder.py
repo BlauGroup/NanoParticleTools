@@ -280,12 +280,15 @@ class UCNPPopBuilder(UCNPBuilder):
             for doc in items
         ])
         avg_total_pop = np.array([
-            np.array(doc['data']['output']['y_overall_populations'])
-            [:min_length] for doc in items
+            np.array(
+                doc['data']['output']['y_overall_populations'])[:min_length]
+            for doc in items
         ]).mean(0)
         avg_total_pop_by_constraint = np.array([
-            np.array(doc['data']['output']['y_overall_populations'])
-            [:min_length] for doc in items
+            np.array([
+                item[:min_length]
+                for item in doc['data']['output']['y_constraint_populations']
+            ]) for doc in items
         ]).mean(0)
 
         avg_doc["output"]['avg_total_pop'] = avg_total_pop
@@ -294,6 +297,9 @@ class UCNPPopBuilder(UCNPBuilder):
 
         # Include average
         avg_doc["output"]['avg_5ms_total_pop'] = avg_total_pop[-500:].mean(0)
+        avg_doc["output"]['avg_8ms_total_pop'] = avg_total_pop[-800:].mean(0)
+        avg_doc["output"]['avg_5ms_total_pop_by_constraint'] = avg_total_pop_by_constraint[:, -500:].mean(1)
+        avg_doc["output"]['avg_8ms_total_pop_by_constraint'] = avg_total_pop_by_constraint[:, -800:].mean(1)
 
         return avg_doc
 
