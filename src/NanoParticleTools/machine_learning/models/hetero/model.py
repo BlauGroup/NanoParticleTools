@@ -8,6 +8,7 @@ from torch.nn import functional as F
 from torch import nn
 import torch
 import torch_geometric.nn as gnn
+import warnings
 
 
 class DopantInteractionHeteroRepresentationModule(torch.nn.Module):
@@ -19,6 +20,7 @@ class DopantInteractionHeteroRepresentationModule(torch.nn.Module):
                  use_volume_in_dopant_constraint: bool = False,
                  normalize_interaction_by_volume: bool = False,
                  use_inverse_concentration: bool = False,
+                 interaction_embedding: bool = False,
                  conc_eps: float = 0.01,
                  **kwargs):
         """
@@ -37,6 +39,7 @@ class DopantInteractionHeteroRepresentationModule(torch.nn.Module):
         self.normalize_interaction_by_volume = normalize_interaction_by_volume
         self.use_inverse_concentration = use_inverse_concentration
         self.conc_eps = conc_eps
+        self.interaction_embedding = interaction_embedding
 
         n_conc = 2 if self.use_inverse_concentration else 1
         interaction_dim = nsigma * 4 if self.use_inverse_concentration else nsigma
@@ -52,7 +55,10 @@ class DopantInteractionHeteroRepresentationModule(torch.nn.Module):
                 2, embed_dim, [16, 16])
         self.dopant_norm = nn.BatchNorm1d(embed_dim)
 
-        self.interaction_embedder = nn.Linear(2, embed_dim)
+        if self.interaction_embedding:
+            self.interaction_embedder = nn.Embedding(9, embed_dim)
+        else:
+            self.interaction_embedder = nn.Linear(2, embed_dim)
         self.integrated_interaction = InteractionBlock(nsigma=nsigma)
         self.interaction_norm = nn.BatchNorm1d(interaction_dim)
         self.interaction_film_layer = FiLMLayer(interaction_dim, embed_dim,
@@ -81,6 +87,7 @@ class DopantInteractionHeteroRepresentationModule(torch.nn.Module):
                 dopant_concs,
                 dopant_constraint_indices,
                 interaction_type_indices,
+                interaction_types,
                 interaction_dopant_indices,
                 edge_index_dict,
                 radii,
@@ -90,7 +97,7 @@ class DopantInteractionHeteroRepresentationModule(torch.nn.Module):
         _radii = radii[constraint_radii_idx]
 
         # Compute the volumes of the constraints
-        volume = 4 / 3 * torch.pi * _radii ** 3
+        volume = 4 / 3 * torch.pi * _radii**3
         volume = volume[:, 1] - volume[:, 0]
 
         # Embed the dopant types
@@ -118,8 +125,11 @@ class DopantInteractionHeteroRepresentationModule(torch.nn.Module):
         dopant_attr = self.dopant_norm(dopant_attr)
 
         # Embed the interaction nodes, using the pair of dopant types
-        interaction_attr = self.interaction_embedder(
-            interaction_type_indices.float())
+        if self.interaction_embedding:
+            interaction_attr = self.interaction_embedder(interaction_types)
+        else:
+            interaction_attr = self.interaction_embedder(
+                interaction_type_indices.float())
 
         # Index the radii and compute the integrated interaction
         interaction_node_radii = _radii[dopant_constraint_indices][
@@ -141,8 +151,11 @@ class DopantInteractionHeteroRepresentationModule(torch.nn.Module):
                  inv_interaction_node_conc[:, 0] * inv_interaction_node_conc[:, 1])).mT
             # yapf: enable
 
-            integrated_interaction = conc_factor[:, :, None] * integrated_interaction[:, None, :]
-            integrated_interaction = integrated_interaction.reshape(-1, 4 * self.nsigma)
+            integrated_interaction = conc_factor[:, :,
+                                                 None] * integrated_interaction[:,
+                                                                                None, :]
+            integrated_interaction = integrated_interaction.reshape(
+                -1, 4 * self.nsigma)
         else:
             conc_factor = (interaction_node_conc[:, 0] *
                            interaction_node_conc[:, 1]).unsqueeze(-1)
@@ -193,6 +206,9 @@ class DopantInteractionHeteroModel(SpectrumModelBase):
                  nsigma=5,
                  **kwargs):
         if 'n_input_nodes' in kwargs:
+            warnings.warn(
+                'Cannot override n_input_nodes for this model. It is inferred from'
+                'the embed_dim.')
             del kwargs['n_input_nodes']
 
         super().__init__(n_input_nodes=embed_dim, **kwargs)
@@ -211,6 +227,7 @@ class DopantInteractionHeteroModel(SpectrumModelBase):
                 dopant_concs,
                 dopant_constraint_indices,
                 interaction_type_indices,
+                interaction_types,
                 interaction_dopant_indices,
                 edge_index_dict,
                 radii,
@@ -218,8 +235,9 @@ class DopantInteractionHeteroModel(SpectrumModelBase):
                 batch_dict=None):
         representation = self.representation_module(
             dopant_types, dopant_concs, dopant_constraint_indices,
-            interaction_type_indices, interaction_dopant_indices,
-            edge_index_dict, radii, constraint_radii_idx, batch_dict)
+            interaction_type_indices, interaction_types,
+            interaction_dopant_indices, edge_index_dict, radii,
+            constraint_radii_idx, batch_dict)
         out = self.readout(representation)
         return out
 
@@ -229,6 +247,7 @@ class DopantInteractionHeteroModel(SpectrumModelBase):
             dopant_concs=data['dopant'].x,
             dopant_constraint_indices=data['dopant'].constraint_indices,
             interaction_type_indices=data['interaction'].type_indices,
+            interaction_types=data['interaction'].types,
             interaction_dopant_indices=data['interaction'].dopant_indices,
             edge_index_dict=data.edge_index_dict,
             radii=data.radii,
@@ -242,6 +261,7 @@ class DopantInteractionHeteroModel(SpectrumModelBase):
             dopant_concs=data['dopant'].x,
             dopant_constraint_indices=data['dopant'].constraint_indices,
             interaction_type_indices=data['interaction'].type_indices,
+            interaction_types=data['interaction'].types,
             interaction_dopant_indices=data['interaction'].dopant_indices,
             edge_index_dict=data.edge_index_dict,
             radii=data.radii,
@@ -268,6 +288,7 @@ class DopantInteractionHeteroModel(SpectrumModelBase):
             dopant_concs=batch['dopant'].x,
             dopant_constraint_indices=batch['dopant'].constraint_indices,
             interaction_type_indices=batch['interaction'].type_indices,
+            interaction_types=batch['interaction'].types,
             interaction_dopant_indices=batch['interaction'].dopant_indices,
             edge_index_dict=batch.edge_index_dict,
             radii=batch.radii,

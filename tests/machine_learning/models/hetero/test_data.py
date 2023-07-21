@@ -64,6 +64,145 @@ def doc_three():
     }
 
 
+@pytest.fixture
+def doc_four():
+    return {
+        'input': {
+            'constraints': [
+                SphericalConstraint(10),
+                SphericalConstraint(20),
+                SphericalConstraint(30)
+            ],
+            'dopant_specifications':
+            [(0, 0.02, 'Er', 'Y'), (0, 0.5, 'Yb', 'Y'), (1, 0.25, 'Er', 'Y')]
+        },
+        'dopant_concentration': [{
+            'Yb': 0.5,
+            'Er': 0.02
+        }, {
+            'Er': 0.25
+        }],
+    }
+
+
+@pytest.fixture
+def doc_four_dupe():
+    return {
+        'input': {
+            'constraints': [
+                SphericalConstraint(10),
+                SphericalConstraint(20),
+                SphericalConstraint(20),
+                SphericalConstraint(30)
+            ],
+            'dopant_specifications':
+            [(0, 0.02, 'Er', 'Y'), (0, 0.5, 'Yb', 'Y'), (1, 0.25, 'Er', 'Y')]
+        },
+        'dopant_concentration': [{
+            'Yb': 0.5,
+            'Er': 0.02
+        }, {}, {
+            'Er': 0.25
+        }],
+    }
+
+
+def test_exclude_empty_exterior(doc_four, doc_four_dupe):
+    feature_processor = DopantInteractionFeatureProcessor(
+        possible_elements=['Yb', 'Er', 'Mg'],
+        assymetric_interaction=True,
+        include_zeros=True)
+
+    _data_dict = feature_processor.process_doc(doc_four)
+    data = feature_processor.data_cls(_data_dict)
+
+    _data_dict = feature_processor.process_doc(doc_four_dupe)
+    data_dupe = feature_processor.data_cls(_data_dict)
+
+    assert torch.all(data.radii == data_dupe.radii)
+
+
+def test_include_zeros(doc_two, doc_four):
+    feature_processor = DopantInteractionFeatureProcessor(
+        possible_elements=['Yb', 'Er', 'Mg'],
+        assymetric_interaction=True,
+        include_zeros=True)
+
+    _data_dict = feature_processor.process_doc(doc_two)
+    data = feature_processor.data_cls(_data_dict)
+    assert data.radii.shape == (4, )
+    assert data['interaction'].types.shape == (81, )
+    assert data['interaction'].types.max() == 8
+
+    _data_dict = feature_processor.process_doc(doc_four)
+    data = feature_processor.data_cls(_data_dict)
+    assert data.radii.shape == (3, )
+    assert data['interaction'].types.shape == (36, )
+    assert data['interaction'].types.max() == 8
+
+    feature_processor = DopantInteractionFeatureProcessor(
+        possible_elements=['Yb', 'Er', 'Mg'],
+        assymetric_interaction=False,
+        include_zeros=True)
+
+    _data_dict = feature_processor.process_doc(doc_two)
+    data = feature_processor.data_cls(_data_dict)
+    assert data.radii.shape == (4, )
+    assert data['interaction'].types.shape == (81, )
+    assert data['interaction'].types.max() == 5
+
+    _data_dict = feature_processor.process_doc(doc_four)
+    data = feature_processor.data_cls(_data_dict)
+    assert data.radii.shape == (3, )
+    assert data['interaction'].types.shape == (36, )
+    assert data['interaction'].types.max() == 5
+
+
+def test_assymetric(doc_two, doc_four):
+
+    feature_processor = DopantInteractionFeatureProcessor(
+        possible_elements=['Yb', 'Er', 'Mg'],
+        assymetric_interaction=True,
+        include_zeros=False)
+    _data_dict = feature_processor.process_doc(doc_two)
+    data = feature_processor.data_cls(_data_dict)
+
+    assert data.radii.shape == (4, )
+    assert data['interaction'].types.shape == (9, )
+    assert torch.allclose(data['interaction'].types, torch.arange(0, 9))
+
+    print(feature_processor.edge_type_map)
+    _data_dict = feature_processor.process_doc(doc_four)
+    data = feature_processor.data_cls(_data_dict)
+    assert data.radii.shape == (3, )
+    assert data['interaction'].types.shape == (9, )
+    assert torch.allclose(data['interaction'].types,
+                          torch.tensor([0, 1, 1, 3, 4, 4, 3, 4, 4]))
+
+    feature_processor = DopantInteractionFeatureProcessor(
+        possible_elements=['Yb', 'Er', 'Mg'],
+        assymetric_interaction=False,
+        include_zeros=False)
+    _data_dict = feature_processor.process_doc(doc_four)
+    data = feature_processor.data_cls(_data_dict)
+    assert data.radii.shape == (3, )
+    assert data['interaction'].types.shape == (9, )
+    assert torch.allclose(data['interaction'].types,
+                          torch.tensor([0, 1, 1, 1, 3, 3, 1, 3, 3]))
+
+
+def test_grad(doc_four):
+    feature_processor = DopantInteractionFeatureProcessor(
+        possible_elements=['Yb', 'Er', 'Mg'],
+        assymetric_interaction=False,
+        include_zeros=False,
+        input_grad=True)
+    _data_dict = feature_processor.process_doc(doc_four)
+    data = feature_processor.data_cls(_data_dict)
+    assert data.radii.requires_grad
+    assert data['dopant'].x.requires_grad
+
+
 def test_interaction_processor(doc_one, doc_two, doc_three):
 
     feature_processor = DopantInteractionFeatureProcessor(
@@ -191,7 +330,9 @@ def test_interaction_processor_batch(doc_one, doc_two, doc_three):
     # Check the values of the features
     assert torch.all(batch['dopant'].batch == torch.tensor(
         [0, 0, 0, 0, 1, 1, 1, 2])).item()
-    assert torch.allclose(batch.radii, torch.tensor([0, 10, 20, 0, 10, 20, 30, 0, 10]).float())
+    assert torch.allclose(
+        batch.radii,
+        torch.tensor([0, 10, 20, 0, 10, 20, 30, 0, 10]).float())
     assert torch.allclose(
         batch.constraint_radii_idx,
         torch.tensor([[0, 1], [1, 2], [0, 1], [1, 2], [2, 3], [0, 1]]))
