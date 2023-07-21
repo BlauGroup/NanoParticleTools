@@ -1,8 +1,13 @@
+from NanoParticleTools.inputs import NanoParticleConstraint, SphericalConstraint
+from NanoParticleTools.inputs.nanoparticle import Dopant
+from NanoParticleTools.inputs.spectral_kinetics import SpectralKinetics
+from NanoParticleTools.util.conversions import wavenumber_to_wavelength
+from NanoParticleTools.analysis.util import intensities_from_population
+
 from typing import Union, Dict, List, Tuple, Optional
 import torch
 import numpy as np
 from monty.json import MSONable
-from NanoParticleTools.inputs import NanoParticleConstraint, SphericalConstraint
 from scipy.ndimage import gaussian_filter1d
 from torch_geometric.data import Data
 import warnings
@@ -694,9 +699,11 @@ class MultiFidelitySummedWavelengthRangeLabelProcessor(LabelProcessor):
 
             if isinstance(avg_key, str):
                 avg_key_tuple = literal_eval(avg_key)
-            output_dict[f'{avg_key_tuple[0]}{avg_key_tuple[1]}_y'] = y.unsqueeze(0)
-            output_dict[f'{avg_key_tuple[0]}{avg_key_tuple[1]}_log_y'] = torch.log10(
-                y + self.log_constant).unsqueeze(0)
+            output_dict[
+                f'{avg_key_tuple[0]}{avg_key_tuple[1]}_y'] = y.unsqueeze(0)
+            output_dict[
+                f'{avg_key_tuple[0]}{avg_key_tuple[1]}_log_y'] = torch.log10(
+                    y + self.log_constant).unsqueeze(0)
 
         labels = list(out.keys())
         output_dict['labels'] = labels
@@ -710,3 +717,67 @@ class MultiFidelitySummedWavelengthRangeLabelProcessor(LabelProcessor):
 
     def __repr__(self):
         return str(self)
+
+
+class PopulationUVProcessor(LabelProcessor):
+
+    def __init__(self,
+                 wavelength_range=[-450, -300],
+                 last_n_avg=500,
+                 log_constant=1,
+                 **kwargs):
+        if 'fields' in kwargs:
+            kwargs['fields'] += [
+                'excitation_wavelength', 'excitation_power',
+                'output.avg_total_pop', 'overall_dopant_concentration'
+            ]
+        else:
+            kwargs['fields'] = [
+                'excitation_wavelength', 'excitation_power',
+                'output.avg_total_pop', 'overall_dopant_concentration'
+            ]
+        super().__init__(**kwargs)
+
+        self.last_n_avg = last_n_avg
+        self.log_constant = log_constant
+        self.wavelength_range = wavelength_range
+
+    def process_doc(self, doc: Dict) -> Dict:
+        uv_intensity = torch.tensor(
+            uv_from_data_collection(
+                doc,
+                last_n_avg=self.last_n_avg,
+                wavelength_range=self.wavelength_range)).float()
+        return {
+            'y': uv_intensity,
+            'log_y': uv_intensity.add(self.log_constant).log10(),
+            'log_const': self.log_constant
+        }
+
+
+def uv_from_data_collection(doc,
+                            last_n_avg=200,
+                            wavelength_range=[-450, -300]):
+    dopants = [
+        Dopant(key, val)
+        for key, val in doc['overall_dopant_concentration'].items()
+    ]
+    sk = SpectralKinetics(dopants,
+                          excitation_wavelength=doc['excitation_wavelength'],
+                          excitation_power=doc['excitation_power'])
+
+    # overall volume
+    try:
+        volume = 4 / 3 * np.pi * (doc['input']['constraints'][-1]['radius'] /
+                                  10)**3
+    except TypeError:
+        volume = 4 / 3 * np.pi * (doc['input']['constraints'][-1].radius /
+                                  10)**3
+
+    wavelength_range = sorted(list(wavelength_range))
+    wavelengths, intensities = intensities_from_population(
+        sk, np.array(doc['output']['avg_total_pop']), volume, last_n_avg)
+    condition = np.logical_and(wavelengths > wavelength_range[0],
+                               wavelengths < wavelength_range[1])
+    uv_intensity = np.sum(intensities[condition])
+    return uv_intensity
