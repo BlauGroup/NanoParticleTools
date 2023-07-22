@@ -15,6 +15,7 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
                  include_zeros: bool = False,
                  input_grad: bool = False,
                  assymetric_interaction: bool = False,
+                 augment_data: bool = False,
                  **kwargs) -> None:
         """
 
@@ -41,6 +42,7 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
         self.include_zeros = include_zeros
         self.input_grad = input_grad
         self.assymetric_interaction = assymetric_interaction
+        self.augment_data = augment_data
 
     @property
     @lru_cache
@@ -58,8 +60,8 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
         else:
             for type_counter, (i, j) in enumerate(
                     list(
-                        combinations_with_replacement(range(len(self.possible_elements)),
-                                                      2))):
+                        combinations_with_replacement(
+                            range(len(self.possible_elements)), 2))):
                 try:
                     edge_type_map[i][j] = type_counter
                 except KeyError:
@@ -71,8 +73,7 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
                     edge_type_map[j] = {i: type_counter}
         return edge_type_map
 
-    def graph_from_inputs(self,
-                          dopant_concentration: Dict,
+    def graph_from_inputs(self, dopant_concentration: Dict,
                           radii_without_zero: torch.Tensor) -> Dict:
         """
         Get a graph from the raw inputs
@@ -184,6 +185,21 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
         constraints = constraints[:len(dopant_concentration)]
 
         _radii = [0] + [constraint.radius for constraint in constraints]
+
+        if self.augment_data:
+            # we can augment the data by picking a radius at random
+            # between (0+eps) and the max radius and inserting it into the list
+
+            aug_radius = torch.rand(1) * _radii[-1] + 1e-5
+
+            # find where it fits into the list
+            for i, r in enumerate(_radii):
+                if r > aug_radius:
+                    _radii.insert(i, aug_radius)
+
+                    # additionally, duplicate the dopant concentration at this layer
+                    dopant_concentration.insert(i, dopant_concentration[i - 1])
+                    break
 
         # Check for duplicate radii (these would cause 0 thickness layers)
         # must iterate in reverse order
@@ -456,6 +472,8 @@ class HeteroDCVFeatureProcessor(FeatureProcessor):
                     return store['inc']
                 elif 'dopant_indices' in key:
                     return self['dopant'].num_nodes
+                elif key == 'constraint_radii_idx':
+                    return self.radii.size(0)
                 elif 'constraint_indices' in key:
                     return self['constraint_radii_idx'].size(0)
                 elif 'type_indices' in key:

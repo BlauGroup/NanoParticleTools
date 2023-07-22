@@ -107,6 +107,21 @@ def doc_four_dupe():
     }
 
 
+def test_augment(doc_two):
+    feature_processor = DopantInteractionFeatureProcessor(
+        possible_elements=['Yb', 'Er', 'Mg'],
+        augment_data=True,
+        include_zeros=True)
+
+    _data_dict = feature_processor.process_doc(doc_two)
+    data = feature_processor.data_cls(_data_dict)
+
+    assert data.radii.shape == (5, )
+    assert data['dopant'].x.shape == (12, )
+    assert data['interaction'].types.shape == (144, )
+    assert data['interaction'].types.max() == 5
+
+
 def test_exclude_empty_exterior(doc_four, doc_four_dupe):
     feature_processor = DopantInteractionFeatureProcessor(
         possible_elements=['Yb', 'Er', 'Mg'],
