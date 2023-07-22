@@ -1,4 +1,4 @@
-from NanoParticleTools.machine_learning.data.processors import FeatureProcessor
+from NanoParticleTools.machine_learning.models.hetero.data import DopantInteractionFeatureProcessor
 import torch
 from monty.serialization import MontyDecoder
 
@@ -9,69 +9,7 @@ from functools import lru_cache
 from itertools import combinations_with_replacement
 
 
-class HeteroDCVFeatureProcessor(FeatureProcessor):
-
-    def __init__(self,
-                 include_zeros: bool = False,
-                 input_grad: bool = False,
-                 assymetric_interaction: bool = False,
-                 augment_data: bool = False,
-                 **kwargs) -> None:
-        """
-
-        Args:
-            include_zeros: Whether to include zero dopant concentrations in the
-                representation.
-                - If False, the representation will only include:
-                    i) dopants which have a non-zero concentration
-                    ii) constraints which have dopants present
-                - If True, the representation will include:
-                    i) All possible dopants (even if they have zero concentration)
-                    ii) Empty constraints if they are "internal" (such that last (external)
-                    control volume must be occupied
-            input_grad: Whether to .
-            assymetric_interaction: .
-        """
-        # yapf: disable
-        super().__init__(fields=[
-            'formula_by_constraint', 'dopant_concentration', 'input'], **kwargs)
-        # yapf: enable
-
-        self.elements_map = dict([(_t[1], _t[0])
-                                  for _t in enumerate(self.possible_elements)])
-        self.include_zeros = include_zeros
-        self.input_grad = input_grad
-        self.assymetric_interaction = assymetric_interaction
-        self.augment_data = augment_data
-
-    @property
-    @lru_cache
-    def edge_type_map(self):
-        edge_type_map = {}
-        if self.assymetric_interaction:
-            type_counter = 0
-            for i in range(len(self.possible_elements)):
-                for j in range(len(self.possible_elements)):
-                    try:
-                        edge_type_map[i][j] = type_counter
-                    except KeyError:
-                        edge_type_map[i] = {j: type_counter}
-                    type_counter += 1
-        else:
-            for type_counter, (i, j) in enumerate(
-                    list(
-                        combinations_with_replacement(
-                            range(len(self.possible_elements)), 2))):
-                try:
-                    edge_type_map[i][j] = type_counter
-                except KeyError:
-                    edge_type_map[i] = {j: type_counter}
-
-                try:
-                    edge_type_map[j][i] = type_counter
-                except KeyError:
-                    edge_type_map[j] = {i: type_counter}
-        return edge_type_map
+class HeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
 
     def process_doc(self, doc: Dict) -> Dict:
 
@@ -114,13 +52,6 @@ class HeteroDCVFeatureProcessor(FeatureProcessor):
                     dopant_concentration.insert(i, dopant_concentration[i - 1])
                     break
 
-        if len(_radii) == 2:
-            # minimum of 2 layers in this representation, else interaction nodes will be missing
-            _radii.append(_radii[-1] + 1e-3)
-            dopant_concentration.append(
-                {el: 0
-                 for el in self.possible_elements})
-
         # Check for duplicate radii (these would cause 0 thickness layers)
         # must iterate in reverse order
         for i in range(len(_radii) - 1, 0, -1):
@@ -129,6 +60,13 @@ class HeteroDCVFeatureProcessor(FeatureProcessor):
                 _radii.pop(i)
                 # Also remove this from the dopant concentration
                 dopant_concentration.pop(i - 1)
+
+        if len(_radii) == 2:
+            # minimum of 2 layers in this representation, else interaction nodes will be missing
+            _radii.append(_radii[-1] + 1e-3)
+            dopant_concentration.append(
+                {el: 0
+                 for el in self.possible_elements})
 
         radii_without_zero = torch.tensor(_radii[1:],
                                           dtype=torch.float32,
@@ -150,6 +88,7 @@ class HeteroDCVFeatureProcessor(FeatureProcessor):
         data = {
             'dopant': {},
             'interaction': {},
+            'intraaction': {},
             ('dopant', 'coupled_to', 'interaction'): {},
             ('interaction', 'coupled_to', 'dopant'): {},
             ('dopant', 'coupled_to', 'intraaction'): {},
@@ -271,45 +210,3 @@ class HeteroDCVFeatureProcessor(FeatureProcessor):
         data['intraaction']['num_nodes'] = intraaction_counter
 
         return data
-
-    @property
-    def is_graph(self):
-        return True
-
-    @property
-    def data_cls(self):
-
-        class NPHeteroData(HeteroData):
-
-            def __cat_dim__(self,
-                            key: str,
-                            value: Any,
-                            store: Optional[NodeOrEdgeStorage] = None,
-                            *args,
-                            **kwargs) -> Any:
-                if 'indices' in key:
-                    return 0
-                if 'index' in key:
-                    return 1
-                return 0
-
-            def __inc__(self,
-                        key: str,
-                        value: Any,
-                        store: Optional[NodeOrEdgeStorage] = None,
-                        *args,
-                        **kwargs) -> Any:
-                if isinstance(store, EdgeStorage) and 'index' in key:
-                    return store['inc']
-                elif 'dopant_indices' in key:
-                    return self['dopant'].num_nodes
-                elif key == 'constraint_radii_idx':
-                    return self.radii.size(0)
-                elif 'constraint_indices' in key:
-                    return self['constraint_radii_idx'].size(0)
-                elif 'type_indices' in key:
-                    return 0
-                else:
-                    return 0
-
-        return NPHeteroData
