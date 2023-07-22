@@ -57,11 +57,16 @@ class HeteroDCVRepresentationModule(torch.nn.Module):
 
         if self.interaction_embedding:
             self.interaction_embedder = nn.Embedding(9, embed_dim)
+            self.intraaction_embedder = nn.Embedding(9, embed_dim)
         else:
             self.interaction_embedder = nn.Linear(2, embed_dim)
+            self.intraaction_embedder = nn.Linear(2, embed_dim)
         self.integrated_interaction = InteractionBlock(nsigma=nsigma)
         self.interaction_norm = nn.BatchNorm1d(interaction_dim)
+        self.intraaction_norm = nn.BatchNorm1d(interaction_dim)
         self.interaction_film_layer = FiLMLayer(interaction_dim, embed_dim,
+                                                [16, 16])
+        self.intraaction_film_layer = FiLMLayer(interaction_dim, embed_dim,
                                                 [16, 16])
 
         self.convs = nn.ModuleList()
@@ -202,7 +207,7 @@ class HeteroDCVRepresentationModule(torch.nn.Module):
         # Index the radii and compute the integrated intraaction
         intraaction_node_radii = _radii[dopant_constraint_indices][
             intraaction_dopant_indices].flatten(-2)
-        integrated_intraaction = self.integrated_intraaction(
+        integrated_intraaction = self.integrated_interaction(
             *intraaction_node_radii.T)
 
         # Multiply the concentration into the integrated_intraaction
