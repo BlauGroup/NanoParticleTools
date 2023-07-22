@@ -198,8 +198,7 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
                                           dtype=torch.float32,
                                           requires_grad=self.input_grad)
 
-        return self.graph_from_inputs(dopant_concentration,
-                                      radii_without_zero)
+        return self.graph_from_inputs(dopant_concentration, radii_without_zero)
 
     @property
     def is_graph(self):
@@ -232,6 +231,8 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
                     return store['inc']
                 elif 'dopant_indices' in key:
                     return self['dopant'].num_nodes
+                elif key == 'constraint_radii_idx':
+                    return self.radii.size(0)
                 elif 'constraint_indices' in key:
                     return self['constraint_radii_idx'].size(0)
                 elif 'type_indices' in key:

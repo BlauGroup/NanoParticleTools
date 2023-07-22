@@ -335,7 +335,7 @@ def test_interaction_processor_batch(doc_one, doc_two, doc_three):
         torch.tensor([0, 10, 20, 0, 10, 20, 30, 0, 10]).float())
     assert torch.allclose(
         batch.constraint_radii_idx,
-        torch.tensor([[0, 1], [1, 2], [0, 1], [1, 2], [2, 3], [0, 1]]))
+        torch.tensor([[0, 1], [1, 2], [3, 4], [4, 5], [5, 6], [7, 8]]))
     assert torch.allclose(
         batch['dopant'].x,
         torch.tensor([0.499, 0.25, 0.2, 0.1, 0.499, 0.02, 0.25, 0.02]))
