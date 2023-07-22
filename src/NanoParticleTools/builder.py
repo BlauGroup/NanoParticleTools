@@ -79,18 +79,23 @@ class UCNPBuilder(Builder):
 
         for ids in grouped_ids:
             docs_to_avg = list(self.source.query({"_id": {"$in": ids}}))
-
-            # Prune duplicates based on dopant and simulation seed
+            # prune duplicates
             unduplicated_dict = {}
             for i, doc in enumerate(docs_to_avg):
-                unduplicated_dict[
-                    f"{doc['data']['simulation_seed']}-{doc['data']['dopant_seed']}"] = i
+                try:
+                    unduplicated_dict[doc['data']['simulation_seed']][
+                        doc['data']['dopant_seed']] = i
+                except KeyError:
+                    unduplicated_dict[doc['data']['simulation_seed']] = {
+                        doc['data']['dopant_seed']: i
+                    }
 
-            if len(unduplicated_dict) != len(docs_to_avg):
-                docs_to_avg = [docs_to_avg[i] for i in unduplicated_dict.values()]
+            all_unique_docs = []
+            for value in unduplicated_dict.values():
+                for value1 in value.values():
+                    all_unique_docs.append(docs_to_avg[value1])
 
-            if len(docs_to_avg) > 0:
-                yield docs_to_avg
+            yield all_unique_docs
 
     def process_item(self, items: List[Dict]) -> Dict:
 
@@ -295,8 +300,12 @@ class UCNPPopBuilder(UCNPBuilder):
         # Include average
         avg_doc["output"]['avg_5ms_total_pop'] = avg_total_pop[-500:].mean(0)
         avg_doc["output"]['avg_8ms_total_pop'] = avg_total_pop[-800:].mean(0)
-        avg_doc["output"]['avg_5ms_total_pop_by_constraint'] = avg_total_pop_by_constraint[:, -500:].mean(1)
-        avg_doc["output"]['avg_8ms_total_pop_by_constraint'] = avg_total_pop_by_constraint[:, -800:].mean(1)
+        # yapf: disable
+        avg_doc["output"][
+            'avg_5ms_total_pop_by_constraint'] = avg_total_pop_by_constraint[:, -500:].mean(1)
+        avg_doc["output"][
+            'avg_8ms_total_pop_by_constraint'] = avg_total_pop_by_constraint[:, -800:].mean(1)
+        # yapf: enable
 
         return avg_doc
 
@@ -348,28 +357,38 @@ class PartialAveragingBuilder(UCNPBuilder):
             unduplicated_dict = {}
             for i, doc in enumerate(docs_to_avg):
                 try:
-                    unduplicated_dict[doc['data']['simulation_seed']][
-                        doc['data']['dopant_seed']] = i
+                    unduplicated_dict[doc['data']['dopant_seed']][
+                        doc['data']['simulation_seed']] = i
                 except KeyError:
-                    unduplicated_dict[doc['data']['simulation_seed']] = {
-                        doc['data']['dopant_seed']: i
+                    unduplicated_dict[doc['data']['dopant_seed']] = {
+                        doc['data']['simulation_seed']: i
                     }
 
-            # count the total items in the dict
-            total_items = sum([len(v) for v in unduplicated_dict.values()])
-            if total_items < self.n_docs_filter:
+            # sort unduplicated dict by the length of the inner dict
+            unduplicated_dict = dict(
+                sorted(unduplicated_dict.items(),
+                       key=lambda x: len(x[-1]),
+                       reverse=True))
+
+            # now select from this dict
+            docs_to_process = []
+            n_dopant_seeds = 0
+            for dopant_seed, simulations in unduplicated_dict.items():
+                if n_dopant_seeds >= self.n_orderings:
+                    break
+                n_sim_seeds = 0
+                for simulation_seed, idx in simulations.items():
+                    if n_sim_seeds >= self.n_sims:
+                        break
+                    docs_to_process.append(docs_to_avg[idx])
+                    n_sim_seeds += 1
+                if n_sim_seeds < self.n_sims:
+                    continue
+                n_dopant_seeds += 1
+            if n_dopant_seeds < self.n_orderings:
                 continue
 
-            # collect all the items in a single list
-            items = []
-            for i in sorted(unduplicated_dict.keys())[:self.n_orderings]:
-                for j in sorted(unduplicated_dict[i].keys())[:self.n_sims]:
-                    items.append(docs_to_avg[unduplicated_dict[i][j]])
-
-            if len(items) != self.n_orderings * self.n_sims:
-                continue
-
-            yield items
+            yield docs_to_process
 
 
 class MultiFidelityAveragingBuilder(UCNPBuilder):
