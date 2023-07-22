@@ -313,7 +313,6 @@ class UCNPPopBuilder(UCNPBuilder):
 class PartialAveragingBuilder(UCNPBuilder):
 
     def __init__(self,
-                 n_docs_filter: int,
                  source: Store,
                  target: Store,
                  docs_filter: Optional[Dict] = {},
@@ -347,7 +346,6 @@ class PartialAveragingBuilder(UCNPBuilder):
                          energy_spectrum_args=energy_spectrum_args,
                          wavelength_spectrum_args=wavelength_spectrum_args,
                          **kwargs)
-        self.n_docs_filter = n_docs_filter
         self.n_orderings = n_orderings
         self.n_sims = n_sims
 
