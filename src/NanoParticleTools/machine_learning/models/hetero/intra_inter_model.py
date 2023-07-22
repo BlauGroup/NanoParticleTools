@@ -8,6 +8,7 @@ from torch.nn import functional as F
 from torch import nn
 import torch
 import torch_geometric.nn as gnn
+import warnings
 
 
 class HeteroDCVRepresentationModule(torch.nn.Module):
@@ -19,6 +20,7 @@ class HeteroDCVRepresentationModule(torch.nn.Module):
                  use_volume_in_dopant_constraint: bool = False,
                  normalize_interaction_by_volume: bool = False,
                  use_inverse_concentration: bool = False,
+                 interaction_embedding: bool = False,
                  conc_eps: float = 0.01,
                  **kwargs):
         """
@@ -37,6 +39,7 @@ class HeteroDCVRepresentationModule(torch.nn.Module):
         self.normalize_interaction_by_volume = normalize_interaction_by_volume
         self.use_inverse_concentration = use_inverse_concentration
         self.conc_eps = conc_eps
+        self.interaction_embedding = interaction_embedding
 
         n_conc = 2 if self.use_inverse_concentration else 1
         interaction_dim = nsigma * 4 if self.use_inverse_concentration else nsigma
@@ -52,16 +55,13 @@ class HeteroDCVRepresentationModule(torch.nn.Module):
                 2, embed_dim, [16, 16])
         self.dopant_norm = nn.BatchNorm1d(embed_dim)
 
-        self.interaction_embedder = nn.Linear(2, embed_dim)
+        if self.interaction_embedding:
+            self.interaction_embedder = nn.Embedding(9, embed_dim)
+        else:
+            self.interaction_embedder = nn.Linear(2, embed_dim)
         self.integrated_interaction = InteractionBlock(nsigma=nsigma)
         self.interaction_norm = nn.BatchNorm1d(interaction_dim)
         self.interaction_film_layer = FiLMLayer(interaction_dim, embed_dim,
-                                                [16, 16])
-
-        self.intraaction_embedder = nn.Linear(2, embed_dim)
-        self.integrated_intraaction = InteractionBlock(nsigma=nsigma)
-        self.intraaction_norm = nn.BatchNorm1d(interaction_dim)
-        self.intraaction_film_layer = FiLMLayer(interaction_dim, embed_dim,
                                                 [16, 16])
 
         self.convs = nn.ModuleList()
@@ -97,8 +97,10 @@ class HeteroDCVRepresentationModule(torch.nn.Module):
                 dopant_concs,
                 dopant_constraint_indices,
                 interaction_type_indices,
+                interaction_types,
                 interaction_dopant_indices,
                 intraaction_type_indices,
+                intraaction_types,
                 intraaction_dopant_indices,
                 edge_index_dict,
                 radii,
@@ -140,108 +142,107 @@ class HeteroDCVRepresentationModule(torch.nn.Module):
             'dopant': dopant_attr,
         }
 
-        if interaction_type_indices is not None:
-            # Embed the interaction nodes, using the pair of dopant types
+        # Embed the interaction nodes, using the pair of dopant types
+        if self.interaction_embedding:
+            interaction_attr = self.interaction_embedder(interaction_types)
+        else:
             interaction_attr = self.interaction_embedder(
                 interaction_type_indices.float())
 
-            # Index the radii and compute the integrated interaction
-            interaction_node_radii = _radii[dopant_constraint_indices][
-                interaction_dopant_indices].flatten(-2)
-            integrated_interaction = self.integrated_interaction(
-                *interaction_node_radii.T)
+        # Index the radii and compute the integrated interaction
+        interaction_node_radii = _radii[dopant_constraint_indices][
+            interaction_dopant_indices].flatten(-2)
+        integrated_interaction = self.integrated_interaction(
+            *interaction_node_radii.T)
 
-            # Multiply the concentration into the integrated_interaction
-            interaction_node_conc = dopant_concs[interaction_dopant_indices]
-            if self.use_inverse_concentration:
-                inv_interaction_node_conc = 1 / (interaction_node_conc +
-                                                 self.conc_eps)
+        # Multiply the concentration into the integrated_interaction
+        interaction_node_conc = dopant_concs[interaction_dopant_indices]
+        if self.use_inverse_concentration:
+            inv_interaction_node_conc = 1 / (interaction_node_conc +
+                                             self.conc_eps)
 
-                # yapf: disable
-                conc_factor = torch.stack(
-                    (interaction_node_conc[:, 0] * interaction_node_conc[:, 1],
-                     interaction_node_conc[:, 0] * inv_interaction_node_conc[:, 1],
-                     inv_interaction_node_conc[:, 0] * interaction_node_conc[:, 1],
-                     inv_interaction_node_conc[:, 0] * inv_interaction_node_conc[:, 1])).mT
-                # yapf: enable
+            # yapf: disable
+            conc_factor = torch.stack(
+                (interaction_node_conc[:, 0] * interaction_node_conc[:, 1],
+                 interaction_node_conc[:, 0] * inv_interaction_node_conc[:, 1],
+                 inv_interaction_node_conc[:, 0] * interaction_node_conc[:, 1],
+                 inv_interaction_node_conc[:, 0] * inv_interaction_node_conc[:, 1])).mT
+            # yapf: enable
 
-                integrated_interaction = conc_factor[:, :,
-                                                     None] * integrated_interaction[:,
-                                                                                    None, :]
-                integrated_interaction = integrated_interaction.reshape(
-                    -1, 4 * self.nsigma)
-            else:
-                conc_factor = (interaction_node_conc[:, 0] *
-                               interaction_node_conc[:, 1]).unsqueeze(-1)
-                integrated_interaction = conc_factor * integrated_interaction
+            integrated_interaction = conc_factor[:, :,
+                                                 None] * integrated_interaction[:,
+                                                                                None, :]
+            integrated_interaction = integrated_interaction.reshape(
+                -1, 4 * self.nsigma)
+        else:
+            conc_factor = (interaction_node_conc[:, 0] *
+                           interaction_node_conc[:, 1]).unsqueeze(-1)
+            integrated_interaction = conc_factor * integrated_interaction
 
-            # Normalize the integrated interaction
-            # First by volume
-            if self.normalize_interaction_by_volume:
-                norm_factor = volume[dopant_constraint_indices][
-                    interaction_dopant_indices].prod(dim=1).unsqueeze(-1)
-                integrated_interaction = integrated_interaction / norm_factor
+        # Normalize the integrated interaction
+        # First by volume
+        if self.normalize_interaction_by_volume:
+            norm_factor = volume[dopant_constraint_indices][
+                interaction_dopant_indices].prod(dim=1).unsqueeze(-1)
+            integrated_interaction = integrated_interaction / norm_factor
 
-            # Then using a batch norm
-            integrated_interaction = self.interaction_norm(
-                integrated_interaction)
+        # Then using a batch norm
+        integrated_interaction = self.interaction_norm(integrated_interaction)
 
-            # Condition the interaction node attribute on the integrated interaction
-            interaction_attr = self.interaction_film_layer(
-                interaction_attr, integrated_interaction)
-            intermediate_x_dict['interaction'] = interaction_attr
+        # Condition the interaction node attribute on the integrated interaction
+        interaction_attr = self.interaction_film_layer(interaction_attr,
+                                                       integrated_interaction)
+        intermediate_x_dict['interaction'] = interaction_attr
 
-        if intraaction_type_indices is not None:
-            # Repeat the same process for the intraaction
-            # Embed the interaction nodes, using the pair of dopant types
-            intraaction_attr = self.intraaction_embedder(
-                intraaction_type_indices.float())
+        # Repeat the same process for the intraaction
+        # Embed the interaction nodes, using the pair of dopant types
+        intraaction_attr = self.intraaction_embedder(
+            intraaction_type_indices.float())
 
-            # Index the radii and compute the integrated intraaction
-            intraaction_node_radii = _radii[dopant_constraint_indices][
-                intraaction_dopant_indices].flatten(-2)
-            integrated_intraaction = self.integrated_intraaction(
-                *intraaction_node_radii.T)
+        # Index the radii and compute the integrated intraaction
+        intraaction_node_radii = _radii[dopant_constraint_indices][
+            intraaction_dopant_indices].flatten(-2)
+        integrated_intraaction = self.integrated_intraaction(
+            *intraaction_node_radii.T)
 
-            # Multiply the concentration into the integrated_intraaction
-            intraaction_node_conc = dopant_concs[intraaction_dopant_indices]
-            if self.use_inverse_concentration:
-                inv_intraaction_node_conc = 1 / (intraaction_node_conc +
-                                                 self.conc_eps)
+        # Multiply the concentration into the integrated_intraaction
+        intraaction_node_conc = dopant_concs[intraaction_dopant_indices]
+        if self.use_inverse_concentration:
+            inv_intraaction_node_conc = 1 / (intraaction_node_conc +
+                                             self.conc_eps)
 
-                # yapf: disable
-                conc_factor = torch.stack(
-                    (intraaction_node_conc[:, 0] * intraaction_node_conc[:, 1],
-                     intraaction_node_conc[:, 0] * inv_intraaction_node_conc[:, 1],
-                     inv_intraaction_node_conc[:, 0] * intraaction_node_conc[:, 1],
-                     inv_intraaction_node_conc[:, 0] * inv_intraaction_node_conc[:, 1])).mT
-                # yapf: enable
+            # yapf: disable
+            conc_factor = torch.stack(
+                (intraaction_node_conc[:, 0] * intraaction_node_conc[:, 1],
+                    intraaction_node_conc[:, 0] * inv_intraaction_node_conc[:, 1],
+                    inv_intraaction_node_conc[:, 0] * intraaction_node_conc[:, 1],
+                    inv_intraaction_node_conc[:, 0] * inv_intraaction_node_conc[:, 1])).mT
+            # yapf: enable
 
-                integrated_intraaction = conc_factor[:, :,
-                                                     None] * integrated_intraaction[:,
-                                                                                    None, :]
-                integrated_intraaction = integrated_intraaction.reshape(
-                    -1, 4 * self.nsigma)
-            else:
-                conc_factor = (intraaction_node_conc[:, 0] *
-                               intraaction_node_conc[:, 1]).unsqueeze(-1)
-                integrated_intraaction = conc_factor * integrated_intraaction
+            integrated_intraaction = conc_factor[:, :,
+                                                 None] * integrated_intraaction[:,
+                                                                                None, :]
+            integrated_intraaction = integrated_intraaction.reshape(
+                -1, 4 * self.nsigma)
+        else:
+            conc_factor = (intraaction_node_conc[:, 0] *
+                           intraaction_node_conc[:, 1]).unsqueeze(-1)
+            integrated_intraaction = conc_factor * integrated_intraaction
 
-            # Normalize the integrated intraaction
-            # First by volume
-            if self.normalize_interaction_by_volume:
-                norm_factor = volume[dopant_constraint_indices][
-                    intraaction_dopant_indices].prod(dim=1).unsqueeze(-1)
-                integrated_intraaction = integrated_intraaction / norm_factor
+        # Normalize the integrated intraaction
+        # First by volume
+        if self.normalize_interaction_by_volume:
+            norm_factor = volume[dopant_constraint_indices][
+                intraaction_dopant_indices].prod(dim=1).unsqueeze(-1)
+            integrated_intraaction = integrated_intraaction / norm_factor
 
-            # Then using a batch norm
-            integrated_intraaction = self.intraaction_norm(
-                integrated_intraaction)
+        # Then using a batch norm
+        integrated_intraaction = self.intraaction_norm(integrated_intraaction)
 
-            # Condition the intraaction node attribute on the integrated intraaction
-            intraaction_attr = self.intraaction_film_layer(
-                intraaction_attr, integrated_intraaction)
-            intermediate_x_dict['intraaction'] = intraaction_attr
+        # Condition the intraaction node attribute on the integrated intraaction
+        intraaction_attr = self.intraaction_film_layer(intraaction_attr,
+                                                       integrated_intraaction)
+        intermediate_x_dict['intraaction'] = intraaction_attr
 
         # Apply the message passing operator(s)
         for conv in self.convs:
@@ -268,6 +269,9 @@ class HeteroDCVModel(SpectrumModelBase):
                  nsigma=5,
                  **kwargs):
         if 'n_input_nodes' in kwargs:
+            warnings.warn(
+                'Cannot override n_input_nodes for this model. It is inferred from'
+                'the embed_dim.')
             del kwargs['n_input_nodes']
 
         super().__init__(n_input_nodes=embed_dim, **kwargs)
@@ -286,8 +290,10 @@ class HeteroDCVModel(SpectrumModelBase):
                 dopant_concs,
                 dopant_constraint_indices,
                 interaction_type_indices,
+                interaction_types,
                 interaction_dopant_indices,
                 intraaction_type_indices,
+                intraaction_types,
                 intraaction_dopant_indices,
                 edge_index_dict,
                 radii,
@@ -295,9 +301,10 @@ class HeteroDCVModel(SpectrumModelBase):
                 batch_dict=None):
         representation = self.representation_module(
             dopant_types, dopant_concs, dopant_constraint_indices,
-            interaction_type_indices, interaction_dopant_indices,
-            intraaction_type_indices, intraaction_dopant_indices,
-            edge_index_dict, radii, constraint_radii_idx, batch_dict)
+            interaction_type_indices, interaction_types,
+            interaction_dopant_indices, intraaction_type_indices,
+            intraaction_types, intraaction_dopant_indices, edge_index_dict,
+            radii, constraint_radii_idx, batch_dict)
         out = self.readout(representation)
         return out
 
@@ -305,9 +312,12 @@ class HeteroDCVModel(SpectrumModelBase):
         reps = self.representation_module(
             dopant_types=data['dopant'].types,
             dopant_concs=data['dopant'].x,
+            dopant_constraint_indices=data['dopant'].constraint_indices,
             interaction_type_indices=data['interaction'].type_indices,
+            interaction_types=data['interaction'].types,
             interaction_dopant_indices=data['interaction'].dopant_indices,
             intraaction_type_indices=data['intraaction'].type_indices,
+            intraaction_types=data['intraaction'].types,
             intraaction_dopant_indices=data['intraaction'].dopant_indices,
             edge_index_dict=data.edge_index_dict,
             radii=data.radii,
@@ -321,8 +331,10 @@ class HeteroDCVModel(SpectrumModelBase):
             dopant_concs=data['dopant'].x,
             dopant_constraint_indices=data['dopant'].constraint_indices,
             interaction_type_indices=data['interaction'].type_indices,
+            interaction_types=data['interaction'].types,
             interaction_dopant_indices=data['interaction'].dopant_indices,
             intraaction_type_indices=data['intraaction'].type_indices,
+            intraaction_types=data['intraaction'].types,
             intraaction_dopant_indices=data['intraaction'].dopant_indices,
             edge_index_dict=data.edge_index_dict,
             radii=data.radii,
@@ -348,14 +360,12 @@ class HeteroDCVModel(SpectrumModelBase):
             dopant_types=batch['dopant'].types,
             dopant_concs=batch['dopant'].x,
             dopant_constraint_indices=batch['dopant'].constraint_indices,
-            interaction_type_indices=batch['interaction'].type_indices
-            if 'interaction' in batch else None,
-            interaction_dopant_indices=batch['interaction'].dopant_indices
-            if 'interaction' in batch else None,
-            intraaction_type_indices=batch['intraaction'].type_indices
-            if 'intraaction' in batch else None,
-            intraaction_dopant_indices=batch['intraaction'].dopant_indices
-            if 'intraaction' in batch else None,
+            interaction_type_indices=batch['interaction'].type_indices,
+            interaction_types=batch['interaction'].types,
+            interaction_dopant_indices=batch['interaction'].dopant_indices,
+            intraaction_type_indices=batch['intraaction'].type_indices,
+            intraaction_types=batch['intraaction'].types,
+            intraaction_dopant_indices=batch['intraaction'].dopant_indices,
             edge_index_dict=batch.edge_index_dict,
             radii=batch.radii,
             constraint_radii_idx=batch.constraint_radii_idx,

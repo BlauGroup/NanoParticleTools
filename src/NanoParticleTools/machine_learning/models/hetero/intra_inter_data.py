@@ -9,7 +9,7 @@ from functools import lru_cache
 from itertools import combinations_with_replacement
 
 
-class DopantInteractionFeatureProcessor(FeatureProcessor):
+class HeteroDCVFeatureProcessor(FeatureProcessor):
 
     def __init__(self,
                  include_zeros: bool = False,
@@ -114,6 +114,13 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
                     dopant_concentration.insert(i, dopant_concentration[i - 1])
                     break
 
+        if len(_radii) == 2:
+            # minimum of 2 layers in this representation, else interaction nodes will be missing
+            _radii.append(_radii[-1] + 1e-3)
+            dopant_concentration.append(
+                {el: 0
+                 for el in self.possible_elements})
+
         # Check for duplicate radii (these would cause 0 thickness layers)
         # must iterate in reverse order
         for i in range(len(_radii) - 1, 0, -1):
@@ -145,6 +152,8 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
             'interaction': {},
             ('dopant', 'coupled_to', 'interaction'): {},
             ('interaction', 'coupled_to', 'dopant'): {},
+            ('dopant', 'coupled_to', 'intraaction'): {},
+            ('intraaction', 'coupled_to', 'dopant'): {},
         }
 
         radii = torch.cat(
@@ -181,38 +190,85 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
         data['dopant']['num_nodes'] = len(dopant_concs)
 
         # enumerate all possible interactions (dopants x dopants)
-        type_indices = []
-        types = []
-        dopant_indices = []
-        edge_index_forward = []
-        edge_index_backward = []
+        interaction_type_indices = []
+        interaction_types = []
+        interaction_dopant_indices = []
+        interaction_edge_index_forward = []
+        interaction_edge_index_backward = []
         interaction_counter = 0
+
+        intraaction_type_indices = []
+        intraaction_types = []
+        intraaction_dopant_indices = []
+        intraaction_edge_index_forward = []
+        intraaction_edge_index_backward = []
+        intraaction_counter = 0
         for i, type_i in enumerate(dopant_types):
             for j, type_j in enumerate(dopant_types):
-                type_indices.append([type_i, type_j])
-                types.append(self.edge_type_map[type_i][type_j])
-                dopant_indices.append([i, j])
-                edge_index_forward.append([i, interaction_counter])
-                edge_index_backward.append([interaction_counter, j])
-                interaction_counter += 1
+                if dopant_constraint_indices[i] == dopant_constraint_indices[j]:  # yapf: disable
+                    # This is an intra-layer interaction
+                    intraaction_type_indices.append([type_i, type_j])
+                    intraaction_types.append(
+                        self.edge_type_map[type_i][type_j])
+                    intraaction_dopant_indices.append([i, j])
+                    intraaction_edge_index_forward.append(
+                        [i, intraaction_counter])
+                    intraaction_edge_index_backward.append(
+                        [intraaction_counter, j])
+                    intraaction_counter += 1
+                else:
+                    # This is an inter-layer interaction
+                    interaction_type_indices.append([type_i, type_j])
+                    interaction_types.append(
+                        self.edge_type_map[type_i][type_j])
+                    interaction_dopant_indices.append([i, j])
+                    interaction_edge_index_forward.append(
+                        [i, interaction_counter])
+                    interaction_edge_index_backward.append(
+                        [interaction_counter, j])
+                    interaction_counter += 1
 
-        data['interaction']['type_indices'] = torch.tensor(type_indices,
-                                                           dtype=torch.long)
-        data['interaction']['types'] = torch.tensor(types, dtype=torch.long)
-        data['interaction']['dopant_indices'] = torch.tensor(dopant_indices,
-                                                             dtype=torch.long)
+        data['interaction']['type_indices'] = torch.tensor(
+            interaction_type_indices, dtype=torch.long)
+        data['interaction']['types'] = torch.tensor(interaction_types,
+                                                    dtype=torch.long)
+        data['interaction']['dopant_indices'] = torch.tensor(
+            interaction_dopant_indices, dtype=torch.long)
         data['dopant', 'coupled_to',
              'interaction']['edge_index'] = torch.tensor(
-                 edge_index_forward).reshape(-1, 2).transpose(0, 1)
+                 interaction_edge_index_forward).reshape(-1,
+                                                         2).transpose(0, 1)
         data['interaction', 'coupled_to',
              'dopant']['edge_index'] = torch.tensor(
-                 edge_index_backward).reshape(-1, 2).transpose(0, 1)
+                 interaction_edge_index_backward).reshape(-1,
+                                                          2).transpose(0, 1)
         # Keep track of increment (so we can combine graphs)
         data['dopant', 'coupled_to', 'interaction']['inc'] = torch.tensor(
             [len(dopant_concs), interaction_counter]).reshape(2, 1)
         data['interaction', 'coupled_to', 'dopant']['inc'] = torch.tensor(
             [interaction_counter, len(dopant_concs)]).reshape(2, 1)
         data['interaction']['num_nodes'] = interaction_counter
+
+        data['intraaction']['type_indices'] = torch.tensor(
+            intraaction_type_indices, dtype=torch.long)
+        data['intraaction']['types'] = torch.tensor(intraaction_types,
+                                                    dtype=torch.long)
+        data['intraaction']['dopant_indices'] = torch.tensor(
+            intraaction_dopant_indices, dtype=torch.long)
+        data['dopant', 'coupled_to',
+             'intraaction']['edge_index'] = torch.tensor(
+                 intraaction_edge_index_forward).reshape(-1,
+                                                         2).transpose(0, 1)
+        data['intraaction', 'coupled_to',
+             'dopant']['edge_index'] = torch.tensor(
+                 intraaction_edge_index_backward).reshape(-1,
+                                                          2).transpose(0, 1)
+        # Keep track of increment (so we can combine graphs)
+        data['dopant', 'coupled_to', 'intraaction']['inc'] = torch.tensor(
+            [len(dopant_concs), intraaction_counter]).reshape(2, 1)
+        data['intraaction', 'coupled_to', 'dopant']['inc'] = torch.tensor(
+            [intraaction_counter, len(dopant_concs)]).reshape(2, 1)
+        data['intraaction']['num_nodes'] = intraaction_counter
 
         return data
 
