@@ -19,7 +19,7 @@ def label_processor():
 def feature_processor():
     return DopantInteractionFeatureProcessor(
         possible_elements=['Yb', 'Nd', 'Er'],
-        assymetric_interaction=True,
+        asymmetric_interaction=True,
         include_zeros=True)
 
 

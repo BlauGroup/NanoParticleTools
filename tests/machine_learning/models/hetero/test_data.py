@@ -111,7 +111,9 @@ def test_augment(doc_two):
     feature_processor = DopantInteractionFeatureProcessor(
         possible_elements=['Yb', 'Er', 'Mg'],
         augment_data=True,
-        include_zeros=True)
+        include_zeros=True,
+        augment_prob=1,
+        augment_subdivisions=1)
 
     _data_dict = feature_processor.process_doc(doc_two)
     data = feature_processor.data_cls(_data_dict)
@@ -125,7 +127,7 @@ def test_augment(doc_two):
 def test_exclude_empty_exterior(doc_four, doc_four_dupe):
     feature_processor = DopantInteractionFeatureProcessor(
         possible_elements=['Yb', 'Er', 'Mg'],
-        assymetric_interaction=True,
+        asymmetric_interaction=True,
         include_zeros=True)
 
     _data_dict = feature_processor.process_doc(doc_four)
@@ -140,7 +142,7 @@ def test_exclude_empty_exterior(doc_four, doc_four_dupe):
 def test_include_zeros(doc_two, doc_four):
     feature_processor = DopantInteractionFeatureProcessor(
         possible_elements=['Yb', 'Er', 'Mg'],
-        assymetric_interaction=True,
+        asymmetric_interaction=True,
         include_zeros=True)
 
     _data_dict = feature_processor.process_doc(doc_two)
@@ -157,7 +159,7 @@ def test_include_zeros(doc_two, doc_four):
 
     feature_processor = DopantInteractionFeatureProcessor(
         possible_elements=['Yb', 'Er', 'Mg'],
-        assymetric_interaction=False,
+        asymmetric_interaction=False,
         include_zeros=True)
 
     _data_dict = feature_processor.process_doc(doc_two)
@@ -173,11 +175,11 @@ def test_include_zeros(doc_two, doc_four):
     assert data['interaction'].types.max() == 5
 
 
-def test_assymetric(doc_two, doc_four):
+def test_asymmetric(doc_two, doc_four):
 
     feature_processor = DopantInteractionFeatureProcessor(
         possible_elements=['Yb', 'Er', 'Mg'],
-        assymetric_interaction=True,
+        asymmetric_interaction=True,
         include_zeros=False)
     _data_dict = feature_processor.process_doc(doc_two)
     data = feature_processor.data_cls(_data_dict)
@@ -196,7 +198,7 @@ def test_assymetric(doc_two, doc_four):
 
     feature_processor = DopantInteractionFeatureProcessor(
         possible_elements=['Yb', 'Er', 'Mg'],
-        assymetric_interaction=False,
+        asymmetric_interaction=False,
         include_zeros=False)
     _data_dict = feature_processor.process_doc(doc_four)
     data = feature_processor.data_cls(_data_dict)
@@ -209,7 +211,7 @@ def test_assymetric(doc_two, doc_four):
 def test_grad(doc_four):
     feature_processor = DopantInteractionFeatureProcessor(
         possible_elements=['Yb', 'Er', 'Mg'],
-        assymetric_interaction=False,
+        asymmetric_interaction=False,
         include_zeros=False,
         input_grad=True)
     _data_dict = feature_processor.process_doc(doc_four)

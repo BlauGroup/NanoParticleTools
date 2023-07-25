@@ -16,9 +16,9 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
     def __init__(self,
                  include_zeros: bool = False,
                  input_grad: bool = False,
-                 assymetric_interaction: bool = False,
+                 asymmetric_interaction: bool = False,
                  augment_data: bool = False,
-                 augment_data_prob: float = 0.5,
+                 augment_prob: float = 0.5,
                  augment_subdivisions: int = 2,
                  **kwargs) -> None:
         """
@@ -34,7 +34,7 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
                     ii) Empty constraints if they are "internal" (such that last (external)
                     control volume must be occupied
             input_grad: Whether to .
-            assymetric_interaction: .
+            asymmetric_interaction: .
         """
         # yapf: disable
         super().__init__(fields=[
@@ -45,16 +45,16 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
                                   for _t in enumerate(self.possible_elements)])
         self.include_zeros = include_zeros
         self.input_grad = input_grad
-        self.assymetric_interaction = assymetric_interaction
+        self.asymmetric_interaction = asymmetric_interaction
         self.augment_data = augment_data
-        self.augment_data_prob = augment_data_prob
+        self.augment_prob = augment_prob
         self.augment_subdivisions = augment_subdivisions
 
     @property
     @lru_cache
     def edge_type_map(self):
         edge_type_map = {}
-        if self.assymetric_interaction:
+        if self.asymmetric_interaction:
             type_counter = 0
             for i in range(len(self.possible_elements)):
                 for j in range(len(self.possible_elements)):
