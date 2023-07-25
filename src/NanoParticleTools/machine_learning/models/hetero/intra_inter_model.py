@@ -3,12 +3,13 @@ from NanoParticleTools.machine_learning.modules.layer_interaction import Interac
 from NanoParticleTools.machine_learning.modules.film import FiLMLayer
 from NanoParticleTools.machine_learning.modules import NonLinearMLP
 from torch_geometric.data.batch import Batch
-from torch_geometric.data import Data
+from torch_geometric.data import HeteroData
 from torch.nn import functional as F
 from torch import nn
 import torch
 import torch_geometric.nn as gnn
 import warnings
+from typing import Dict
 
 
 class HeteroDCVRepresentationModule(torch.nn.Module):
@@ -313,43 +314,34 @@ class HeteroDCVModel(SpectrumModelBase):
         out = self.readout(representation)
         return out
 
+    def get_inputs(self, data: HeteroData) -> Dict:
+
+        input_dict = {'dopant_types': data['dopant'].types,
+                      'dopant_concs': data['dopant'].x,
+                      'dopant_constraint_indices': data['dopant'].constraint_indices,
+                      'interaction_type_indices': data['interaction'].type_indices,
+                      'interaction_types': data['interaction'].types,
+                      'interaction_dopant_indices': data['interaction'].dopant_indices,
+                      'intraaction_type_indices': data['intraaction'].type_indices,
+                      'intraaction_types': data['intraaction'].types,
+                      'intraaction_dopant_indices': data['intraaction'].dopant_indices,
+                      'edge_index_dict': data.edge_index_dict,
+                      'radii': data.radii,
+                      'constraint_radii_idx': data.constraint_radii_idx,
+                      'batch_dict': data.batch_dict}
+        return input_dict
+
     def get_representation(self, data):
-        reps = self.representation_module(
-            dopant_types=data['dopant'].types,
-            dopant_concs=data['dopant'].x,
-            dopant_constraint_indices=data['dopant'].constraint_indices,
-            interaction_type_indices=data['interaction'].type_indices,
-            interaction_types=data['interaction'].types,
-            interaction_dopant_indices=data['interaction'].dopant_indices,
-            intraaction_type_indices=data['intraaction'].type_indices,
-            intraaction_types=data['intraaction'].types,
-            intraaction_dopant_indices=data['intraaction'].dopant_indices,
-            edge_index_dict=data.edge_index_dict,
-            radii=data.radii,
-            constraint_radii_idx=data.constraint_radii_idx,
-            batch_dict=data.batch_dict)
+        reps = self.representation_module(**self.get_inputs(data))
         return reps
 
     def _evaluate_step(self, data):
-        y_hat = self(
-            dopant_types=data['dopant'].types,
-            dopant_concs=data['dopant'].x,
-            dopant_constraint_indices=data['dopant'].constraint_indices,
-            interaction_type_indices=data['interaction'].type_indices,
-            interaction_types=data['interaction'].types,
-            interaction_dopant_indices=data['interaction'].dopant_indices,
-            intraaction_type_indices=data['intraaction'].type_indices,
-            intraaction_types=data['intraaction'].types,
-            intraaction_dopant_indices=data['intraaction'].dopant_indices,
-            edge_index_dict=data.edge_index_dict,
-            radii=data.radii,
-            constraint_radii_idx=data.constraint_radii_idx,
-            batch_dict=data.batch_dict)
+        y_hat = self(**self.get_inputs(data))
         loss = self.loss_function(y_hat, data.log_y)
         return y_hat, loss
 
     def predict_step(self,
-                     batch: Data | Batch,
+                     batch: HeteroData | Batch,
                      batch_idx: int | None = None) -> torch.Tensor:
         """
         Make a prediction for a batch of data.
@@ -361,25 +353,12 @@ class HeteroDCVModel(SpectrumModelBase):
         Returns:
             torch.Tensor: _description_
         """
-        y_hat = self(
-            dopant_types=batch['dopant'].types,
-            dopant_concs=batch['dopant'].x,
-            dopant_constraint_indices=batch['dopant'].constraint_indices,
-            interaction_type_indices=batch['interaction'].type_indices,
-            interaction_types=batch['interaction'].types,
-            interaction_dopant_indices=batch['interaction'].dopant_indices,
-            intraaction_type_indices=batch['intraaction'].type_indices,
-            intraaction_types=batch['intraaction'].types,
-            intraaction_dopant_indices=batch['intraaction'].dopant_indices,
-            edge_index_dict=batch.edge_index_dict,
-            radii=batch.radii,
-            constraint_radii_idx=batch.constraint_radii_idx,
-            batch_dict=batch.batch_dict)
+        y_hat = self(**self.get_inputs(batch))
         return y_hat
 
     def _step(self,
               prefix: str,
-              batch: Data | Batch,
+              batch: HeteroData | Batch,
               batch_idx: int | None = None,
               log: bool = True):
         y_hat, loss = self._evaluate_step(batch)
