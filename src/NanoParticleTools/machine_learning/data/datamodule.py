@@ -18,6 +18,8 @@ def data_is_graph(dataset) -> bool:
     """
     if isinstance(dataset, torch.utils.data.Subset):
         return data_is_graph(dataset.dataset)
+    elif isinstance(dataset, torch.utils.data.ConcatDataset):
+        return data_is_graph(dataset.datasets[0])
     else:
         return dataset.feature_processor.is_graph
 
