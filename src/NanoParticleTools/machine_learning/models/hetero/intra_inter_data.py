@@ -13,7 +13,7 @@ import numpy as np
 
 class HeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
 
-    def inputs_from_concentration_and_constraints(
+    def inputs_from_constraints_and_concentration(
             self, input_constraints: List[SphericalConstraint],
             input_dopant_concentration: List[Dict]
     ) -> Tuple[Dict, torch.Tensor]:
@@ -97,7 +97,7 @@ class HeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
         constraints = doc['input']['constraints']
         constraints = MontyDecoder().process_decoded(constraints)
 
-        dopant_concentration, radii_without_zero = self.inputs_from_concentration_and_constraints(
+        dopant_concentration, radii_without_zero = self.inputs_from_constraints_and_concentration(
             constraints, dopant_concentration)
 
         return self.graph_from_inputs(dopant_concentration, radii_without_zero)
