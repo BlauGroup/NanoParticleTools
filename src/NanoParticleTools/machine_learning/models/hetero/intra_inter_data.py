@@ -1,21 +1,39 @@
 from NanoParticleTools.machine_learning.models.hetero.data import DopantInteractionFeatureProcessor
+from NanoParticleTools.inputs.nanoparticle import SphericalConstraint
 import torch
 from monty.serialization import MontyDecoder
 
 from torch_geometric.data.hetero_data import HeteroData, NodeOrEdgeStorage, EdgeStorage
 
-from typing import List, Any, Dict, Optional, Union
+from typing import List, Any, Dict, Optional, Union, Tuple
 from functools import lru_cache
 from itertools import combinations_with_replacement
+import numpy as np
 
 
 class HeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
 
-    def process_doc(self, doc: Dict) -> Dict:
+    def inputs_from_concentration_and_constraints(
+            self, input_constraints: List[SphericalConstraint],
+            input_dopant_concentration: List[Dict]
+    ) -> Tuple[Dict, torch.Tensor]:
+        """
+        Preprocess the inputs and constraints to ensure they
+        form valid graphs.
+
+        Get the inputs from the concentration and constraints.
+        the dopant concentration and input constraints should be
+        of the same length.
+
+        Args:
+            input_constraints:
+            input_dopant_concentration:
+
+        """
 
         # Build the dopant concentration
         dopant_concentration = []
-        for constraint in doc['dopant_concentration']:
+        for constraint in input_dopant_concentration:
             dopant_concentration.append({})
             for el in self.possible_elements:
                 _conc = constraint.get(el, 0)
@@ -31,26 +49,26 @@ class HeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
                 break
 
         # use the constraints to build a radii tensor
-        constraints = doc['input']['constraints']
-        constraints = MontyDecoder().process_decoded(constraints)
-        constraints = constraints[:len(dopant_concentration)]
+        constraints = input_constraints[:len(dopant_concentration)]
 
         _radii = [0] + [constraint.radius for constraint in constraints]
 
-        if self.augment_data:
+        # probability of augmenting the data
+        if self.augment_data and np.random.rand() < self.augment_data:
             # we can augment the data by picking a radius at random
             # between (0+eps) and the max radius and inserting it into the list
 
-            aug_radius = torch.rand(1) * _radii[-1] + 1e-5
+            for _ in range(self.augment_subdivisions):
+                aug_radius = torch.rand(1) * _radii[-1] + 1e-5
 
-            # find where it fits into the list
-            for i, r in enumerate(_radii):
-                if r > aug_radius:
-                    _radii.insert(i, aug_radius)
+                # find where it fits into the list
+                for i, r in enumerate(_radii):
+                    if r > aug_radius:
+                        _radii.insert(i, aug_radius)
 
-                    # additionally, duplicate the dopant concentration at this layer
-                    dopant_concentration.insert(i, dopant_concentration[i - 1])
-                    break
+                        # additionally, duplicate the dopant concentration at this layer
+                        dopant_concentration.insert(i, dopant_concentration[i - 1])
+                        break
 
         # Check for duplicate radii (these would cause 0 thickness layers)
         # must iterate in reverse order
@@ -71,6 +89,16 @@ class HeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
         radii_without_zero = torch.tensor(_radii[1:],
                                           dtype=torch.float32,
                                           requires_grad=self.input_grad)
+        return dopant_concentration, radii_without_zero
+
+    def process_doc(self, doc: Dict) -> Dict:
+        dopant_concentration = doc['dopant_concentration']
+
+        constraints = doc['input']['constraints']
+        constraints = MontyDecoder().process_decoded(constraints)
+
+        dopant_concentration, radii_without_zero = self.inputs_from_concentration_and_constraints(
+            constraints, dopant_concentration)
 
         return self.graph_from_inputs(dopant_concentration, radii_without_zero)
 

@@ -1,12 +1,14 @@
 from NanoParticleTools.machine_learning.data.processors import FeatureProcessor
-import torch
+from NanoParticleTools.inputs.nanoparticle import SphericalConstraint
 from monty.serialization import MontyDecoder
 
 from torch_geometric.data.hetero_data import HeteroData, NodeOrEdgeStorage, EdgeStorage
 
-from typing import List, Any, Dict, Optional, Union
+from typing import List, Any, Dict, Optional, Union, Tuple
 from functools import lru_cache
 from itertools import combinations_with_replacement
+import numpy as np
+import torch
 
 
 class DopantInteractionFeatureProcessor(FeatureProcessor):
@@ -16,6 +18,8 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
                  input_grad: bool = False,
                  assymetric_interaction: bool = False,
                  augment_data: bool = False,
+                 augment_data_prob: float = 0.5,
+                 augment_subdivisions: int = 2,
                  **kwargs) -> None:
         """
 
@@ -43,6 +47,8 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
         self.input_grad = input_grad
         self.assymetric_interaction = assymetric_interaction
         self.augment_data = augment_data
+        self.augment_data_prob = augment_data_prob
+        self.augment_subdivisions = augment_subdivisions
 
     @property
     @lru_cache
@@ -73,11 +79,26 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
                     edge_type_map[j] = {i: type_counter}
         return edge_type_map
 
-    def process_doc(self, doc: Dict) -> Dict:
+    def inputs_from_concentration_and_constraints(
+            self, input_constraints: List[SphericalConstraint],
+            input_dopant_concentration: List[Dict]
+    ) -> Tuple[Dict, torch.Tensor]:
+        """
+        Preprocess the inputs and constraints to ensure they
+        form valid graphs.
 
+        Get the inputs from the concentration and constraints.
+        the dopant concentration and input constraints should be
+        of the same length.
+
+        Args:
+            input_constraints:
+            input_dopant_concentration:
+
+        """
         # Build the dopant concentration
         dopant_concentration = []
-        for constraint in doc['dopant_concentration']:
+        for constraint in input_dopant_concentration:
             dopant_concentration.append({})
             for el in self.possible_elements:
                 _conc = constraint.get(el, 0)
@@ -93,26 +114,26 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
                 break
 
         # use the constraints to build a radii tensor
-        constraints = doc['input']['constraints']
-        constraints = MontyDecoder().process_decoded(constraints)
-        constraints = constraints[:len(dopant_concentration)]
+        constraints = input_constraints[:len(dopant_concentration)]
 
         _radii = [0] + [constraint.radius for constraint in constraints]
 
-        if self.augment_data:
+        # probability of augmenting the data
+        if self.augment_data and np.random.rand() < self.augment_data:
             # we can augment the data by picking a radius at random
             # between (0+eps) and the max radius and inserting it into the list
 
-            aug_radius = torch.rand(1) * _radii[-1] + 1e-5
+            for _ in range(self.augment_subdivisions):
+                aug_radius = torch.rand(1) * _radii[-1] + 1e-5
 
-            # find where it fits into the list
-            for i, r in enumerate(_radii):
-                if r > aug_radius:
-                    _radii.insert(i, aug_radius)
+                # find where it fits into the list
+                for i, r in enumerate(_radii):
+                    if r > aug_radius:
+                        _radii.insert(i, aug_radius)
 
-                    # additionally, duplicate the dopant concentration at this layer
-                    dopant_concentration.insert(i, dopant_concentration[i - 1])
-                    break
+                        # additionally, duplicate the dopant concentration at this layer
+                        dopant_concentration.insert(i, dopant_concentration[i - 1])
+                        break
 
         # Check for duplicate radii (these would cause 0 thickness layers)
         # must iterate in reverse order
@@ -126,6 +147,17 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
         radii_without_zero = torch.tensor(_radii[1:],
                                           dtype=torch.float32,
                                           requires_grad=self.input_grad)
+
+        return dopant_concentration, radii_without_zero
+
+    def process_doc(self, doc: Dict) -> Dict:
+        dopant_concentration = doc['dopant_concentration']
+
+        constraints = doc['input']['constraints']
+        constraints = MontyDecoder().process_decoded(constraints)
+
+        dopant_concentration, radii_without_zero = self.inputs_from_concentration_and_constraints(
+            constraints, dopant_concentration)
 
         return self.graph_from_inputs(dopant_concentration, radii_without_zero)
 
