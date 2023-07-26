@@ -1,4 +1,5 @@
 from NanoParticleTools.machine_learning.models.mlp_model.model import MLPSpectrumModel
+from NanoParticleTools.machine_learning.models.hetero.intra_inter_model import HeteroDCVModel
 import pytorch_lightning as pl
 from maggma.stores import MongoStore
 from NanoParticleTools.machine_learning.data.datamodule import NPMCDataModule
