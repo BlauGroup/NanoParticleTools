@@ -188,7 +188,7 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
         dopant_concentration = doc['dopant_concentration']
 
         constraints = doc['input']['constraints']
-        constraints = MontyDecoder().process_decoded(constraints)
+        # constraints = MontyDecoder().process_decoded(constraints)
 
         dopant_concentration, radii_without_zero = self.inputs_from_concentration_and_constraints(
             constraints, dopant_concentration)

@@ -28,10 +28,20 @@ class NanoParticleConstraint(ABC, MSONable):
     """
 
     def __init__(self, host_structure: Optional[Structure] = None):
-        if host_structure is None:
-            self.host_structure = get_nayf4_structure()
+        self.host_structure = host_structure
+
+    def get_host_structure(self):
+        if self.host_structure is None:
+            return get_nayf4_structure()
         else:
-            self.host_structure = host_structure
+            return self.host_structure
+
+    def as_dict(self) -> dict:
+        _d = super().as_dict()
+        if self.host_structure.composition.reduced_formula == 'NaYF4':
+            # If this is the default structure, don't save it
+            _d['host_structure'] = None
+        return _d
 
     @abstractmethod
     def bounding_box(self) -> List[float]:
@@ -370,7 +380,7 @@ class DopedNanoparticle(MSONable):
             for dopants_dict, constraint in zip(conc_by_layer_and_species,
                                                 constraints):
                 _sites = [
-                    site for site in constraint.host_structure.sites
+                    site for site in constraint.get_host_structure().sites
                     if site.species_string in dopants_dict.keys()
                 ]
                 constraint.host_structure = Structure.from_sites(_sites)
@@ -420,7 +430,7 @@ class DopedNanoparticle(MSONable):
         # Construct nanoparticle
         nanoparticle_sites = []
         for i, constraint in enumerate(self.constraints):
-            _struct = constraint.host_structure.copy()
+            _struct = constraint.get_host_structure().copy()
 
             # Identify the minimum scaling matrix required to fit
             # the bounding box

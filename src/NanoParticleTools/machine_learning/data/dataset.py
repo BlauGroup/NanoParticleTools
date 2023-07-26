@@ -32,6 +32,17 @@ class NPMCDataset(Dataset):
         self._docs = None
         self._cached_data = None
 
+    def __getstate__(self):
+        state = {}
+        for key, value in self.__dict__.items():
+            try:
+                state[key] = value.copy()
+            except AttributeError:
+                state[key] = value
+        state['_docs'] = None
+        state['_cached_data'] = None
+        return state
+
     @property
     def docs(self):
         if self._docs is None:
@@ -151,6 +162,7 @@ def download(feature_processor: FeatureProcessor,
     # Download the data
     data_store.connect()
     documents = list(data_store.query(doc_filter, properties=required_fields))
+    documents = MontyDecoder().process_decoded(documents)
     data_store.close()
 
     # Write the data to the raw directory

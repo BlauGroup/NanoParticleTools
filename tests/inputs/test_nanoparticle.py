@@ -20,7 +20,7 @@ def test_spherical_constraint():
               [17, 17, 17],
               [18, 18, 18]]
 
-    assert constraint.host_structure == get_nayf4_structure()
+    assert constraint.get_host_structure() == get_nayf4_structure()
     assert constraint.radius == 30
     assert constraint.bounding_box() == [30, 30, 30]
 
@@ -29,7 +29,7 @@ def test_spherical_constraint():
 
     structure = get_wse2_structure()
     constraint = SphericalConstraint(20, structure)
-    assert constraint.host_structure == structure
+    assert constraint.get_host_structure() == structure
 
 
 def test_prism_constraint():
