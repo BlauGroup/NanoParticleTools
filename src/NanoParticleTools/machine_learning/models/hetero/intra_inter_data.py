@@ -59,7 +59,7 @@ class HeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
             # between (0+eps) and the max radius and inserting it into the list
 
             for _ in range(self.augment_subdivisions):
-                aug_radius = torch.rand(1) * _radii[-1] + 1e-5
+                aug_radius = (0.90 * torch.rand(1) + 0.05) * _radii[-1]
 
                 # find where it fits into the list
                 for i, r in enumerate(_radii):
@@ -67,7 +67,8 @@ class HeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
                         _radii.insert(i, aug_radius)
 
                         # additionally, duplicate the dopant concentration at this layer
-                        dopant_concentration.insert(i, dopant_concentration[i - 1])
+                        dopant_concentration.insert(
+                            i, dopant_concentration[i - 1])
                         break
 
         # Check for duplicate radii (these would cause 0 thickness layers)

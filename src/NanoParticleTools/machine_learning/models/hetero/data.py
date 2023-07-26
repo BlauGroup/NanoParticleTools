@@ -11,6 +11,40 @@ import numpy as np
 import torch
 
 
+class NPHeteroData(HeteroData):
+
+    def __cat_dim__(self,
+                    key: str,
+                    value: Any,
+                    store: Optional[NodeOrEdgeStorage] = None,
+                    *args,
+                    **kwargs) -> Any:
+        if 'indices' in key:
+            return 0
+        if 'index' in key:
+            return 1
+        return 0
+
+    def __inc__(self,
+                key: str,
+                value: Any,
+                store: Optional[NodeOrEdgeStorage] = None,
+                *args,
+                **kwargs) -> Any:
+        if isinstance(store, EdgeStorage) and 'index' in key:
+            return store['inc']
+        elif 'dopant_indices' in key:
+            return self['dopant'].num_nodes
+        elif key == 'constraint_radii_idx':
+            return self.radii.size(0)
+        elif 'constraint_indices' in key:
+            return self['constraint_radii_idx'].size(0)
+        elif 'type_indices' in key:
+            return 0
+        else:
+            return 0
+
+
 class DopantInteractionFeatureProcessor(FeatureProcessor):
 
     def __init__(self,
@@ -254,38 +288,4 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
 
     @property
     def data_cls(self):
-
-        class NPHeteroData(HeteroData):
-
-            def __cat_dim__(self,
-                            key: str,
-                            value: Any,
-                            store: Optional[NodeOrEdgeStorage] = None,
-                            *args,
-                            **kwargs) -> Any:
-                if 'indices' in key:
-                    return 0
-                if 'index' in key:
-                    return 1
-                return 0
-
-            def __inc__(self,
-                        key: str,
-                        value: Any,
-                        store: Optional[NodeOrEdgeStorage] = None,
-                        *args,
-                        **kwargs) -> Any:
-                if isinstance(store, EdgeStorage) and 'index' in key:
-                    return store['inc']
-                elif 'dopant_indices' in key:
-                    return self['dopant'].num_nodes
-                elif key == 'constraint_radii_idx':
-                    return self.radii.size(0)
-                elif 'constraint_indices' in key:
-                    return self['constraint_radii_idx'].size(0)
-                elif 'type_indices' in key:
-                    return 0
-                else:
-                    return 0
-
         return NPHeteroData

@@ -105,6 +105,10 @@ class FeatureProcessor(DataProcessor):
         return 4 / 3 * np.pi * (r**3)
 
     @property
+    def num_elements(self):
+        return len(self.possible_elements)
+
+    @property
     def is_graph(self):
         raise NotImplementedError
 
