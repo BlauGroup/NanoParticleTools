@@ -9,7 +9,7 @@ from torch import nn
 import torch
 import torch_geometric.nn as gnn
 import warnings
-from typing import Dict
+from typing import Dict, List
 
 
 class HeteroDCVRepresentationModule(torch.nn.Module):
@@ -273,6 +273,7 @@ class HeteroDCVModel(SpectrumModelBase):
                  embed_dim: int = 16,
                  n_message_passing: int = 3,
                  nsigma=5,
+                 readout_layers: List[int] = [128],
                  **kwargs):
         if 'n_input_nodes' in kwargs:
             warnings.warn(
@@ -285,11 +286,12 @@ class HeteroDCVModel(SpectrumModelBase):
         self.embed_dim = embed_dim
         self.n_message_passing = n_message_passing
         self.nsigma = nsigma
+        self.readout_layers = readout_layers
 
         self.representation_module = HeteroDCVRepresentationModule(
             self.embed_dim, self.n_message_passing, self.nsigma, **kwargs)
 
-        self.readout = NonLinearMLP(embed_dim, 1, [128], 0.25, nn.SiLU)
+        self.readout = NonLinearMLP(embed_dim, 1, self.readout_layers, 0.25, nn.SiLU)
 
     def forward(self,
                 dopant_types,
