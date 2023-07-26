@@ -25,6 +25,7 @@ def data_is_graph(dataset) -> bool:
 
 
 class NPMCDataModule(pl.LightningDataModule):
+
     def __init__(self,
                  train_dataset,
                  val_dataset: Optional[Dataset] = None,
@@ -44,7 +45,18 @@ class NPMCDataModule(pl.LightningDataModule):
         self.batch_size = batch_size
         self.loader_workers = loader_workers
 
-        self.save_hyperparameters(ignore=['train_dataset', 'val_dataset', 'test_dataset'])
+        self.save_hyperparameters(
+            ignore=['train_dataset', 'val_dataset', 'test_dataset'])
+
+    @property
+    def persistent_workers(self):
+        return self.loader_workers > 0
+
+    @property
+    def pin_memory(self):
+        if torch.cuda.is_available():
+            return True
+        return False
 
     @classmethod
     def from_train_dataset(cls,
@@ -98,7 +110,8 @@ class NPMCDataModule(pl.LightningDataModule):
             train_dataset, [train_size, validation_size],
             generator=torch.Generator().manual_seed(split_seed))
 
-        return cls(train_subset, val_subset, test_dataset, split_seed, **kwargs)
+        return cls(train_subset, val_subset, test_dataset, split_seed,
+                   **kwargs)
 
     @staticmethod
     def collate(data_list: List[Data]):
@@ -120,50 +133,74 @@ class NPMCDataModule(pl.LightningDataModule):
     def train_dataloader(self) -> DataLoader:
         if self.data_is_graph:
             # The data is graph structured
-            return pyg_DataLoader(self.train_dataset,
-                                  batch_size=self.batch_size,
-                                  shuffle=True,
-                                  num_workers=self.loader_workers,
-                                  drop_last=True)
+            return pyg_DataLoader(
+                self.train_dataset,
+                batch_size=self.batch_size,
+                shuffle=True,
+                num_workers=self.loader_workers,
+                drop_last=True,
+                persistent_workers=self.persistent_workers,
+                pin_memory=self.pin_memory,
+            )
         else:
             # The data is in an image representation
-            return DataLoader(self.train_dataset,
-                              batch_size=self.batch_size,
-                              collate_fn=self.collate,
-                              shuffle=True,
-                              num_workers=self.loader_workers,
-                              drop_last=True)
+            return DataLoader(
+                self.train_dataset,
+                batch_size=self.batch_size,
+                collate_fn=self.collate,
+                shuffle=True,
+                num_workers=self.loader_workers,
+                drop_last=True,
+                persistent_workers=self.persistent_workers,
+                pin_memory=self.pin_memory,
+            )
 
     def val_dataloader(self) -> DataLoader:
         if self.data_is_graph:
             # The data is graph structured
-            return pyg_DataLoader(self.val_dataset,
-                                  batch_size=self.batch_size,
-                                  shuffle=False,
-                                  num_workers=self.loader_workers,
-                                  drop_last=True)
+            return pyg_DataLoader(
+                self.val_dataset,
+                batch_size=self.batch_size,
+                shuffle=False,
+                num_workers=self.loader_workers,
+                drop_last=True,
+                persistent_workers=self.persistent_workers,
+                pin_memory=self.pin_memory,
+            )
         else:
             # The data is in an image representation
-            return DataLoader(self.val_dataset,
-                              batch_size=self.batch_size,
-                              collate_fn=self.collate,
-                              shuffle=False,
-                              num_workers=self.loader_workers,
-                              drop_last=True)
+            return DataLoader(
+                self.val_dataset,
+                batch_size=self.batch_size,
+                collate_fn=self.collate,
+                shuffle=False,
+                num_workers=self.loader_workers,
+                drop_last=True,
+                persistent_workers=self.persistent_workers,
+                pin_memory=self.pin_memory,
+            )
 
     def test_dataloader(self) -> DataLoader:
         if self.data_is_graph:
             # The data is graph structured
-            return pyg_DataLoader(self.test_dataset,
-                                  batch_size=self.batch_size,
-                                  shuffle=False,
-                                  num_workers=self.loader_workers,
-                                  drop_last=True)
+            return pyg_DataLoader(
+                self.test_dataset,
+                batch_size=self.batch_size,
+                shuffle=False,
+                num_workers=self.loader_workers,
+                drop_last=True,
+                persistent_workers=self.persistent_workers,
+                pin_memory=self.pin_memory,
+            )
         else:
             # The data is in an image representation
-            return DataLoader(self.test_dataset,
-                              batch_size=self.batch_size,
-                              collate_fn=self.collate,
-                              shuffle=False,
-                              num_workers=self.loader_workers,
-                              drop_last=True)
+            return DataLoader(
+                self.test_dataset,
+                batch_size=self.batch_size,
+                collate_fn=self.collate,
+                shuffle=False,
+                num_workers=self.loader_workers,
+                drop_last=True,
+                persistent_workers=self.persistent_workers,
+                pin_memory=self.pin_memory,
+            )
