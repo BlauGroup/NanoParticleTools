@@ -65,3 +65,24 @@ def k_fold_validation_training(dataset: NPMCDataset,
         validation_sets.append(validation_subset)
 
     return training_sets, validation_sets
+
+
+def FineTuneHeteroModel(model: HeteroDCVModel,
+               freeze_representation: bool,
+               reset_readout: bool
+               ):
+    """
+    params
+    model: HeteroDCVModel trained on LF data
+    freeze_representation: whether or not to freeze the representation (or just initialize)
+    reset_readout: whether or not to reset the readout layer (or just initialize)
+    """
+    if reset_readout == True: 
+        for name, param in model.readout.named_parameters():
+            param = 0 # reset to random weights, or 0?
+    
+    if freeze_representation == True: 
+        for name, param in model.representation_module.named_parameters():
+            param.requires_grad = False
+            
+    return model
