@@ -52,12 +52,6 @@ class NPMCDataModule(pl.LightningDataModule):
     def persistent_workers(self):
         return self.loader_workers > 0
 
-    @property
-    def pin_memory(self):
-        if torch.cuda.is_available():
-            return True
-        return False
-
     @classmethod
     def from_train_dataset(cls,
                            train_dataset,
@@ -140,7 +134,6 @@ class NPMCDataModule(pl.LightningDataModule):
                 num_workers=self.loader_workers,
                 drop_last=True,
                 persistent_workers=self.persistent_workers,
-                pin_memory=self.pin_memory,
             )
         else:
             # The data is in an image representation
@@ -152,7 +145,6 @@ class NPMCDataModule(pl.LightningDataModule):
                 num_workers=self.loader_workers,
                 drop_last=True,
                 persistent_workers=self.persistent_workers,
-                pin_memory=self.pin_memory,
             )
 
     def val_dataloader(self) -> DataLoader:
@@ -165,7 +157,6 @@ class NPMCDataModule(pl.LightningDataModule):
                 num_workers=self.loader_workers,
                 drop_last=True,
                 persistent_workers=self.persistent_workers,
-                pin_memory=self.pin_memory,
             )
         else:
             # The data is in an image representation
@@ -177,7 +168,6 @@ class NPMCDataModule(pl.LightningDataModule):
                 num_workers=self.loader_workers,
                 drop_last=True,
                 persistent_workers=self.persistent_workers,
-                pin_memory=self.pin_memory,
             )
 
     def test_dataloader(self) -> DataLoader:
@@ -190,7 +180,6 @@ class NPMCDataModule(pl.LightningDataModule):
                 num_workers=self.loader_workers,
                 drop_last=True,
                 persistent_workers=self.persistent_workers,
-                pin_memory=self.pin_memory,
             )
         else:
             # The data is in an image representation
@@ -202,5 +191,4 @@ class NPMCDataModule(pl.LightningDataModule):
                 num_workers=self.loader_workers,
                 drop_last=True,
                 persistent_workers=self.persistent_workers,
-                pin_memory=self.pin_memory,
             )
