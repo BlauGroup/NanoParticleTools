@@ -334,10 +334,10 @@ class NPMCTrainer():
 
         if self.gpu:
             from gpuparallel import GPUParallel, delayed
-            warnings.warn('GPU parallel cannot distribute multiple models per device, '
-                          'falling back to 1 model per device')
-            GPUParallel(n_gpu=self.n_available_devices)(delayed(self.train_one_model)(**run_config)
-                                 for run_config in training_runs)
+            GPUParallel(n_gpu=self.n_available_devices,
+                        n_workers_per_gpu=self.models_per_device)(
+                            delayed(self.train_one_model)(**run_config)
+                            for run_config in training_runs)
         else:
             from joblib import Parallel, delayed
 
