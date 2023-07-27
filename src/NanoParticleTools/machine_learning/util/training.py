@@ -21,6 +21,7 @@ import torch
 from pandas import DataFrame
 from matplotlib import ticker as mticker
 from matplotlib.lines import Line2D
+import warnings
 
 
 def train_spectrum_model(config,
@@ -333,8 +334,9 @@ class NPMCTrainer():
 
         if self.gpu:
             from gpuparallel import GPUParallel, delayed
-
-            GPUParallel(n_gpu=2)(delayed(self.train_one_model)(**run_config)
+            warnings.warn('GPU parallel cannot distribute multiple models per device, '
+                          'falling back to 1 model per device')
+            GPUParallel(n_gpu=self.n_available_devices)(delayed(self.train_one_model)(**run_config)
                                  for run_config in training_runs)
         else:
             from joblib import Parallel, delayed
