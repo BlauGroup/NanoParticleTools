@@ -23,5 +23,6 @@ setup(name='NanoParticleTools',
           "bayesian-optimization",
           "ray",
           "wandb",
+          "gpuparallel"
       ]
       )
