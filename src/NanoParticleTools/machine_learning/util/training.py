@@ -281,6 +281,8 @@ class NPMCTrainer():
                         model_config: dict,
                         wandb_name: Optional[str] = None,
                         device_id=None):
+        if isinstance(device_id, str):
+            device_id = int(device_id.split(':')[-1])
 
         # get a free gpu from the list
         trainer_device_config = {}
