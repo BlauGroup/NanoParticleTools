@@ -1,11 +1,41 @@
+from NanoParticleTools.util.visualization import plot_nanoparticle_from_arrays
 from NanoParticleTools.inputs.nanoparticle import SphericalConstraint
 
+from torch_geometric.data import HeteroData
 from scipy.optimize import Bounds
 from scipy.optimize import LinearConstraint
+
+from matplotlib import pyplot as plt
 import numpy as np
 import torch
-from torch_geometric.data import HeteroData
+
 from typing import Union
+
+
+def get_plotting_fn(feature_processor):
+    n_elements = len(feature_processor.possible_elements)
+
+    def plotting_fn(x, f=None, accept=None):
+        # Trim #'s less than 0 so they don't cause issues in the plotting
+        x = x.clip(0)
+
+        plt.figure()
+        n_constraints = len(x) // (n_elements + 1)
+        plot_nanoparticle_from_arrays(
+            np.concatenate(([0], x[-n_constraints:])),
+            x[:-n_constraints].reshape(n_constraints, -1),
+            dpi=80,
+            elements=feature_processor.possible_elements,
+        )
+        if f is not None:
+            plt.text(0.1,
+                    0.95,
+                    f'UV Intensity={np.power(10, -f)-100:.2f}',
+                    fontsize=20,
+                    transform=plt.gca().transAxes)
+        plt.show()
+
+    return plotting_fn
 
 
 def get_bounds(n_constraints: int, n_elements: int, r_max: Union[int, float]):
