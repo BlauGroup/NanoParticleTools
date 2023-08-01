@@ -21,13 +21,15 @@ class NPMCDataset(Dataset):
                  feature_processor: DataProcessor,
                  label_processor: DataProcessor,
                  use_metadata: bool = False,
-                 cache_in_memory: bool = True):
+                 cache_in_memory: bool = True,
+                 gpu_training: bool = False):
 
         self.file_path = file_path
         self.feature_processor = feature_processor
         self.label_processor = label_processor
         self.use_metadata = use_metadata
         self.cache_in_memory = cache_in_memory
+        self.gpu_training = gpu_training
 
         self._docs = None
         self._cached_data = None
@@ -95,13 +97,21 @@ class NPMCDataset(Dataset):
                 # generate the point
                 data = self.process_single_doc(idx)
 
+                # Cache the data
                 self.cached_data[idx] = data
 
                 # We have cached the output of this document, free up memory
                 self.docs[idx] = None
         else:
             data = self.process_single_doc(idx)
-        return data
+
+        if self.gpu_training:
+            # If training on gpu, return a clone. This way we don't end
+            # up with a bunch of tensors cached on the gpu (and potentially)
+            # mismatched with others that haven't already been put on the gpu
+            return data.clone()
+        else:
+            return data
 
     def get_random(self):
         _idx = np.random.choice(range(len(self)))
