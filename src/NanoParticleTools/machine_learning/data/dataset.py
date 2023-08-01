@@ -127,7 +127,8 @@ class NPMCDataset(Dataset):
                    overwrite: bool = False,
                    use_metadata: bool = False,
                    file_path: str = './dataset.json',
-                   cache_in_memory: bool = True):
+                   cache_in_memory: bool = True,
+                   **kwargs):
         # Check if the file exists
         if os.path.isfile(file_path):
             if overwrite:
@@ -143,7 +144,7 @@ class NPMCDataset(Dataset):
                      doc_filter, file_path, use_metadata)
 
         return cls(file_path, feature_processor, label_processor, use_metadata,
-                   cache_in_memory)
+                   cache_in_memory, **kwargs)
 
 
 def get_required_fields(feature_processor: FeatureProcessor,
