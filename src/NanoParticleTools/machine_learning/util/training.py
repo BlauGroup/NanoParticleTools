@@ -210,7 +210,15 @@ def train_uv_model(config,
                          callbacks=callbacks,
                          **trainer_device_config)
 
-    trainer.fit(model=model, datamodule=data_module)
+    try:
+        trainer.fit(model=model, datamodule=data_module)
+    except Exception as e:
+        if isinstance(e, KeyboardInterrupt):
+            # If keyboard interupt, we'll let the statistics be logged
+            pass
+        else:
+            # If there's any other exception, we'll let it raise
+            raise e
 
     # Load the best model checkpoint, set it to evaluation mode, and then evaluate the metrics
     # for the training, validation, and test sets
