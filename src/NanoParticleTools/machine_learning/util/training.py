@@ -147,6 +147,7 @@ def train_uv_model(config,
                    augment_loss=False,
                    ray_tune: Optional[bool] = False,
                    early_stop: Optional[bool] = False,
+                   early_stop_patience: Optional[int] = 200,
                    swa: Optional[bool] = False,
                    save_checkpoints: Optional[bool] = True,
                    wandb_config: Optional[dict] = None,
@@ -187,7 +188,7 @@ def train_uv_model(config,
     # if augment_loss:
     #     callbacks.append(LossAugmentCallback(aug_loss_epoch=augment_loss))
     if early_stop:
-        callbacks.append(EarlyStopping(monitor='val_loss', patience=200))
+        callbacks.append(EarlyStopping(monitor='val_loss', patience=early_stop_patience))
     if swa:
         callbacks.append(StochasticWeightAveraging(swa_lrs=1e-3))
     if ray_tune:
@@ -263,6 +264,7 @@ class NPMCTrainer():
         models_per_device: Optional[int] = 1,
         num_epochs=2000,
         lr_scheduler=get_sequential,
+        train_fn_kwargs={},
     ):
         self.data_module = data_module
         self.model_cls = model_cls
@@ -284,6 +286,7 @@ class NPMCTrainer():
         self.gpu = gpu
         self.n_available_devices = n_available_devices
         self.models_per_device = models_per_device
+        self.train_fn_kwargs = train_fn_kwargs
 
     def train_one_model(self,
                         model_config: dict,
@@ -318,7 +321,8 @@ class NPMCTrainer():
                 swa=False,
                 save_checkpoints=True,
                 wandb_config=wandb_config,
-                trainer_device_config=trainer_device_config)
+                trainer_device_config=trainer_device_config,
+                **self.train_fn_kwargs)
         except Exception as e:
             # We'll ignore this exception and let this singular job fail
             print(e)
