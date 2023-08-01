@@ -202,8 +202,12 @@ class HeteroDCVRepresentationModule(torch.nn.Module):
 
         # Repeat the same process for the intraaction
         # Embed the interaction nodes, using the pair of dopant types
-        intraaction_attr = self.intraaction_embedder(
-            intraaction_type_indices.float())
+        if self.interaction_embedding:
+            intraaction_attr = self.intraaction_embedder(
+                intraaction_types)
+        else:
+            intraaction_attr = self.intraaction_embedder(
+                intraaction_type_indices.float())
 
         # Index the radii and compute the integrated intraaction
         intraaction_node_radii = _radii[dopant_constraint_indices][
