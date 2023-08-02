@@ -153,7 +153,7 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
         _radii = [0] + [constraint.radius for constraint in constraints]
 
         # probability of augmenting the data
-        if self.augment_data and np.random.rand() < self.augment_data:
+        if self.augment_data and np.random.rand() < self.augment_prob:
             # we can augment the data by picking a radius at random
             # between (0+eps) and the max radius and inserting it into the list
 
