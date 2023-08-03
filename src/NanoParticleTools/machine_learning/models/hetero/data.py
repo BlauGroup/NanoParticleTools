@@ -9,7 +9,7 @@ from functools import lru_cache
 from itertools import combinations_with_replacement
 import numpy as np
 import torch
-
+import random
 
 class NPHeteroData(HeteroData):
 
@@ -54,6 +54,7 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
                  augment_data: bool = False,
                  augment_prob: float = 0.5,
                  augment_subdivisions: int = 2,
+                 distribute_subdivisions: bool = False,
                  **kwargs) -> None:
         """
 
@@ -83,7 +84,7 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
         self.augment_data = augment_data
         self.augment_prob = augment_prob
         self.augment_subdivisions = augment_subdivisions
-
+        self.distribute_subdivisions = distribute_subdivisions
     @property
     @lru_cache
     def edge_type_map(self):
@@ -151,13 +152,18 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
         constraints = input_constraints[:len(dopant_concentration)]
 
         _radii = [0] + [constraint.radius for constraint in constraints]
-
+        
+        # randomly assign number of subdivisions within range
+        if self.distribute_subdivisions: 
+            num_subdivisions = random.randint(0, self.augment_subdivisions)
+        else:
+            num_subdivisions = self.augment_subdivisions
         # probability of augmenting the data
-        if self.augment_data and np.random.rand() < self.augment_prob:
+        if self.augment_data and (np.random.rand() < self.augment_prob):
             # we can augment the data by picking a radius at random
             # between (0+eps) and the max radius and inserting it into the list
 
-            for _ in range(self.augment_subdivisions):
+            for _ in range(num_subdivisions):
                 aug_radius = torch.rand(1) * _radii[-1] + 1e-5
 
                 # find where it fits into the list
