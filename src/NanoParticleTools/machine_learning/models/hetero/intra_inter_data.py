@@ -54,7 +54,7 @@ class HeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
         _radii = [0] + [constraint.radius for constraint in constraints]
 
         # randomly assign number of subdivisions within range
-        if self.distribute_subdivisions: 
+        if self.distribute_subdivisions and self.augment_data: 
             num_subdivisions = random.randint(0, self.augment_subdivisions)
         else:
             num_subdivisions = self.augment_subdivisions
