@@ -18,7 +18,7 @@ def get_doc(constraints: List[SphericalConstraint],
     }
     if dopant_specifications:
         _d['input']['dopant_specifications'] = dopant_specifications
-    return
+    return _d
 
 
 class bcolors:
