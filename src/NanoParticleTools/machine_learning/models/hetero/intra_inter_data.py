@@ -9,7 +9,7 @@ from typing import List, Any, Dict, Optional, Union, Tuple
 from functools import lru_cache
 from itertools import combinations_with_replacement
 import numpy as np
-
+import random
 
 class HeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
 
@@ -53,12 +53,17 @@ class HeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
 
         _radii = [0] + [constraint.radius for constraint in constraints]
 
+        # randomly assign number of subdivisions within range
+        if self.distribute_subdivisions and self.augment_data: 
+            num_subdivisions = random.randint(0, self.augment_subdivisions)
+        else:
+            num_subdivisions = self.augment_subdivisions
         # probability of augmenting the data
-        if self.augment_data and np.random.rand() < self.augment_data:
+        if self.augment_data and np.random.rand() < self.augment_prob:
             # we can augment the data by picking a radius at random
             # between (0+eps) and the max radius and inserting it into the list
 
-            for _ in range(self.augment_subdivisions):
+            for _ in range(num_subdivisions):
                 aug_radius = (0.90 * torch.rand(1) + 0.05) * _radii[-1]
 
                 # find where it fits into the list
