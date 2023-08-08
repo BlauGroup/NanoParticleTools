@@ -11,7 +11,7 @@ from NanoParticleTools.inputs.photo_physics import (
     get_absorption_cross_section_from_MD_line_strength,
     get_rate_from_MD_line_strength, gaussian_overlap_integral,
     phonon_assisted_energy_transfer_constant, energy_transfer_constant)
-from scipy.integrate import odeint
+from scipy.integrate import solve_ivp
 from functools import lru_cache
 from monty.json import MSONable
 
@@ -312,20 +312,22 @@ class SpectralKinetics(MSONable):
                         if abs(energy_gap -
                                self.incident_wavenumber) > critical_energy_gap:
                             individual_absorption_cross_section = (
-                                absorption_cross_section
-                                * gaussian(energy_gap, energy_gap, abs_sigma))
+                                absorption_cross_section *
+                                gaussian(energy_gap, energy_gap, abs_sigma))
                             mpr_assisted_absorption_correction_factor = np.exp(
                                 -self.mpr_alpha *
                                 np.abs(energy_gap - self.incident_wavenumber))
                         else:
                             individual_absorption_cross_section = (
-                                absorption_cross_section
-                                * gaussian(energy_gap, self.incident_wavenumber, abs_sigma))
+                                absorption_cross_section *
+                                gaussian(energy_gap, self.incident_wavenumber,
+                                         abs_sigma))
                             mpr_assisted_absorption_correction_factor = 1
 
-                        radiative_rate = (self.incident_photon_flux
-                                          * individual_absorption_cross_section
-                                          * mpr_assisted_absorption_correction_factor)
+                        radiative_rate = (
+                            self.incident_photon_flux *
+                            individual_absorption_cross_section *
+                            mpr_assisted_absorption_correction_factor)
 
                         # exponential term accounts for differences between incident
                         # energy and energy level gap
@@ -403,14 +405,15 @@ class SpectralKinetics(MSONable):
 
                         absorption_cross_section = (
                             get_absorption_cross_section_from_MD_line_strength(
-                                current_line_strength, energy_gap, Ji, self.n_refract))
+                                current_line_strength, energy_gap, Ji,
+                                self.n_refract))
                         critical_energy_gap = get_critical_energy_gap(
                             self.mpr_alpha, absfwhm)
                         if np.abs(energy_gap - self.incident_wavenumber
                                   ) > critical_energy_gap:
                             individual_absorption_cross_section = (
-                                absorption_cross_section
-                                * gaussian(energy_gap, energy_gap, abs_sigma))
+                                absorption_cross_section *
+                                gaussian(energy_gap, energy_gap, abs_sigma))
                             mpr_assisted_absorption_correction_factor = np.exp(
                                 -self.mpr_alpha *
                                 np.abs(energy_gap - self.incident_wavenumber))
@@ -418,8 +421,9 @@ class SpectralKinetics(MSONable):
                             # energy mismatch < critical energy gap, therefore don't use
                             # any MPR assistance
                             individual_absorption_cross_section = (
-                                absorption_cross_section
-                                * gaussian(energy_gap, self.incident_wavenumber, abs_sigma))
+                                absorption_cross_section *
+                                gaussian(energy_gap, self.incident_wavenumber,
+                                         abs_sigma))
                             mpr_assisted_absorption_correction_factor = 1
 
                         # TODO: Resolve comment: "FIXME -- this should probably be enabled since
@@ -553,7 +557,8 @@ class SpectralKinetics(MSONable):
 
                         # TODO: Add SK_omitETtransitions to omit specific transitions
                         if (energy_transfer_rate * donor_concentration *
-                                acceptor_concentration) > self.energy_transfer_rate_threshold:
+                                acceptor_concentration
+                            ) > self.energy_transfer_rate_threshold:
                             energy_transfers.append([
                                 combined_di, combined_dj, combined_ai,
                                 combined_aj, energy_transfer_rate
@@ -574,9 +579,9 @@ class SpectralKinetics(MSONable):
             self,
             initial_populations: Optional[Union[Sequence[Sequence[float]],
                                                 str]] = 'ground_state',
-                                                t: List[int] = None):
-        if t is None:
-            t = [0, 1]
+            t_span: Tuple[int, int] = None):
+        if t_span is None:
+            t_span = (0, 0.01)
 
         if isinstance(initial_populations, list):
             # check if supplied populations is the proper length
@@ -585,17 +590,26 @@ class SpectralKinetics(MSONable):
             else:
                 raise ValueError(
                     "Supplied Population is invalid. Expected length of {self.total_n_levels, "
-                    "received length of {len(initial_population)}"
-                )
+                    "received length of {len(initial_population)}")
         elif initial_populations == 'ground_state':
             initial_populations = self.get_ground_state()
         else:
             raise ValueError(
                 "Invalid argument supplied for: initial_populations")
 
-        sol = odeint(dNdt_from_populations, initial_populations, t, args=(self,))
+        def get_dNdt_fn(sk):
 
-        return sol
+            def dNdt_fn(t, y):
+                return dNdt_from_populations(y, t, sk)
+
+            return dNdt_fn
+
+        sol = solve_ivp(get_dNdt_fn(self),
+                        t_span=t_span,
+                        y0=self.get_ground_state(),
+                        method='BDF')
+
+        return sol.t, sol.y.T
 
     def get_ground_state(self):
         initial_populations = []
@@ -621,11 +635,10 @@ def dNdt_from_populations(populations, t, sk):
 
     indices_array = sk.energy_transfer_rate_matrix[:, :4].astype(int)
     di, dj, ai, aj = indices_array.T
-    et_rate = 4 * math.pi / 3 * (
-        sk.energy_transfer_rate_matrix[:, 4] *
-        1e42) * populations[ai] * populations[di] * (
-            sk.min_dopant_distance**(-3) * 1e-21 -
-            (4 * math.pi / 3) * populations[ai])
+    et_rate = 4 * math.pi / 3 * (sk.energy_transfer_rate_matrix[:, 4] *
+                                 1e42) * populations[ai] * populations[di] * (
+                                     sk.min_dopant_distance**(-3) * 1e-21 -
+                                     (4 * math.pi / 3) * populations[ai])
 
     # Prune away the zero rates, this improves performance by >4x per step
     nonzero_idx = np.nonzero(et_rate)
