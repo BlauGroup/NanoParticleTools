@@ -11,7 +11,7 @@ from NanoParticleTools.inputs.photo_physics import (
     get_absorption_cross_section_from_MD_line_strength,
     get_rate_from_MD_line_strength, gaussian_overlap_integral,
     phonon_assisted_energy_transfer_constant, energy_transfer_constant)
-from scipy.integrate import BDF, OdeSolver
+from scipy.integrate import odeint
 from functools import lru_cache
 from monty.json import MSONable
 
@@ -49,7 +49,6 @@ class SpectralKinetics(MSONable):
                  energy_transfer_rate_threshold: Optional[float] = 0.1,
                  radiative_rate_threshold: Optional[float] = 0.0001,
                  stokes_shift: Optional[float] = 150,
-                 ode_solver: Optional[OdeSolver] = BDF,
                  excitation_wavelength: Optional[float] = 976,
                  excitation_power: Optional[float] = 1e7,
                  **kwargs):
@@ -95,7 +94,6 @@ class SpectralKinetics(MSONable):
         self.energy_transfer_rate_threshold = energy_transfer_rate_threshold
         self.radiative_rate_threshold = radiative_rate_threshold
         self.stokes_shift = stokes_shift
-        self.ode_solver = ode_solver
 
         self.excitation_power = excitation_power
         self.excitation_wavelength = excitation_wavelength
@@ -576,24 +574,10 @@ class SpectralKinetics(MSONable):
             self,
             initial_populations: Optional[Union[Sequence[Sequence[float]],
                                                 str]] = 'ground_state',
-            t0: Optional[int] = 0,
-            t_bound: Optional[int] = 1):
-        """
-        SOLVES the differential equations without doing any of the setup or
-        analysis of SK_SetUpAndDoKinetics
-        ASSUMES that all of the proper values have already been stored in the global variables
+                                                t: List[int] = None):
+        if t is None:
+            t = [0, 1]
 
-        Args:
-            initial_populations (Union[Sequence[Sequence[float]], str], None): _description_.
-                Defaults to 'ground_state'.
-            t0 (int, None): _description_.
-                Defaults to 0.
-            t_bound (int, None): _description_.
-                Defaults to 1.
-
-        Returns:
-            _type_: _description_
-        """
         if isinstance(initial_populations, list):
             # check if supplied populations is the proper length
             if len(initial_populations) == self.total_n_levels:
@@ -604,101 +588,54 @@ class SpectralKinetics(MSONable):
                     "received length of {len(initial_population)}"
                 )
         elif initial_populations == 'ground_state':
-            for dopant in self.dopants:
-                dopant.set_initial_populations()
-            initial_populations = np.vstack(
-                [dopant.initial_populations for dopant in self.dopants])
+            initial_populations = self.get_ground_state()
         else:
             raise ValueError(
                 "Invalid argument supplied for: initial_populations")
 
-        population_time = np.zeros((self.num_steps, self.total_n_levels))
+        sol = odeint(dNdt_from_populations, initial_populations, t, args=(self,))
 
-        # TODO: check how ode_solver works and how to retrieve values at each step
-        solver = self.ode_solver(fun=self.differential_kinetics,
-                                 t0=t0,
-                                 y0=initial_populations,
-                                 t_bound=t_bound,
-                                 atol=self.ode_max_error,
-                                 max_step=self.num_steps)
+        return sol
 
-        return population_time
+    def get_ground_state(self):
+        initial_populations = []
+        for dopant in self.dopants:
+            _dopant_states = np.zeros(dopant.n_levels)
+            _dopant_states[0] = 1
+            initial_populations.append(_dopant_states)
+        initial_populations = np.concatenate(initial_populations, axis=-1)
+        return initial_populations
 
-    def differential_kinetics(self, N_pop):
-        """
-        # This function is intended to be called by igor's IntegrateODE function
 
-        # FYI, this function does not use matrix math (e.g., MatrixOps).
-        # It was tested and found to perform slower
-        # than iterating through For loops.
+def dNdt_from_populations(populations, t, sk):
 
-        :param params: params is the parameter wave, which is not used in this function
-            Instead, this function calls global waves M_ETRate, M_RadRate, M_NRrate
-            in $KINETIC_PARAMS_FOLDER These must be set or else the function will return gibberish
-        :param tt: time value at which to calculate derivatives
-        :param N_pop: the fractional occupation or population of each level.
-            yw[0]-yw[3] containing concentrations of A,B,C,D
-        :param dNdt: the differential change in each level corresponding to the elements of N_pop
-            wave to receive dA/dt, dB/dt etc. (output)
-        :return:
-        """
-        num_species = len(N_pop)
-        dNdt = np.zeros(self.total_n_levels + 2)
+    dNdt = np.zeros(sk.total_n_levels)
 
-        # NRate
-        for i in range(0, num_species):
-            for j in range(0, num_species):
-                dNdt[i] -= N_pop[i] * self.non_radiative_rate_matrix[i][
-                    j]  # depletion
-                dNdt[j] += N_pop[i] * self.non_radiative_rate_matrix[i][
-                    j]  # accumulation
+    nr_rate = sk.non_radiative_rate_matrix * populations[:, None]
+    ed_rate = sk.radiative_rate_matrix * populations[:, None]
+    md_rate = sk.magnetic_dipole_rate_matrix * populations[:, None]
 
-        # Electric Dipole Radiative Emission
-        for i in range(0, num_species):
-            for j in range(0, num_species):
-                dNdt[i] -= N_pop[i] * self.radiative_rate_matrix[i][
-                    j]  # depletion
-                dNdt[j] += N_pop[i] * self.radiative_rate_matrix[i][
-                    j]  # accumulation
+    dNdt = dNdt + nr_rate.sum(0) - nr_rate.sum(1)
+    dNdt = dNdt + ed_rate.sum(0) - ed_rate.sum(1)
+    dNdt = dNdt + md_rate.sum(0) - md_rate.sum(1)
 
-        # Magnetic Dipole Radiative Emission
-        for i in range(0, num_species):
-            for j in range(0, num_species):
-                dNdt[i] -= N_pop[i] * self.magnetic_dipole_rate_matrix[i][
-                    j]  # depletion
-                dNdt[j] += N_pop[i] * self.magnetic_dipole_rate_matrix[i][
-                    j]  # accumulation
+    indices_array = sk.energy_transfer_rate_matrix[:, :4].astype(int)
+    di, dj, ai, aj = indices_array.T
+    et_rate = 4 * math.pi / 3 * (
+        sk.energy_transfer_rate_matrix[:, 4] *
+        1e42) * populations[ai] * populations[di] * (
+            sk.min_dopant_distance**(-3) * 1e-21 -
+            (4 * math.pi / 3) * populations[ai])
 
-        # Energy Transfer
-        num_energy_transfer_transitions = len(self.energy_transfer_rate_matrix)
+    # Prune away the zero rates, this improves performance by >4x per step
+    nonzero_idx = np.nonzero(et_rate)
+    nonzero_indices_array = indices_array[nonzero_idx]
+    nonzero_di, nonzero_dj, nonzero_ai, nonzero_aj = nonzero_indices_array.T
+    nonzero_et_rate = et_rate[nonzero_idx]
 
-        for i in range(0, num_energy_transfer_transitions):
+    np.add.at(dNdt, nonzero_indices_array[:, 0], -nonzero_et_rate)
+    np.add.at(dNdt, nonzero_indices_array[:, 2], -nonzero_et_rate)
+    np.add.at(dNdt, nonzero_indices_array[:, 1], nonzero_et_rate)
+    np.add.at(dNdt, nonzero_indices_array[:, 3], nonzero_et_rate)
 
-            di = int(self.energy_transfer_rate_matrix[i][0])
-            dj = int(self.energy_transfer_rate_matrix[i][1])
-            ai = int(self.energy_transfer_rate_matrix[i][2])
-            aj = int(self.energy_transfer_rate_matrix[i][3])
-
-            # FIXME not correct (Original Igor comment
-            # changed W_ETrates[i] to W_ETrates[i][4], confirm with Emory
-            et_rate = 4 * math.pi / 3 * (
-                self.energy_transfer_rate_matrix[i][4] *
-                1e42) * N_pop[ai]**1 * N_pop[di]**1 * (
-                    self.minimum_dopant_distance**(-3) * 1e-21 -
-                    (4 * math.pi / 3) * N_pop[ai])
-
-            # last term doesn't really change things that much.
-            # 1e42 = W_ETrates needs to be converted from cm^6/s to nm^6/s since N_pop is in nm^-3
-            # and W_ET is in cm^6/s
-            # Minimum dopant distance multiplied by 1e-21 to convert from (cm^-3 -> nm^-3
-            if (et_rate > 0):
-                et_rate = et_rate
-            dNdt[ai] -= et_rate
-            dNdt[di] -= et_rate
-            # accumulation
-            dNdt[aj] += et_rate
-            dNdt[dj] += et_rate
-        return dNdt
-
-    def SK_Analysis(self):
-        pass
+    return dNdt
