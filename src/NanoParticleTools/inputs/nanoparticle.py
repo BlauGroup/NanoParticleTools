@@ -38,9 +38,10 @@ class NanoParticleConstraint(ABC, MSONable):
 
     def as_dict(self) -> dict:
         _d = super().as_dict()
-        if self.host_structure.composition.reduced_formula == 'NaYF4':
-            # If this is the default structure, don't save it
-            _d['host_structure'] = None
+        if self.host_structure is not None:
+            if self.host_structure.composition.reduced_formula == 'NaYF4':
+                # If this is the default structure, don't save it
+                _d['host_structure'] = None
         return _d
 
     @abstractmethod
