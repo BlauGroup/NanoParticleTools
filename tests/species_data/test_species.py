@@ -45,12 +45,19 @@ def test_dopant():
     assert dopant.judd_ofelt_parameters == []
     assert dopant.check_intrinsic_data()
 
-    dopant = Dopant('Er', 0.02, 30)
+    # Check Er without specifying n_levels
+    dopant = Dopant('Er', 0.02)
 
     assert len(dopant.energy_levels) == 34
-    assert dopant.n_levels == 30
+    assert dopant.n_levels == 34
     assert dopant.judd_ofelt_parameters == [1.33e-20,
                                             8.6100002e-21, 7.6600002e-21]
+
+    # Check Er with specifying n_levels
+    dopant = Dopant('Er', 0.02, 30)
+
+    assert len(dopant.energy_levels) == 30
+    assert dopant.n_levels == 30
     assert dopant.check_intrinsic_data()
 
 

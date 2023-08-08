@@ -18,6 +18,7 @@ class EnergyLevel(MSONable):
         label (str): The label of the energy level
         energy (float): The energy of the energy level in $cm^{-1}$.
     """
+
     def __init__(self, element: str, label: str, energy: float):
         self.element = element
         self.label = label
@@ -40,6 +41,7 @@ class Transition(MSONable):
         final_level (EnergyLevel): The final energy level of the transition.
         line_strength (float): The line strength of the transition.
     """
+
     def __init__(self, initial_level: EnergyLevel, final_level: EnergyLevel,
                  line_strength: float):
         self.initial_level = initial_level
@@ -107,9 +109,9 @@ class Dopant(MSONable):
         # If more levels are specified than possible, use the max
         # number of levels instead
         if n_levels is None:
-            self.n_levels = len(self.energy_levels)
+            self.n_levels = len(self.species_data()['EnergyLevels'])
         else:
-            self.n_levels = min(n_levels, len(self.energy_levels))
+            self.n_levels = min(n_levels, len(self.species_data()['EnergyLevels']))
 
     def check_intrinsic_data(self) -> bool:
         """
@@ -126,16 +128,15 @@ class Dopant(MSONable):
             raise ValueError(
                 'Error: The number of eigenvectors does not match'
                 'the number of intermediate coupling coefficients')
-        elif len(self.energy_levels) > self.intermediate_coupling_coefficients.shape[0]:
+        elif len(self.energy_levels
+                 ) > self.intermediate_coupling_coefficients.shape[0]:
             raise ValueError(
                 'Error: The number of Energy levels does not match the number'
-                ' of intermediate coupling coefficients'
-            )
+                ' of intermediate coupling coefficients')
         elif len(self.energy_levels) > len(self.slj):
             raise ValueError(
                 'Error: The number of Energy levels does not match the number'
-                ' of SLJ rows'
-            )
+                ' of SLJ rows')
         return True
 
     @lru_cache
@@ -175,7 +176,7 @@ class Dopant(MSONable):
             EnergyLevel(self.symbol, i, j)
             for i, j in zip(self.species_data()['EnergyLevelLabels'],
                             self.species_data()['EnergyLevels'])
-        ]
+        ][:self.n_levels]
 
     @property
     @lru_cache
