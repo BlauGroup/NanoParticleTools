@@ -583,7 +583,7 @@ class SpectralKinetics(MSONable):
         if t_span is None:
             t_span = (0, 0.01)
 
-        if isinstance(initial_populations, list):
+        if isinstance(initial_populations, (list, np.ndarray)):
             # check if supplied populations is the proper length
             if len(initial_populations) == self.total_n_levels:
                 print('Using user input initial population')
@@ -606,7 +606,7 @@ class SpectralKinetics(MSONable):
 
         sol = solve_ivp(get_dNdt_fn(self),
                         t_span=t_span,
-                        y0=self.get_ground_state(),
+                        y0=initial_populations,
                         method='BDF')
 
         return sol.t, sol.y.T
