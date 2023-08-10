@@ -481,9 +481,11 @@ class AugmentHeteroDCVModel(SpectrumModelBase):
         return reps, augmented_reps
 
     def _evaluate_step(self, data):
-        y_hat, augmented_y_hat = self(self.get_inputs(data))
-        loss = self.loss_function(y_hat, data.log_y)
-        return y_hat, loss
+        rep, augmented_rep = self(self.get_representation(self, data))
+        rep = rep.detach().numpy()
+        augmented_rep = augmented_rep.detach().numpy()
+        loss = self.loss_function(rep, augmented_rep)
+        return rep, augmented_rep, loss
 
     def predict_step(self,
                      batch: HeteroData | Batch,
@@ -506,7 +508,7 @@ class AugmentHeteroDCVModel(SpectrumModelBase):
               batch: HeteroData | Batch,
               batch_idx: int | None = None,
               log: bool = True):
-        y_hat, loss = self._evaluate_step(batch)
+        rep, augmented_rep, loss = self._evaluate_step(batch)
 
         # Determine the batch size
         if batch.batch_dict is not None:
@@ -518,13 +520,9 @@ class AugmentHeteroDCVModel(SpectrumModelBase):
         metric_dict = {f'{prefix}_loss': loss}
         if prefix != 'train':
             # For the validation and test sets, log additional metrics
-            metric_dict[f'{prefix}_mse'] = F.mse_loss(y_hat, batch.log_y)
-            metric_dict[f'{prefix}_mae'] = F.l1_loss(y_hat, batch.log_y)
-            metric_dict[f'{prefix}_huber'] = F.huber_loss(y_hat, batch.log_y)
-            metric_dict[f'{prefix}_hinge'] = F.hinge_embedding_loss(
-                y_hat, batch.log_y)
             metric_dict[f'{prefix}_cos_sim'] = F.cosine_similarity(
-                y_hat, batch.log_y, 1).mean(0)
+                rep, augmented_rep, 1).mean(0)
+            #add other metrics if interested
 
         if log:
             self.log_dict(metric_dict, batch_size=batch_size)
