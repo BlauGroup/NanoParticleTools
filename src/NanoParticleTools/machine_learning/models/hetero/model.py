@@ -255,7 +255,7 @@ class DopantInteractionHeteroModel(SpectrumModelBase):
             batch_dict=data.batch_dict)
         return reps
 
-    def _evaluate_step(self, data):
+    def evaluate_step(self, data):
         y_hat = self(
             dopant_types=data['dopant'].types,
             dopant_concs=data['dopant'].x,
@@ -301,7 +301,7 @@ class DopantInteractionHeteroModel(SpectrumModelBase):
               batch: Data | Batch,
               batch_idx: int | None = None,
               log: bool = True):
-        y_hat, loss = self._evaluate_step(batch)
+        y_hat, loss = self.evaluate_step(batch)
 
         # Determine the batch size
         if batch.batch_dict is not None:

@@ -28,7 +28,7 @@ class EnsembleModel(nn.Module):
         x = torch.cat(output, dim=-1)
         return {'y': x, 'y_hat': x.mean(-1), 'std': x.std()}
 
-    def _evaluate_step(self, data):
+    def evaluate_step(self, data):
         output = []
         for module in self.models:
             y_hat = module.predict_step(data)

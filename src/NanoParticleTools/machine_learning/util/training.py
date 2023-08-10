@@ -1,5 +1,5 @@
 from NanoParticleTools.inputs.nanoparticle import SphericalConstraint
-from NanoParticleTools.machine_learning.util.learning_rate import get_sequential
+from NanoParticleTools.machine_learning.util.learning_rate import ReduceLROnPlateauWithWarmup
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.callbacks import (LearningRateMonitor,
                                          StochasticWeightAveraging,
@@ -27,9 +27,10 @@ import warnings
 def train_spectrum_model(config,
                          model_cls,
                          data_module,
-                         lr_scheduler,
+                         lr_scheduler: torch.optim.lr_scheduler.
+                         _LRScheduler = ReduceLROnPlateauWithWarmup,
+                         lr_scheduler_kwargs: Optional[dict] = None,
                          num_epochs: Optional[int] = 2000,
-                         augment_loss=False,
                          ray_tune: Optional[bool] = False,
                          early_stop: Optional[bool] = False,
                          swa: Optional[bool] = False,
@@ -48,6 +49,13 @@ def train_spectrum_model(config,
         swa: whether or not to use stochastic weight averaging
 
         """
+    if lr_scheduler_kwargs is None:
+        lr_scheduler_kwargs = {
+            'warmup_epochs': 10,
+            'patience': 100,
+            'factor': 0.8
+        }
+
     if trainer_device_config is None:
         trainer_device_config = {'accelerator': 'auto'}
 
@@ -56,6 +64,7 @@ def train_spectrum_model(config,
 
     # Make the model
     model = model_cls(lr_scheduler=lr_scheduler,
+                      lr_scheduler_kwargs=lr_scheduler_kwargs,
                       optimizer_type='adam',
                       **config)
 
@@ -141,10 +150,11 @@ def train_spectrum_model(config,
 def train_uv_model(config,
                    model_cls,
                    data_module,
-                   lr_scheduler,
+                   lr_scheduler: torch.optim.lr_scheduler.
+                   _LRScheduler = ReduceLROnPlateauWithWarmup,
+                   lr_scheduler_kwargs: dict = None,
                    initial_model: Optional[pl.LightningModule] = None,
                    num_epochs: Optional[int] = 2000,
-                   augment_loss=False,
                    ray_tune: Optional[bool] = False,
                    early_stop: Optional[bool] = False,
                    early_stop_patience: Optional[int] = 200,
@@ -163,7 +173,14 @@ def train_uv_model(config,
         early_stop: whether or not to use early stopping
         swa: whether or not to use stochastic weight averaging
 
-        """
+    """
+    if lr_scheduler_kwargs is None:
+        lr_scheduler_kwargs = {
+            'warmup_epochs': 10,
+            'patience': 100,
+            'factor': 0.8
+        }
+
     if trainer_device_config is None:
         trainer_device_config = {'accelerator': 'auto'}
 
@@ -173,6 +190,7 @@ def train_uv_model(config,
     # Make the model
     if initial_model is None:
         model = model_cls(lr_scheduler=lr_scheduler,
+                          lr_scheduler_kwargs=lr_scheduler_kwargs,
                           optimizer_type='adam',
                           **config)
     else:
@@ -188,7 +206,8 @@ def train_uv_model(config,
     # if augment_loss:
     #     callbacks.append(LossAugmentCallback(aug_loss_epoch=augment_loss))
     if early_stop:
-        callbacks.append(EarlyStopping(monitor='val_loss', patience=early_stop_patience))
+        callbacks.append(
+            EarlyStopping(monitor='val_loss', patience=early_stop_patience))
     if swa:
         callbacks.append(StochasticWeightAveraging(swa_lrs=1e-3))
     if ray_tune:
@@ -263,7 +282,8 @@ class NPMCTrainer():
         train_single_fn: Optional[callable] = train_uv_model,
         models_per_device: Optional[int] = 1,
         num_epochs=2000,
-        lr_scheduler=get_sequential,
+        lr_scheduler=ReduceLROnPlateauWithWarmup,
+        lr_scheduler_kwargs=None,
         train_fn_kwargs={},
     ):
         self.data_module = data_module
@@ -271,6 +291,7 @@ class NPMCTrainer():
         self.train_single_fn = train_single_fn
         self.num_epochs = num_epochs
         self.lr_scheduler = lr_scheduler
+        self.lr_scheduler_kwargs = lr_scheduler_kwargs
 
         self.wandb_entity = wandb_entity
         if wandb_project is None:
@@ -315,6 +336,7 @@ class NPMCTrainer():
                 config=model_config,
                 data_module=self.data_module,
                 lr_scheduler=self.lr_scheduler,
+                lr_scheduler_kwargs=self.lr_scheduler_kwargs,
                 num_epochs=self.num_epochs,
                 ray_tune=False,
                 early_stop=False,
@@ -506,7 +528,7 @@ def log_additional_data(model, data_module, wandb_logger):
 
 
 def get_logged_data(model, data):
-    y_hat, loss = model._evaluate_step(data)
+    y_hat, loss = model.evaluate_step(data)
 
     spectra_x = data.spectra_x.squeeze()
     npmc_spectrum = data.y.squeeze()

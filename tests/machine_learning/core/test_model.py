@@ -1,6 +1,5 @@
 from NanoParticleTools.machine_learning.core import SpectrumModelBase
-from NanoParticleTools.machine_learning.util.learning_rate import (
-    get_reduce_with_warmup, ReduceLROnPlateauWithWarmup)
+from NanoParticleTools.machine_learning.util.learning_rate import ReduceLROnPlateauWithWarmup
 from torch_geometric.data import Data, Batch
 import torch
 
@@ -37,7 +36,10 @@ def test_base_model():
 def test_configure_optimizers():
     model = TestModel(learning_rate=1e-5,
                       l2_regularization_weight=1e-4,
-                      lr_scheduler=get_reduce_with_warmup,
+                      lr_scheduler=ReduceLROnPlateauWithWarmup,
+                      lr_scheduler_kwargs={'warmup_epochs': 10,
+                                           'patience': 100,
+                                           'factor': 0.8},
                       loss_function=torch.nn.functional.mse_loss,
                       additional_metadata={})
     optimizers, lr_schedulers = model.configure_optimizers()
@@ -66,21 +68,24 @@ def test_configure_optimizers():
 def test_evaluate_step():
     model = TestModel(learning_rate=1e-5,
                       l2_regularization_weight=1e-4,
-                      lr_scheduler=get_reduce_with_warmup,
+                      lr_scheduler=ReduceLROnPlateauWithWarmup,
+                      lr_scheduler_kwargs={'warmup_epochs': 10,
+                                           'patience': 100,
+                                           'factor': 0.8},
                       loss_function=torch.nn.functional.mse_loss,
                       additional_metadata={})
 
     x = torch.rand(10)
     log_y = torch.rand(4)
     data = Data(x=x, log_y=log_y)
-    y_hat, loss = model._evaluate_step(data)
+    y_hat, loss = model.evaluate_step(data)
     assert y_hat.shape == (4, )
     assert loss.shape == ()
 
     x = torch.rand(1, 10)
     log_y = torch.rand(1, 4)
     batch = Batch.from_data_list([Data(x=x, log_y=log_y) for _ in range(16)])
-    y_hat, loss = model._evaluate_step(batch)
+    y_hat, loss = model.evaluate_step(batch)
     assert y_hat.shape == (16, 4)
     assert loss.shape == ()
 
@@ -88,7 +93,10 @@ def test_evaluate_step():
 def test_training_step():
     model = TestModel(learning_rate=1e-5,
                       l2_regularization_weight=1e-4,
-                      lr_scheduler=get_reduce_with_warmup,
+                      lr_scheduler=ReduceLROnPlateauWithWarmup,
+                      lr_scheduler_kwargs={'warmup_epochs': 10,
+                                           'patience': 100,
+                                           'factor': 0.8},
                       loss_function=torch.nn.functional.mse_loss,
                       additional_metadata={})
 
@@ -102,7 +110,10 @@ def test_training_step():
 def test_validation_step():
     model = TestModel(learning_rate=1e-5,
                       l2_regularization_weight=1e-4,
-                      lr_scheduler=get_reduce_with_warmup,
+                      lr_scheduler=ReduceLROnPlateauWithWarmup,
+                      lr_scheduler_kwargs={'warmup_epochs': 10,
+                                           'patience': 100,
+                                           'factor': 0.8},
                       loss_function=torch.nn.functional.mse_loss,
                       additional_metadata={})
 
@@ -116,7 +127,10 @@ def test_validation_step():
 def test_test_step():
     model = TestModel(learning_rate=1e-5,
                       l2_regularization_weight=1e-4,
-                      lr_scheduler=get_reduce_with_warmup,
+                      lr_scheduler=ReduceLROnPlateauWithWarmup,
+                      lr_scheduler_kwargs={'warmup_epochs': 10,
+                                           'patience': 100,
+                                           'factor': 0.8},
                       loss_function=torch.nn.functional.mse_loss,
                       additional_metadata={})
 
@@ -130,7 +144,10 @@ def test_test_step():
 def test_predict_step():
     model = TestModel(learning_rate=1e-5,
                       l2_regularization_weight=1e-4,
-                      lr_scheduler=get_reduce_with_warmup,
+                      lr_scheduler=ReduceLROnPlateauWithWarmup,
+                      lr_scheduler_kwargs={'warmup_epochs': 10,
+                                           'patience': 100,
+                                           'factor': 0.8},
                       loss_function=torch.nn.functional.mse_loss,
                       additional_metadata={})
 

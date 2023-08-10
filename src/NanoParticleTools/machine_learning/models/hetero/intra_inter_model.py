@@ -341,7 +341,7 @@ class HeteroDCVModel(SpectrumModelBase):
         reps = self.representation_module(**self.get_inputs(data))
         return reps
 
-    def _evaluate_step(self, data):
+    def evaluate_step(self, data):
         y_hat = self(**self.get_inputs(data))
         loss = self.loss_function(y_hat, data.log_y)
         return y_hat, loss
@@ -367,7 +367,7 @@ class HeteroDCVModel(SpectrumModelBase):
               batch: HeteroData | Batch,
               batch_idx: int | None = None,
               log: bool = True):
-        y_hat, loss = self._evaluate_step(batch)
+        y_hat, loss = self.evaluate_step(batch)
 
         # Determine the batch size
         if batch.batch_dict is not None:

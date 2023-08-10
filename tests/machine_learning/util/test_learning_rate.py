@@ -1,5 +1,5 @@
 from NanoParticleTools.machine_learning.util.learning_rate import (
-    get_sequential, get_reduce_with_warmup, ReduceLROnPlateauWithWarmup)
+    WarmupSequentialLR, ReduceLROnPlateauWithWarmup)
 import pytest
 import torch
 
@@ -14,22 +14,18 @@ def optimizer(model):
     return torch.optim.Adam(model.parameters(), lr=1e-3)
 
 
-def test_get_sequential(optimizer):
-    lr_scheduler = get_sequential(optimizer)
+def test_SequentialLR(optimizer):
+    lr_scheduler = WarmupSequentialLR(optimizer)
     assert lr_scheduler is not None
     assert isinstance(lr_scheduler, torch.optim.lr_scheduler.SequentialLR)
-
-
-def test_get_reduce_with_warmup(optimizer):
-    lr_scheduler = get_reduce_with_warmup(optimizer)
-    assert lr_scheduler is not None
-    assert isinstance(lr_scheduler, ReduceLROnPlateauWithWarmup)
 
 
 def test_ReduceLROnPlateauWithWarmup(optimizer):
     lr_scheduler = ReduceLROnPlateauWithWarmup(3,
                                                patience=5,
+                                               factor=0.1,
                                                optimizer=optimizer)
+    print(lr_scheduler.patience)
     expected_lr = [
         0.0001, 0.0002, 0.00030000000000000003, 0.00030000000000000003,
         0.00030000000000000003, 0.00030000000000000003, 0.00030000000000000003,

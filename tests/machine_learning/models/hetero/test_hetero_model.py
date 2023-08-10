@@ -36,7 +36,7 @@ def dataset(feature_processor, label_processor):
 def test_model(dataset):
     model = DopantInteractionHeteroModel()
 
-    model._evaluate_step(dataset[0])
+    model.evaluate_step(dataset[0])
 
 
 def test_embedding(dataset):
@@ -45,7 +45,7 @@ def test_embedding(dataset):
                                          use_inverse_concentration=False,
                                          interaction_embedding=True)
 
-    model._evaluate_step(dataset[0])
+    model.evaluate_step(dataset[0])
 
 
 def test_model_variants(dataset):
@@ -53,23 +53,23 @@ def test_model_variants(dataset):
                                          normalize_interaction_by_volume=False,
                                          use_inverse_concentration=False)
 
-    model._evaluate_step(dataset[0])
+    model.evaluate_step(dataset[0])
 
     model = DopantInteractionHeteroModel(use_volume_in_dopant_constraint=False,
                                          normalize_interaction_by_volume=True,
                                          use_inverse_concentration=False)
 
-    model._evaluate_step(dataset[0])
+    model.evaluate_step(dataset[0])
 
     model = DopantInteractionHeteroModel(use_volume_in_dopant_constraint=False,
                                          normalize_interaction_by_volume=False,
                                          use_inverse_concentration=True)
 
-    model._evaluate_step(dataset[0])
+    model.evaluate_step(dataset[0])
 
     model = DopantInteractionHeteroModel(n_input_nodes=10,
                                          use_volume_in_dopant_constraint=True,
                                          normalize_interaction_by_volume=True,
                                          use_inverse_concentration=True)
 
-    model._evaluate_step(dataset[0])
+    model.evaluate_step(dataset[0])
