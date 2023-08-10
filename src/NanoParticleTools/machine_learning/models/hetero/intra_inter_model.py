@@ -390,3 +390,167 @@ class HeteroDCVModel(SpectrumModelBase):
         if log:
             self.log_dict(metric_dict, batch_size=batch_size)
         return loss, metric_dict
+
+class AugmentHeteroDCVModel(SpectrumModelBase):
+
+    def __init__(self,
+                 embed_dim: int = 16,
+                 n_message_passing: int = 3,
+                 nsigma=5,
+                 readout_layers: List[int] = [128],
+                 **kwargs):
+        if 'n_input_nodes' in kwargs:
+            warnings.warn(
+                'Cannot override n_input_nodes for this model. It is inferred from'
+                'the embed_dim.')
+            del kwargs['n_input_nodes']
+
+        super().__init__(n_input_nodes=embed_dim, **kwargs)
+
+        self.embed_dim = embed_dim
+        self.n_message_passing = n_message_passing
+        self.nsigma = nsigma
+        self.readout_layers = readout_layers
+
+        self.representation_module = HeteroDCVRepresentationModule(
+            self.embed_dim, self.n_message_passing, self.nsigma, **kwargs)
+
+        self.readout = NonLinearMLP(embed_dim, 1, self.readout_layers, 0.25, nn.SiLU)
+
+    def forward(self, input_dict: Dict, 
+                augmented_input_dict: Dict
+                ):
+        dopant_types = input_dict['dopant_types']
+        dopant_concs  = input_dict['dopant_concs']
+        dopant_constraint_indices = input_dict['dopant_constraint_indices']
+        interaction_type_indices = input_dict['interaction_type_indices']
+        interaction_types = input_dict['interaction_types']
+        interaction_dopant_indices = input_dict['interaction_dopant_indices']
+        intraaction_type_indices = input_dict['intraaction_type_indices']
+        intraaction_types = input_dict['intraaction_types']
+        intraaction_dopant_indices = input_dict['intraaction_dopant_indices']
+        edge_index_dict = input_dict['edge_index_dict']
+        radii = input_dict['radii']
+        constraint_radii_idx = input_dict['constraint_radii_idx']
+        batch_dict = augmented_input_dict['batch_dict']
+
+
+        subdivided_dopant_types = augmented_input_dict['dopant_types']
+        subdivided_dopant_concs = augmented_input_dict['dopant_concs']
+        subdivided_dopant_constraint_indices = augmented_input_dict['dopant_constraint_indices']
+        subdivided_interaction_type_indices = augmented_input_dict['interaction_type_indices']
+        subdivided_interaction_types = augmented_input_dict['interaction_types']
+        subdivided_interaction_dopant_indices = augmented_input_dict['interaction_dopant_indices']
+        subdivided_intraaction_type_indices = augmented_input_dict['intraaction_type_indices']
+        subdivided_intraaction_types = augmented_input_dict['intraaction_types']
+        subdivided_intraaction_dopant_indices = augmented_input_dict['intraaction_dopant_indices']
+        subdivided_edge_index_dict = augmented_input_dict['edge_index_dict']# how to differentiate these ???
+        subdivided_radii = augmented_input_dict['radii']
+        subdivided_constraint_radii_idx = augmented_input_dict['constraint_radii_idx']
+        subdivided_batch_dict = augmented_input_dict['batch_dict']
+
+        representation = self.representation_module(
+            dopant_types, dopant_concs, dopant_constraint_indices,
+            interaction_type_indices, interaction_types,
+            interaction_dopant_indices, intraaction_type_indices,
+            intraaction_types, intraaction_dopant_indices, edge_index_dict,
+            radii, constraint_radii_idx, batch_dict)
+        out = self.readout(representation)
+
+        subdivision_representation = self.representation_module(
+            subdivided_dopant_types, subdivided_dopant_concs, subdivided_dopant_constraint_indices,
+            subdivided_interaction_type_indices, subdivided_interaction_types,
+            subdivided_interaction_dopant_indices, subdivided_intraaction_type_indices,
+            subdivided_intraaction_types, subdivided_intraaction_dopant_indices, subdivided_edge_index_dict,
+            subdivided_radii, subdivided_constraint_radii_idx, subdivided_batch_dict)
+        subdivision_out = self.readout(subdivision_representation)
+
+        return out, subdivision_out
+
+    def get_inputs(self, data: HeteroData) -> Dict:
+
+        input_dict = {'dopant_types': data['dopant'].types,
+                      'dopant_concs': data['dopant'].x,
+                      'dopant_constraint_indices': data['dopant'].constraint_indices,
+                      'interaction_type_indices': data['interaction'].type_indices,
+                      'interaction_types': data['interaction'].types,
+                      'interaction_dopant_indices': data['interaction'].dopant_indices,
+                      'intraaction_type_indices': data['intraaction'].type_indices,
+                      'intraaction_types': data['intraaction'].types,
+                      'intraaction_dopant_indices': data['intraaction'].dopant_indices,
+                      'edge_index_dict': data.edge_index_dict,
+                      'radii': data.radii,
+                      'constraint_radii_idx': data.constraint_radii_idx,
+                      'batch_dict': data.batch_dict}
+
+        augmented_input_dict = {'dopant_types': data['subdivided_dopant'].types,
+                                'dopant_concs': data['subdivided_dopant'].x,
+                                'dopant_constraint_indices': data['subdivided_dopant'].constraint_indices,
+                                'interaction_type_indices': data['subdivided_interaction'].type_indices,
+                                'interaction_types': data['subdivided_interaction'].types,
+                                'interaction_dopant_indices': data['subdivided_interaction'].dopant_indices,
+                                'intraaction_type_indices': data['subdivided_intraaction'].type_indices,
+                                'intraaction_types': data['subdivided_intraaction'].types,
+                                'intraaction_dopant_indices': data['subdivided_intraaction'].dopant_indices,
+                                'edge_index_dict': data.edge_index_dict, #fix this
+                                'radii': data.subdivided_radii,
+                                'constraint_radii_idx': data.subdivided_constraint_radii_idx,
+                                'batch_dict': data.subdivided_batch_dict}
+        
+        return input_dict, augmented_input_dict
+
+    def get_representation(self, data):
+        input_dict, augmented_input_dict = self.get_inputs(data)
+        reps = self.representation_module(**input_dict)
+        augmented_reps = self.representation_module(**augmented_input_dict)
+        return reps, augmented_reps
+
+    def _evaluate_step(self, data):
+        y_hat, augmented_y_hat = self(self.get_inputs(data))
+        loss = self.loss_function(y_hat, data.log_y)
+        return y_hat, loss
+
+    def predict_step(self,
+                     batch: HeteroData | Batch,
+                     batch_idx: int | None = None) -> torch.Tensor:
+        """
+        Make a prediction for a batch of data.
+
+        Args:
+            batch (_type_): _description_
+            batch_idx (int | None, optional): _description_. Defaults to None.
+
+        Returns:
+            torch.Tensor: _description_
+        """
+        y_hat, augmented_y_hat = self(self.get_inputs(batch))
+        return y_hat
+
+    def _step(self,
+              prefix: str,
+              batch: HeteroData | Batch,
+              batch_idx: int | None = None,
+              log: bool = True):
+        y_hat, loss = self._evaluate_step(batch)
+
+        # Determine the batch size
+        if batch.batch_dict is not None:
+            batch_size = batch.batch_dict["dopant"].size(0)
+        else:
+            batch_size = 1
+
+        # Log the loss
+        metric_dict = {f'{prefix}_loss': loss}
+        if prefix != 'train':
+            # For the validation and test sets, log additional metrics
+            metric_dict[f'{prefix}_mse'] = F.mse_loss(y_hat, batch.log_y)
+            metric_dict[f'{prefix}_mae'] = F.l1_loss(y_hat, batch.log_y)
+            metric_dict[f'{prefix}_huber'] = F.huber_loss(y_hat, batch.log_y)
+            metric_dict[f'{prefix}_hinge'] = F.hinge_embedding_loss(
+                y_hat, batch.log_y)
+            metric_dict[f'{prefix}_cos_sim'] = F.cosine_similarity(
+                y_hat, batch.log_y, 1).mean(0)
+
+        if log:
+            self.log_dict(metric_dict, batch_size=batch_size)
+        return loss, metric_dict
