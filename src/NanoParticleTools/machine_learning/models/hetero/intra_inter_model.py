@@ -392,31 +392,6 @@ class HeteroDCVModel(SpectrumModelBase):
         return loss, metric_dict
 
 class AugmentHeteroDCVModel(SpectrumModelBase):
-
-    def __init__(self,
-                 embed_dim: int = 16,
-                 n_message_passing: int = 3,
-                 nsigma=5,
-                 readout_layers: List[int] = [128],
-                 **kwargs):
-        if 'n_input_nodes' in kwargs:
-            warnings.warn(
-                'Cannot override n_input_nodes for this model. It is inferred from'
-                'the embed_dim.')
-            del kwargs['n_input_nodes']
-
-        super().__init__(n_input_nodes=embed_dim, **kwargs)
-
-        self.embed_dim = embed_dim
-        self.n_message_passing = n_message_passing
-        self.nsigma = nsigma
-        self.readout_layers = readout_layers
-
-        self.representation_module = HeteroDCVRepresentationModule(
-            self.embed_dim, self.n_message_passing, self.nsigma, **kwargs)
-
-        self.readout = NonLinearMLP(embed_dim, 1, self.readout_layers, 0.25, nn.SiLU)
-
     def forward(self, input_dict: Dict, 
                 augmented_input_dict: Dict
                 ):
@@ -444,7 +419,7 @@ class AugmentHeteroDCVModel(SpectrumModelBase):
         subdivided_intraaction_type_indices = augmented_input_dict['intraaction_type_indices']
         subdivided_intraaction_types = augmented_input_dict['intraaction_types']
         subdivided_intraaction_dopant_indices = augmented_input_dict['intraaction_dopant_indices']
-        subdivided_edge_index_dict = augmented_input_dict['edge_index_dict']# how to differentiate these ???
+        subdivided_edge_index_dict = augmented_input_dict['subdivided_edge_index_dict']# how to differentiate these ???
         subdivided_radii = augmented_input_dict['radii']
         subdivided_constraint_radii_idx = augmented_input_dict['constraint_radii_idx']
         subdivided_batch_dict = augmented_input_dict['batch_dict']
@@ -492,7 +467,7 @@ class AugmentHeteroDCVModel(SpectrumModelBase):
                                 'intraaction_type_indices': data['subdivided_intraaction'].type_indices,
                                 'intraaction_types': data['subdivided_intraaction'].types,
                                 'intraaction_dopant_indices': data['subdivided_intraaction'].dopant_indices,
-                                'edge_index_dict': data.edge_index_dict, #fix this
+                                'edge_index_dict': data.subdivided_edge_index_dict, #fix this
                                 'radii': data.subdivided_radii,
                                 'constraint_radii_idx': data.subdivided_constraint_radii_idx,
                                 'batch_dict': data.subdivided_batch_dict}
