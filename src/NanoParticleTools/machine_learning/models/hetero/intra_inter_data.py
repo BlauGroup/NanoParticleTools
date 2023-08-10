@@ -575,11 +575,11 @@ class AugmentededHeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
         data['subdivided_interaction']['dopant_indices'] = torch.tensor(
             interaction_dopant_indices, dtype=torch.long)
         data['subdivided_dopant', 'coupled_to',
-             'subdivided_interaction']['edge_index'] = torch.tensor(
+             'subdivided_interaction']['subdivided_edge_index'] = torch.tensor(
                  interaction_edge_index_forward).reshape(-1,
                                                          2).transpose(0, 1)
         data['subdivided_interaction', 'coupled_to',
-             'subdivided_dopant']['edge_index'] = torch.tensor(
+             'subdivided_dopant']['subdivided_edge_index'] = torch.tensor(
                  interaction_edge_index_backward).reshape(-1,
                                                           2).transpose(0, 1)
         # Keep track of increment (so we can combine graphs)
@@ -596,11 +596,11 @@ class AugmentededHeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
         data['subdivided_intraaction']['dopant_indices'] = torch.tensor(
             intraaction_dopant_indices, dtype=torch.long)
         data['subdivided_dopant', 'coupled_to',
-             'subdivided_intraaction']['edge_index'] = torch.tensor(
+             'subdivided_intraaction']['subdivided_edge_index'] = torch.tensor(
                  intraaction_edge_index_forward).reshape(-1,
                                                          2).transpose(0, 1)
         data['subdivided_intraaction', 'coupled_to',
-             'subdivided_dopant']['edge_index'] = torch.tensor(
+             'subdivided_dopant']['subdivided_edge_index'] = torch.tensor(
                  intraaction_edge_index_backward).reshape(-1,
                                                           2).transpose(0, 1)
         # Keep track of increment (so we can combine graphs)
