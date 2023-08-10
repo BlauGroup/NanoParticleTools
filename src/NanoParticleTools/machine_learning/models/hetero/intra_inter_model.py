@@ -391,7 +391,7 @@ class HeteroDCVModel(SpectrumModelBase):
             self.log_dict(metric_dict, batch_size=batch_size)
         return loss, metric_dict
 
-class AugmentHeteroDCVModel(SpectrumModelBase):
+class AugmentHeteroDCVModel(HeteroDCVModel):
     def forward(self, input_dict: Dict, 
                 augmented_input_dict: Dict
                 ):
