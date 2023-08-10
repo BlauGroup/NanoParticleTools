@@ -392,6 +392,17 @@ class HeteroDCVModel(SpectrumModelBase):
         return loss, metric_dict
 
 class AugmentHeteroDCVModel(HeteroDCVModel):
+
+    def __init__(self,
+                 initial_model: HeteroDCVModel):
+        self.embed_dim = initial_model.embed_dim
+        self.n_message_passing = initial_model.n_message_passing
+        self.nsigma = initial_model.nsigma
+        self.readout_layers = initial_model.readout_layers
+        
+        self.representation_module = initial_model.representation_module
+        self.readout = initial_model.readout
+
     def forward(self, input_dict: Dict, 
                 augmented_input_dict: Dict
                 ):
