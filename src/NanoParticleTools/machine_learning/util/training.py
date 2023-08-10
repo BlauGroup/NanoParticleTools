@@ -286,7 +286,7 @@ def train_uv_model_augment(config,
                           optimizer_type='adam',
                           **config)
     else:
-        model = initial_model
+        model = model_cls(initial_model)
     # Make WandB logger
     wandb_logger = WandbLogger(log_model=True, **wandb_config)
 
