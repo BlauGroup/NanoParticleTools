@@ -373,10 +373,10 @@ class AugmentededHeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
             'subdivided_dopant': {},
             'subdivided_interaction': {},
             'subdivided_intraaction': {},
-            ('subdivided_dopant', 'subdivided_coupled_to', 'subdivided_interaction'): {},
-            ('subdivided_interaction', 'subdivided_coupled_to', 'subdivided_dopant'): {},
-            ('subdivided_dopant', 'subdivided_coupled_to', 'subdivided_intraaction'): {},
-            ('subdivided_intraaction', 'subdivided_coupled_to', 'subdivided_dopant'): {},
+            ('subdivided_dopant', 'coupled_to', 'subdivided_interaction'): {},
+            ('subdivided_interaction', 'coupled_to', 'subdivided_dopant'): {},
+            ('subdivided_dopant', 'coupled_to', 'subdivided_intraaction'): {},
+            ('subdivided_intraaction', 'coupled_to', 'subdivided_dopant'): {},
         }
 
         radii = torch.cat(
