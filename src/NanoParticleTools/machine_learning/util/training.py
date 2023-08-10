@@ -248,6 +248,115 @@ def train_uv_model(config,
 
     return model
 
+def train_uv_model_augment(config,
+                   model_cls,
+                   data_module,
+                   lr_scheduler,
+                   initial_model: Optional[pl.LightningModule] = None,
+                   num_epochs: Optional[int] = 2000,
+                   augment_loss=False,
+                   ray_tune: Optional[bool] = False,
+                   early_stop: Optional[bool] = False,
+                   early_stop_patience: Optional[int] = 200,
+                   swa: Optional[bool] = False,
+                   save_checkpoints: Optional[bool] = True,
+                   wandb_config: Optional[dict] = None,
+                   trainer_device_config: Optional[dict] = None,
+                   additional_callbacks: Optional[List] = None):
+    """
+        params
+        model_cls:
+        model_config:
+        lr_scheduler:
+        augment_loss:
+        ray_tune: whether or not this is a ray tune run
+        early_stop: whether or not to use early stopping
+        swa: whether or not to use stochastic weight averaging
+
+        """
+    if trainer_device_config is None:
+        trainer_device_config = {'accelerator': 'auto'}
+
+    if wandb_config is None:
+        wandb_config = {'name': None}
+
+    # Make the model
+    if initial_model is None:
+        model = model_cls(lr_scheduler=lr_scheduler,
+                          optimizer_type='adam',
+                          **config)
+    else:
+        model = initial_model
+    # Make WandB logger
+    wandb_logger = WandbLogger(log_model=True, **wandb_config)
+
+    # Configure callbacks
+    callbacks = []
+    callbacks.append(LearningRateMonitor(logging_interval='step'))
+
+    # Disable augment loss for now. It seems to not help
+    # if augment_loss:
+    #     callbacks.append(LossAugmentCallback(aug_loss_epoch=augment_loss))
+    if early_stop:
+        callbacks.append(EarlyStopping(monitor='val_loss', patience=early_stop_patience))
+    if swa:
+        callbacks.append(StochasticWeightAveraging(swa_lrs=1e-3))
+    if ray_tune:
+        callbacks.append(
+            TuneReportCallback({"loss": "val_loss"}, on="validation_end"))
+    if save_checkpoints:
+        checkpoint_callback = ModelCheckpoint(save_top_k=1,
+                                              monitor="val_loss",
+                                              save_last=True)
+        callbacks.append(checkpoint_callback)
+
+    if additional_callbacks is not None:
+        # Allow for custom callbacks to be passed in
+        callbacks.extend(additional_callbacks)
+
+    # Make the trainer
+    trainer = pl.Trainer(max_epochs=num_epochs,
+                         enable_progress_bar=False,
+                         logger=wandb_logger,
+                         callbacks=callbacks,
+                         **trainer_device_config)
+
+    try:
+        trainer.fit(model=model, datamodule=data_module)
+    except Exception as e:
+        if isinstance(e, KeyboardInterrupt):
+            # If keyboard interupt, we'll let the statistics be logged
+            pass
+        else:
+            # If there's any other exception, we'll let it raise
+            raise e
+
+    # Load the best model checkpoint, set it to evaluation mode, and then evaluate the metrics
+    # for the training, validation, and test sets
+    model = model_cls.load_from_checkpoint(checkpoint_callback.best_model_path)
+    model.eval()
+
+    # Train metrics
+    train_metrics = {}
+    factor = 1 / len(data_module.train_dataloader())
+    for batch_idx, batch in enumerate(data_module.train_dataloader()):
+        _, _, _loss_d = model._step('train_eval', batch, batch_idx, log=False)
+        for key in _loss_d:
+            try:
+                train_metrics[key] += _loss_d[key].item() * factor
+            except KeyError:
+                train_metrics[key] = _loss_d[key] * factor
+    wandb_logger.log_metrics(train_metrics)
+
+    # Validation metrics
+    trainer.validate(dataloaders=data_module.val_dataloader(),
+                     ckpt_path='best')
+    # Test metrics
+    trainer.test(dataloaders=data_module.test_dataloader(), ckpt_path='best')
+
+    wandb.finish()
+
+    return model
 
 class NPMCTrainer():
 
