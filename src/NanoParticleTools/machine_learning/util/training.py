@@ -252,7 +252,7 @@ def train_uv_model_augment(config,
                    model_cls,
                    data_module,
                    lr_scheduler,
-                   initial_model: Optional[pl.LightningModule] = None,
+                   initial_model_path: Optional[__path__] = None,
                    num_epochs: Optional[int] = 2000,
                    augment_loss=False,
                    ray_tune: Optional[bool] = False,
@@ -281,12 +281,12 @@ def train_uv_model_augment(config,
         wandb_config = {'name': None}
 
     # Make the model
-    if initial_model is None:
+    if initial_model_path is None:
         model = model_cls(lr_scheduler=lr_scheduler,
                           optimizer_type='adam',
                           **config)
     else:
-        model = model_cls(initial_model)
+        model = model_cls.load_from_checkpoint(initial_model_path)
     # Make WandB logger
     wandb_logger = WandbLogger(log_model=True, **wandb_config)
 
