@@ -10,7 +10,7 @@ import torch
 import torch_geometric.nn as gnn
 import warnings
 from typing import Dict, List
-from sklearn.metrics.pairwise import euclidean_distances
+from sklearn.metrics.pairwise import euclidean_distances, cosine_similarity
 
 
 class HeteroDCVRepresentationModule(torch.nn.Module):
@@ -525,7 +525,7 @@ class AugmentHeteroDCVModel(HeteroDCVModel):
         metric_dict = {f'{prefix}_loss': loss}
         if prefix != 'train':
             # For the validation and test sets, log additional metrics
-            metric_dict[f'{prefix}_cos_sim'] = F.cosine_similarity(
+            metric_dict[f'{prefix}_cos_sim'] = cosine_similarity(
                 rep, augmented_rep, 1).mean(0)
             #add other metrics if interested
 
