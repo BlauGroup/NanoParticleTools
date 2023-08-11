@@ -261,9 +261,6 @@ class HeteroDCVRepresentationModule(torch.nn.Module):
                 k: nn.functional.silu(v)
                 for k, v in intermediate_x_dict.items()
             }
-
-        #print(intermediate_x_dict.keys())
-        print(edge_index_dict)
         if batch_dict and 'dopant' in batch_dict:
             out = self.aggregation(intermediate_x_dict['dopant'],
                                    batch_dict['dopant'])
@@ -480,14 +477,14 @@ class AugmentHeteroDCVModel(HeteroDCVModel):
 
         return input_dict, augmented_input_dict
 
-    def get_representation(self, data):
+    def get_representation(self, data: HeteroData):
         input_dict, augmented_input_dict = self.get_inputs(data)
         reps = self.representation_module(**input_dict)
         augmented_reps = self.representation_module(**augmented_input_dict)
         return reps, augmented_reps
 
     def _evaluate_step(self, data):
-        rep, augmented_rep = self(self.get_representation(self, data))
+        rep, augmented_rep = self(self.get_representation(data))
         rep = rep.detach().numpy()
         augmented_rep = augmented_rep.detach().numpy()
         loss = self.loss_function(rep, augmented_rep)
