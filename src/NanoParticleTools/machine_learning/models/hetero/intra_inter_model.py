@@ -11,6 +11,7 @@ import torch_geometric.nn as gnn
 import warnings
 from typing import Dict, List
 from sklearn.metrics.pairwise import euclidean_distances, cosine_similarity
+from torch.nn.functional import pairwise_distance
 
 
 class HeteroDCVRepresentationModule(torch.nn.Module):
@@ -487,9 +488,9 @@ class AugmentHeteroDCVModel(HeteroDCVModel):
     def _evaluate_step(self, data):
         input_dict, augmented_input_dict = self.get_inputs(data)
         rep, augmented_rep = self(input_dict, augmented_input_dict)
-        rep = rep.detach().numpy()
-        augmented_rep = augmented_rep.detach().numpy()
-        loss = euclidean_distances(rep, augmented_rep)
+        #rep = rep.detach().numpy()
+        #augmented_rep = augmented_rep.detach().numpy()
+        loss = pairwise_distance(rep, augmented_rep)
         return rep, augmented_rep, loss
 
     def predict_step(self,
@@ -523,10 +524,10 @@ class AugmentHeteroDCVModel(HeteroDCVModel):
 
         # Log the loss
         metric_dict = {f'{prefix}_loss': loss}
-        if prefix != 'train':
+        #if prefix != 'train':
             # For the validation and test sets, log additional metrics
-            metric_dict[f'{prefix}_cos_sim'] = cosine_similarity(
-                rep, augmented_rep, 1).mean(0)
+            #metric_dict[f'{prefix}_cos_sim'] = cosine_similarity(
+            #    rep, augmented_rep, 1).mean(0)
             #add other metrics if interested
 
         if log:
