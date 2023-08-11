@@ -10,6 +10,7 @@ import torch
 import torch_geometric.nn as gnn
 import warnings
 from typing import Dict, List
+from sklearn.metrics.pairwise import euclidean_distances
 
 
 class HeteroDCVRepresentationModule(torch.nn.Module):
@@ -488,7 +489,7 @@ class AugmentHeteroDCVModel(HeteroDCVModel):
         rep, augmented_rep = self(input_dict, augmented_input_dict)
         rep = rep.detach().numpy()
         augmented_rep = augmented_rep.detach().numpy()
-        loss = self.loss_function(rep, augmented_rep)
+        loss = euclidean_distances(rep, augmented_rep)
         return rep, augmented_rep, loss
 
     def predict_step(self,
