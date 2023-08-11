@@ -262,6 +262,8 @@ class HeteroDCVRepresentationModule(torch.nn.Module):
                 for k, v in intermediate_x_dict.items()
             }
 
+        #print(intermediate_x_dict.keys())
+        print(edge_index_dict)
         if batch_dict and 'dopant' in batch_dict:
             out = self.aggregation(intermediate_x_dict['dopant'],
                                    batch_dict['dopant'])
@@ -393,16 +395,6 @@ class HeteroDCVModel(SpectrumModelBase):
 
 class AugmentHeteroDCVModel(HeteroDCVModel):
 
-    def __init__(self,
-                 initial_model: HeteroDCVModel):
-        self.embed_dim = initial_model.embed_dim
-        self.n_message_passing = initial_model.n_message_passing
-        self.nsigma = initial_model.nsigma
-        self.readout_layers = initial_model.readout_layers
-        
-        self.representation_module = initial_model.representation_module
-        self.readout = initial_model.readout
-
     def forward(self, input_dict: Dict, 
                 augmented_input_dict: Dict
                 ):
@@ -482,7 +474,10 @@ class AugmentHeteroDCVModel(HeteroDCVModel):
                                 'radii': data.subdivided_radii,
                                 'constraint_radii_idx': data.subdivided_constraint_radii_idx,
                                 'batch_dict': data.subdivided_batch_dict}
-        
+        #iterate through subdivided_edge_index_dict and make sure keys match 
+        for new_key, old_key in zip(data.edge_index_dict.keys(),data.subdivided_edge_index_dict.keys()):
+            augmented_input_dict['edge_index_dict'][new_key] = augmented_input_dict['edge_index_dict'].pop(old_key)
+
         return input_dict, augmented_input_dict
 
     def get_representation(self, data):
