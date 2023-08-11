@@ -419,7 +419,7 @@ class AugmentHeteroDCVModel(HeteroDCVModel):
         subdivided_intraaction_type_indices = augmented_input_dict['intraaction_type_indices']
         subdivided_intraaction_types = augmented_input_dict['intraaction_types']
         subdivided_intraaction_dopant_indices = augmented_input_dict['intraaction_dopant_indices']
-        subdivided_edge_index_dict = augmented_input_dict['subdivided_edge_index_dict']# how to differentiate these ???
+        subdivided_edge_index_dict = augmented_input_dict['edge_index_dict']
         subdivided_radii = augmented_input_dict['radii']
         subdivided_constraint_radii_idx = augmented_input_dict['constraint_radii_idx']
         subdivided_batch_dict = augmented_input_dict['batch_dict']
@@ -484,7 +484,8 @@ class AugmentHeteroDCVModel(HeteroDCVModel):
         return reps, augmented_reps
 
     def _evaluate_step(self, data):
-        rep, augmented_rep = self(self.get_representation(data))
+        input_dict, augmented_input_dict = self.get_inputs(data)
+        rep, augmented_rep = self(input_dict, augmented_input_dict)
         rep = rep.detach().numpy()
         augmented_rep = augmented_rep.detach().numpy()
         loss = self.loss_function(rep, augmented_rep)
