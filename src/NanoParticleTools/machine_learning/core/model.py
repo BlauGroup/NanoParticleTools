@@ -30,12 +30,12 @@ class SpectrumModelBase(pl.LightningModule):
                  **kwargs):
         """
         Args:
-            learning_rate: The default learning rate for model training. The actual learning rate
-                used may be different depending on the actions of the learning rate scheduler
-            optimizer_type: The type of optimizer to use. options are 'sgd', 'adam', and 'amsgrad'.
-                if 'amsgrad' is selected, the pytorch adam optimizer is used with the `amsgrad=True`
             l2_regularization_weight: The weight of the L2 regularization term in the loss function.
                 This is passed to the torch optimizer
+            optimizer_type: The type of optimizer to use. options are 'sgd', 'adam', and 'amsgrad'.
+                if 'amsgrad' is selected, the pytorch adam optimizer is used with the `amsgrad=True`
+            learning_rate: The default learning rate for model training. The actual learning rate
+                used may be different depending on the actions of the learning rate scheduler
             lr_scheduler: The learning rate scheduler class to use.
             lr_scheduler_kwargs: The kwargs passed to the learning rate scheduler on initialization.
             loss_function: The loss function to use for backpropagation in training.

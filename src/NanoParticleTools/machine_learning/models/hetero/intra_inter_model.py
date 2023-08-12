@@ -274,6 +274,11 @@ class HeteroDCVModel(SpectrumModelBase):
                 radii,
                 constraint_radii_idx,
                 batch_dict=None):
+        """
+        Forward for the model. This should not be called directly, but rather through
+        the `predict_step` or `evaluate_step` methods which accept torch geometric
+        `Data` objects.
+        """
         representation = self.representation_module(
             dopant_types, dopant_concs, dopant_constraint_indices,
             interaction_type_indices, interaction_types,
@@ -284,7 +289,9 @@ class HeteroDCVModel(SpectrumModelBase):
         return out
 
     def get_inputs(self, data: HeteroData) -> Dict:
-
+        """
+        Extract the required tensors from the `Data` object.
+        """
         input_dict = {
             'dopant_types': data['dopant'].types,
             'dopant_concs': data['dopant'].x,
@@ -303,6 +310,9 @@ class HeteroDCVModel(SpectrumModelBase):
         return input_dict
 
     def get_representation(self, data):
+        """
+        Get the representation latent vector for a batch of data.
+        """
         reps = self.representation_module(**self.get_inputs(data))
         return reps
 
@@ -313,8 +323,8 @@ class HeteroDCVModel(SpectrumModelBase):
         Make a prediction for a batch of data.
 
         Args:
-            batch (_type_): _description_
-            batch_idx (int | None, optional): _description_. Defaults to None.
+            batch: A single data point or a collated batch of data points.
+            batch_idx: The index of the batch.
 
         Returns:
             torch.Tensor: _description_
@@ -339,6 +349,9 @@ class HeteroDCVModel(SpectrumModelBase):
         return y_hat, loss
 
     def get_batch_size(self, batch):
+        """
+        Determine the batch size of a batch of data.
+        """
         if batch.batch_dict is not None:
             return batch.batch_dict["dopant"].size(0)
         else:
