@@ -1,10 +1,9 @@
-from NanoParticleTools.machine_learning.data.dataset import NPMCDataset, Dataset
+from NanoParticleTools.machine_learning.data.dataset import NPMCDataset
 from NanoParticleTools.machine_learning.data.processors import DataProcessor
 
 import numpy as np
 import pytorch_lightning as pl
 import torch
-from maggma.core import Store
 from torch.utils.data import DataLoader
 from torch_geometric.data import Data
 from torch_geometric.loader import DataLoader as pyg_DataLoader
@@ -12,41 +11,69 @@ from torch_geometric.loader import DataLoader as pyg_DataLoader
 from typing import List, Optional
 
 
-def data_is_graph(dataset) -> bool:
+def get_processors(dataset: NPMCDataset) -> List[DataProcessor]:
     """
-    Helper function to determine if a dataset is graph structured
+    A Helper function to get the data processors from a dataset.
+
+    This is helpful when using Subsets or Concatenated datasets, in
+    which the feature_processor is not directly accessible.
+
+    Note: This function assumes that all sub-datasets in a ConcatDataset
+        or Subset have the same feature_processor
     """
     if isinstance(dataset, torch.utils.data.Subset):
-        return data_is_graph(dataset.dataset)
+        return get_processors(dataset.dataset)
     elif isinstance(dataset, torch.utils.data.ConcatDataset):
-        return data_is_graph(dataset.datasets[0])
+        return get_processors(dataset.datasets[0])
     else:
-        return dataset.feature_processor.is_graph
+        return dataset.feature_processor, dataset.label_processor
+
+
+def data_is_graph(dataset) -> bool:
+    """
+    Helper function to determine if a dataset is graph structured.
+    """
+    feature_processor, _ = get_processors(dataset)
+    return feature_processor.is_graph
 
 
 class NPMCDataModule(pl.LightningDataModule):
 
     def __init__(self,
                  train_dataset,
-                 val_dataset: Optional[Dataset] = None,
-                 test_dataset: Optional[Dataset] = None,
+                 val_dataset: Optional[NPMCDataset] = None,
+                 test_dataset: Optional[NPMCDataset] = None,
+                 iid_test_dataset: Optional[NPMCDataset] = None,
                  split_seed: int = None,
                  batch_size: int = 16,
                  loader_workers: int = 0,
                  **kwargs) -> None:
+        """
+        Args:
+            train_dataset: Training dataset
+            val_dataset: Validation dataset
+            test_dataset: Out of distribution test dataset
+            iid_test_dataset: In distribution test dataset
+            split_seed: The seed used for random splitting of the data.
+                Note, this is not actually used, it is just saved for bookkeeping.
+            batch_size (int, optional): _description_. Defaults to 16.
+            loader_workers (int, optional): _description_. Defaults to 0.
+        """
         super().__init__()
 
         self.train_dataset = train_dataset
         self.val_dataset = val_dataset
         self.test_dataset = test_dataset
+        self.iid_test_dataset = iid_test_dataset
 
         self.split_seed = split_seed
         self.data_is_graph = data_is_graph(train_dataset)
         self.batch_size = batch_size
         self.loader_workers = loader_workers
+        self.feature_processor, self.label_processor = get_processors(train_dataset)
 
         self.save_hyperparameters(
-            ignore=['train_dataset', 'val_dataset', 'test_dataset'])
+            ignore=['train_dataset', 'val_dataset', 'test_dataset', 'iid_test_dataset'])
 
     @property
     def persistent_workers(self):
@@ -178,7 +205,7 @@ class NPMCDataModule(pl.LightningDataModule):
                 batch_size=self.batch_size,
                 shuffle=False,
                 num_workers=self.loader_workers,
-                drop_last=True,
+                drop_last=False,
                 persistent_workers=self.persistent_workers,
             )
         else:
@@ -189,6 +216,29 @@ class NPMCDataModule(pl.LightningDataModule):
                 collate_fn=self.collate,
                 shuffle=False,
                 num_workers=self.loader_workers,
-                drop_last=True,
+                drop_last=False,
+                persistent_workers=self.persistent_workers,
+            )
+
+    def iid_test_dataloader(self) -> DataLoader:
+        if self.data_is_graph:
+            # The data is graph structured
+            return pyg_DataLoader(
+                self.iid_test_dataset,
+                batch_size=self.batch_size,
+                shuffle=False,
+                num_workers=self.loader_workers,
+                drop_last=False,
+                persistent_workers=self.persistent_workers,
+            )
+        else:
+            # The data is in an image representation
+            return DataLoader(
+                self.iid_test_dataset,
+                batch_size=self.batch_size,
+                collate_fn=self.collate,
+                shuffle=False,
+                num_workers=self.loader_workers,
+                drop_last=False,
                 persistent_workers=self.persistent_workers,
             )
