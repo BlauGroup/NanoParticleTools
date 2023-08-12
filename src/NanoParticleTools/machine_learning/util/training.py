@@ -263,6 +263,23 @@ def train_uv_model(config,
     # Test metrics
     trainer.test(dataloaders=data_module.test_dataloader(), ckpt_path='best')
 
+    # If a IID test set is specified in the data module, we'll obtain the metrics for that as well
+    if data_module.iid_test_dataset is not None:
+        iid_test_metrics = {}
+        for batch_idx, batch in enumerate(data_module.train_dataloader()):
+            _, _loss_d = model._step('train_eval', batch, batch_idx, log=False)
+            for key in _loss_d:
+                try:
+                    iid_test_metrics[key] += _loss_d[key].item() * data_module.batch_size
+                except KeyError:
+                    iid_test_metrics[key] = _loss_d[key] * data_module.batch_size
+
+        # For the testing set, batches may not be all the same size due to drop_last=False,
+        # so we need to account for that.
+        for key in iid_test_metrics:
+            iid_test_metrics[key] /= len(data_module.iid_test_dataset)
+        wandb_logger.log_metrics(iid_test_metrics)
+
     wandb.finish()
 
     return model
