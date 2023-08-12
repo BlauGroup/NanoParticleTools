@@ -18,11 +18,9 @@ class HeteroDCVRepresentationModule(torch.nn.Module):
                  embed_dim: int = 16,
                  n_message_passing: int = 3,
                  nsigma: int = 5,
-                 use_volume_in_dopant_constraint: bool = False,
-                 normalize_interaction_by_volume: bool = False,
-                 use_inverse_concentration: bool = False,
-                 interaction_embedding: bool = False,
+                 interaction_embedding: bool = True,
                  conc_eps: float = 0.01,
+                 geometry_film_layers: List[int] = [16, 16],
                  **kwargs):
         """
         Args:
@@ -36,24 +34,14 @@ class HeteroDCVRepresentationModule(torch.nn.Module):
         self.embed_dim = embed_dim
         self.n_message_passing = n_message_passing
         self.nsigma = nsigma
-        self.use_volume_in_dopant_constraint = use_volume_in_dopant_constraint
-        self.normalize_interaction_by_volume = normalize_interaction_by_volume
-        self.use_inverse_concentration = use_inverse_concentration
         self.conc_eps = conc_eps
         self.interaction_embedding = interaction_embedding
 
         n_conc = 2 if self.use_inverse_concentration else 1
-        interaction_dim = nsigma * 4 if self.use_inverse_concentration else nsigma
+        self.dopant_film_layer = FiLMLayer(1, embed_dim, [16, 16])
 
-        self.dopant_embedder = nn.Embedding(3, embed_dim)
-        self.dopant_film_layer = FiLMLayer(n_conc, embed_dim, [16, 16])
-
-        if self.use_volume_in_dopant_constraint:
-            self.dopant_constraint_film_layer = FiLMLayer(
-                3, embed_dim, [16, 16])
-        else:
-            self.dopant_constraint_film_layer = FiLMLayer(
-                2, embed_dim, [16, 16])
+        self.dopant_constraint_film_layer = FiLMLayer(
+            2, embed_dim, [16, 16])
         self.dopant_norm = nn.BatchNorm1d(embed_dim)
 
         if self.interaction_embedding:
@@ -63,11 +51,11 @@ class HeteroDCVRepresentationModule(torch.nn.Module):
             self.interaction_embedder = nn.Linear(2, embed_dim)
             self.intraaction_embedder = nn.Linear(2, embed_dim)
         self.integrated_interaction = InteractionBlock(nsigma=nsigma)
-        self.interaction_norm = nn.BatchNorm1d(interaction_dim)
-        self.intraaction_norm = nn.BatchNorm1d(interaction_dim)
-        self.interaction_film_layer = FiLMLayer(interaction_dim, embed_dim,
+        self.interaction_norm = nn.BatchNorm1d(nsigma)
+        self.intraaction_norm = nn.BatchNorm1d(nsigma)
+        self.interaction_film_layer = FiLMLayer(nsigma, embed_dim,
                                                 [16, 16])
-        self.intraaction_film_layer = FiLMLayer(interaction_dim, embed_dim,
+        self.intraaction_film_layer = FiLMLayer(nsigma, embed_dim,
                                                 [16, 16])
 
         self.convs = nn.ModuleList()
@@ -124,19 +112,13 @@ class HeteroDCVRepresentationModule(torch.nn.Module):
 
         # Use a film layer to condition the dopant embedding on the dopant concentration
         conc_attr = dopant_concs.unsqueeze(-1)
-        if self.use_inverse_concentration:
-            inv_conc_attr = 1 / (conc_attr + self.conc_eps)
-            conc_attr = torch.cat((conc_attr, inv_conc_attr), dim=-1)
+        # conc_attr = self.conc_norm(conc_attr)
         dopant_attr = self.dopant_film_layer(dopant_attr, conc_attr)
 
         # Condition the dopant node attribute on the size of the dopant constraint
-        if self.use_volume_in_dopant_constraint:
-            geometric_features = torch.cat(
-                (_radii[dopant_constraint_indices],
-                 volume[dopant_constraint_indices].unsqueeze(-1)),
-                dim=-1)
-        else:
-            geometric_features = _radii[dopant_constraint_indices]
+        geometric_features = _radii[dopant_constraint_indices]
+        # geometric_features = self.geometry_norm(geometric_features)
+
         dopant_attr = self.dopant_constraint_film_layer(
             dopant_attr, geometric_features)
 
@@ -163,36 +145,12 @@ class HeteroDCVRepresentationModule(torch.nn.Module):
 
         # Multiply the concentration into the integrated_interaction
         interaction_node_conc = dopant_concs[interaction_dopant_indices]
-        if self.use_inverse_concentration:
-            inv_interaction_node_conc = 1 / (interaction_node_conc +
-                                             self.conc_eps)
-
-            # yapf: disable
-            conc_factor = torch.stack(
-                (interaction_node_conc[:, 0] * interaction_node_conc[:, 1],
-                 interaction_node_conc[:, 0] * inv_interaction_node_conc[:, 1],
-                 inv_interaction_node_conc[:, 0] * interaction_node_conc[:, 1],
-                 inv_interaction_node_conc[:, 0] * inv_interaction_node_conc[:, 1])).mT
-            # yapf: enable
-
-            integrated_interaction = conc_factor[:, :,
-                                                 None] * integrated_interaction[:,
-                                                                                None, :]
-            integrated_interaction = integrated_interaction.reshape(
-                -1, 4 * self.nsigma)
-        else:
-            conc_factor = (interaction_node_conc[:, 0] *
-                           interaction_node_conc[:, 1]).unsqueeze(-1)
-            integrated_interaction = conc_factor * integrated_interaction
+        conc_factor = (interaction_node_conc[:, 0] *
+                        interaction_node_conc[:, 1]).unsqueeze(-1)
+        integrated_interaction = conc_factor * integrated_interaction
 
         # Normalize the integrated interaction
-        # First by volume
-        if self.normalize_interaction_by_volume:
-            norm_factor = volume[dopant_constraint_indices][
-                interaction_dopant_indices].prod(dim=1).unsqueeze(-1)
-            integrated_interaction = integrated_interaction / norm_factor
-
-        # Then using a batch norm
+        # Using a batch norm
         integrated_interaction = self.interaction_norm(integrated_interaction)
 
         # Condition the interaction node attribute on the integrated interaction
@@ -217,36 +175,12 @@ class HeteroDCVRepresentationModule(torch.nn.Module):
 
         # Multiply the concentration into the integrated_intraaction
         intraaction_node_conc = dopant_concs[intraaction_dopant_indices]
-        if self.use_inverse_concentration:
-            inv_intraaction_node_conc = 1 / (intraaction_node_conc +
-                                             self.conc_eps)
-
-            # yapf: disable
-            conc_factor = torch.stack(
-                (intraaction_node_conc[:, 0] * intraaction_node_conc[:, 1],
-                    intraaction_node_conc[:, 0] * inv_intraaction_node_conc[:, 1],
-                    inv_intraaction_node_conc[:, 0] * intraaction_node_conc[:, 1],
-                    inv_intraaction_node_conc[:, 0] * inv_intraaction_node_conc[:, 1])).mT
-            # yapf: enable
-
-            integrated_intraaction = conc_factor[:, :,
-                                                 None] * integrated_intraaction[:,
-                                                                                None, :]
-            integrated_intraaction = integrated_intraaction.reshape(
-                -1, 4 * self.nsigma)
-        else:
-            conc_factor = (intraaction_node_conc[:, 0] *
-                           intraaction_node_conc[:, 1]).unsqueeze(-1)
-            integrated_intraaction = conc_factor * integrated_intraaction
+        conc_factor = (intraaction_node_conc[:, 0] *
+                        intraaction_node_conc[:, 1]).unsqueeze(-1)
+        integrated_intraaction = conc_factor * integrated_intraaction
 
         # Normalize the integrated intraaction
-        # First by volume
-        if self.normalize_interaction_by_volume:
-            norm_factor = volume[dopant_constraint_indices][
-                intraaction_dopant_indices].prod(dim=1).unsqueeze(-1)
-            integrated_intraaction = integrated_intraaction / norm_factor
-
-        # Then using a batch norm
+        # Using a batch norm
         integrated_intraaction = self.intraaction_norm(integrated_intraaction)
 
         # Condition the intraaction node attribute on the integrated intraaction
