@@ -1,5 +1,6 @@
 from NanoParticleTools.machine_learning.util.learning_rate import ReduceLROnPlateauWithWarmup
 from torch_geometric.data import Data, Batch
+from torch_geometric.data import HeteroData
 import pytorch_lightning as pl
 
 import torch
@@ -109,7 +110,7 @@ class SpectrumModelBase(pl.LightningModule):
         else:
             return [optimizer], [lr_scheduler]
 
-    def predict_step(self, batch: Data | Batch, **kwargs) -> torch.Tensor:
+    def predict_step(self, batch: HeteroData | Data | Batch, **kwargs) -> torch.Tensor:
         """
         Make a prediction for a batch of data.
 
@@ -122,7 +123,7 @@ class SpectrumModelBase(pl.LightningModule):
         y_hat = self(**batch.to_dict())
         return y_hat
 
-    def evaluate_step(self, batch: Data | Batch,
+    def evaluate_step(self, batch: HeteroData | Data | Batch,
                       **kwargs) -> tuple[torch.Tensor, torch.Tensor]:
         """
         A single forward pass of the data and loss calculation.
@@ -139,9 +140,16 @@ class SpectrumModelBase(pl.LightningModule):
         loss = self.loss_function(y_hat, batch.log_y)
         return y_hat, loss
 
+    def get_batch_size(self, batch):
+        if batch.batch is not None:
+            return batch.batch[-1]
+        else:
+            return 1
+        return batch_size
+
     def _step(self,
               prefix: str,
-              batch: Data | Batch,
+              batch: HeteroData | Data | Batch,
               log_to_wandb: bool = True,
               **kwargs) -> tuple[torch.Tensor, dict]:
         """
@@ -156,13 +164,9 @@ class SpectrumModelBase(pl.LightningModule):
             loss: The loss for the batch
             metric_dict: A dictionary of metrics (mse, mae, cos_sim) for the batch
         """
-        y_hat, loss = self.evaluate_step(batch)
+        batch_size = self.get_batch_size(batch)
 
-        # Determine the batch size
-        if batch.batch is not None:
-            batch_size = batch.batch[-1]
-        else:
-            batch_size = 1
+        y_hat, loss = self.evaluate_step(batch)
 
         # Log the loss
         metric_dict = {f'{prefix}_loss': loss}
@@ -178,7 +182,7 @@ class SpectrumModelBase(pl.LightningModule):
         return loss, metric_dict
 
     def training_step(self,
-                      batch: Data | Batch,
+                      batch: HeteroData | Data | Batch,
                       batch_idx: int | None = None) -> torch.Tensor:
         """
         A single training step.
@@ -194,7 +198,7 @@ class SpectrumModelBase(pl.LightningModule):
         return loss
 
     def validation_step(self,
-                        batch: Data | Batch,
+                        batch: HeteroData | Data | Batch,
                         batch_idx: int | None = None) -> torch.Tensor:
         """
         A single validation step.
@@ -210,7 +214,7 @@ class SpectrumModelBase(pl.LightningModule):
         return loss
 
     def test_step(self,
-                  batch: Data | Batch,
+                  batch: HeteroData | Data | Batch,
                   batch_idx: int | None = None) -> torch.Tensor:
         """
         A single testing step.

@@ -231,6 +231,8 @@ class HeteroDCVModel(SpectrumModelBase):
 
         self.readout = NonLinearMLP(embed_dim, 1, self.readout_layers, 0.25, nn.SiLU)
 
+        self.save_hyperparameters()
+
     def forward(self,
                 dopant_types,
                 dopant_concs,
@@ -275,11 +277,6 @@ class HeteroDCVModel(SpectrumModelBase):
         reps = self.representation_module(**self.get_inputs(data))
         return reps
 
-    def evaluate_step(self, data):
-        y_hat = self(**self.get_inputs(data))
-        loss = self.loss_function(y_hat, data.log_y)
-        return y_hat, loss
-
     def predict_step(self,
                      batch: HeteroData | Batch,
                      batch_idx: int | None = None) -> torch.Tensor:
@@ -296,31 +293,24 @@ class HeteroDCVModel(SpectrumModelBase):
         y_hat = self(**self.get_inputs(batch))
         return y_hat
 
-    def _step(self,
-              prefix: str,
-              batch: HeteroData | Batch,
-              batch_idx: int | None = None,
-              log: bool = True):
-        y_hat, loss = self.evaluate_step(batch)
+    def evaluate_step(self, data):
+        """
+        A single forward pass of the data and loss calculation.
 
-        # Determine the batch size
+        Args:
+            batch: A single data point or a collated batch of data points.
+
+        Returns:
+            y_hat: The predicted value(s) for the batch
+            loss: The loss for the batch
+        """
+        y_hat = self(**self.get_inputs(data))
+
+        loss = self.loss_function(y_hat, data.log_y)
+        return y_hat, loss
+
+    def get_batch_size(self, batch):
         if batch.batch_dict is not None:
-            batch_size = batch.batch_dict["dopant"].size(0)
+            return batch.batch_dict["dopant"].size(0)
         else:
-            batch_size = 1
-
-        # Log the loss
-        metric_dict = {f'{prefix}_loss': loss}
-        if prefix != 'train':
-            # For the validation and test sets, log additional metrics
-            metric_dict[f'{prefix}_mse'] = F.mse_loss(y_hat, batch.log_y)
-            metric_dict[f'{prefix}_mae'] = F.l1_loss(y_hat, batch.log_y)
-            metric_dict[f'{prefix}_huber'] = F.huber_loss(y_hat, batch.log_y)
-            metric_dict[f'{prefix}_hinge'] = F.hinge_embedding_loss(
-                y_hat, batch.log_y)
-            metric_dict[f'{prefix}_cos_sim'] = F.cosine_similarity(
-                y_hat, batch.log_y, 1).mean(0)
-
-        if log:
-            self.log_dict(metric_dict, batch_size=batch_size)
-        return loss, metric_dict
+            return 1
