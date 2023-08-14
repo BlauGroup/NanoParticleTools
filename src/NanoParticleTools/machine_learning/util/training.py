@@ -266,8 +266,8 @@ def train_uv_model(config,
     # If a IID test set is specified in the data module, we'll obtain the metrics for that as well
     if data_module.iid_test_dataset is not None:
         iid_test_metrics = {}
-        for batch_idx, batch in enumerate(data_module.train_dataloader()):
-            _, _loss_d = model._step('train_eval', batch, batch_idx, log=False)
+        for batch_idx, batch in enumerate(data_module.iid_test_dataloader()):
+            _, _loss_d = model._step('iid_test', batch, batch_idx, log=False)
             for key in _loss_d:
                 try:
                     iid_test_metrics[key] += _loss_d[key].item() * data_module.batch_size
