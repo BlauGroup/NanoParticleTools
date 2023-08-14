@@ -340,7 +340,7 @@ def train_uv_model_augment(config,
     train_metrics = {}
     factor = 1 / len(data_module.train_dataloader())
     for batch_idx, batch in enumerate(data_module.train_dataloader()):
-        _, _, _loss_d = model._step('train_eval', batch, batch_idx, log=False)
+        _, _loss_d = model._step('train_eval', batch, batch_idx, log=False)
         for key in _loss_d:
             try:
                 train_metrics[key] += _loss_d[key].item() * factor
