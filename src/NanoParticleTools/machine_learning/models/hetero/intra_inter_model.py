@@ -22,6 +22,7 @@ class HeteroDCVRepresentationModule(torch.nn.Module):
                  conc_eps: float = 0.01,
                  geometry_film_layers: List[int] = [16, 16],
                  n_dopants: int = 3,
+                 aggregation: str = 'sum',
                  **kwargs):
         """
         Args:
@@ -82,7 +83,15 @@ class HeteroDCVRepresentationModule(torch.nn.Module):
             }
             self.convs.append(gnn.HeteroConv(conv_modules))
 
-        self.aggregation = gnn.aggr.SumAggregation()
+        if aggregation == 'sum':
+            self.aggregation = gnn.aggr.SumAggregation()
+        elif aggregation == 'mean':
+            self.aggregation = gnn.aggr.MeanAggregation()
+        elif isinstance(aggregation, nn.Module):
+            self.aggregation = aggregation()
+        else:
+            raise ValueError(
+                f'Aggregation type {aggregation} is not supported.')
 
     def forward(self,
                 dopant_types,
@@ -210,6 +219,7 @@ class HeteroDCVModel(SpectrumModelBase):
                  n_message_passing: int = 3,
                  nsigma=5,
                  readout_layers: List[int] = [128],
+                 aggregation: str = 'sum',
                  **kwargs):
         """
         Args:
@@ -253,6 +263,7 @@ class HeteroDCVModel(SpectrumModelBase):
             self.n_message_passing,
             self.nsigma,
             n_dopants=n_dopants,
+            aggregation=aggregation,
             **kwargs)
 
         self.readout = NonLinearMLP(embed_dim, 1, self.readout_layers, 0.25,
