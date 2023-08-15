@@ -487,7 +487,7 @@ class AugmentHeteroDCVModel(HeteroDCVModel):
 
     def _evaluate_step(self, data):
         rep, augmented_rep = self.get_representation(data)
-        loss = pairwise_distance(rep, augmented_rep).detach()
+        loss = pairwise_distance(rep, augmented_rep)
         return rep, augmented_rep, loss
 
     def predict_step(self,
