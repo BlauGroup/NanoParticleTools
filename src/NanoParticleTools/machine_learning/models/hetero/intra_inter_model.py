@@ -512,7 +512,7 @@ class AugmentHeteroDCVModel(HeteroDCVModel):
               batch_idx: int | None = None,
               log: bool = True):
         rep, augmented_rep, loss = self._evaluate_step(batch)
-
+        loss = loss.mean(0)
         # Determine the batch size
         if batch.batch_dict is not None:
             batch_size = batch.batch_dict["dopant"].size(0)
@@ -520,7 +520,7 @@ class AugmentHeteroDCVModel(HeteroDCVModel):
             batch_size = 1
 
         # Log the loss
-        metric_dict = {f'{prefix}_loss': loss.mean(0)}
+        metric_dict = {f'{prefix}_loss': loss}
         #if prefix != 'train':
             # For the validation and test sets, log additional metrics
             #metric_dict[f'{prefix}_cos_sim'] = cosine_similarity(
