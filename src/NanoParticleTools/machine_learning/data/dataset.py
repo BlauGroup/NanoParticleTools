@@ -22,7 +22,8 @@ class NPMCDataset(Dataset):
                  label_processor: DataProcessor,
                  use_metadata: bool = False,
                  cache_in_memory: bool = True,
-                 gpu_training: bool = False):
+                 gpu_training: bool = False,
+                 return_original_inputs: bool = False):
 
         self.file_path = file_path
         self.feature_processor = feature_processor
@@ -30,6 +31,7 @@ class NPMCDataset(Dataset):
         self.use_metadata = use_metadata
         self.cache_in_memory = cache_in_memory
         self.gpu_training = gpu_training
+        self.return_original_inputs = return_original_inputs
 
         self._docs = None
         self._cached_data = None
@@ -78,8 +80,11 @@ class NPMCDataset(Dataset):
         _d = self.feature_processor.process_doc(doc)
         _d.update(self.label_processor.process_doc(doc))
 
-        _d['constraints'] = doc['input']['constraints']
-        _d['dopant_specifications'] = doc['input']['dopant_specifications']
+        if self.return_original_inputs:
+            _d['constraints'] = doc['input']['constraints']
+            _d['dopant_specifications'] = doc['input']['dopant_specifications']
+            _d['dopant_concentration'] = doc['dopant_concentration']
+
         if 'metadata' in doc and self.use_metadata:
             _d['metadata'] = doc['metadata']
         if issubclass(self.feature_processor.data_cls, HeteroData):
