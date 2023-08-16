@@ -1,86 +1,86 @@
-import torch
-from torch.utils import data
-from torch import nn
-import pytorch_lightning as pl
-import torch.nn.functional as F
-from typing import Callable, Optional, Union, List
-import numpy as np
+from torch_geometric.data import Batch, Data, HeteroData
 from NanoParticleTools.machine_learning.core.model import SpectrumModelBase
+from NanoParticleTools.machine_learning.modules import NonLinearMLP
+
+import pytorch_lightning as pl
+import numpy as np
+
+import torch
+from torch import nn
+import torch.nn.functional as F
+from torch.utils import data
+
+from typing import Callable, Optional, Union, List
 
 
 class MLPSpectrumModel(SpectrumModelBase):
 
     def __init__(self,
-                 n_input_nodes: int,
-                 n_output_nodes: Optional[int] = 600,
-                 dopants: Union[list, dict] = ['Yb', 'Er', 'Nd'],
+                 max_layers: int = 4,
+                 n_dopants: int = 3,
+                 n_output_nodes: Optional[int] = 1,
                  nn_layers: Optional[List[int]] = [128],
                  dropout_probability: float = 0,
+                 use_volume: bool = True,
                  **kwargs):
         super().__init__(**kwargs)
 
+        self.use_volume = use_volume
         self.dropout_probability = dropout_probability
 
-        if isinstance(dopants, list):
-            self.dopant_map = {key: i for i, key in enumerate(dopants)}
-        elif isinstance(dopants, dict):
-            self.dopant_map = dopants
-        else:
-            raise ValueError('Expected dopants to be of type list or dict')
-
-        self.dopants = dopants
-
-        self.n_input_nodes = n_input_nodes
+        self.n_dopants = n_dopants
+        self.max_layers = max_layers
         self.n_output_nodes = n_output_nodes
         self.n_layers = len(nn_layers)
         self.nn_layers = nn_layers
 
+        self.vol_factor = nn.Parameter(torch.tensor(1e6).float())
+        self.conc_factor = nn.Parameter(torch.tensor(100).float())
+
         # Build the Feed Forward Neural Network Architecture
-        current_n_nodes = self.n_input_nodes
-        layers = []
-        for i, n_nodes in enumerate(self.nn_layers):
-            layers.extend(self._get_layer(current_n_nodes, n_nodes))
-            current_n_nodes = n_nodes
-        layers.append(nn.Linear(current_n_nodes, self.n_output_nodes))
-        # Add a final ReLU to constrain outputs to be always positive
-        layers.append(nn.ReLU())
-        self.nn = nn.Sequential(*layers)
+        self.nn = NonLinearMLP(self.n_input_nodes, n_output_nodes, nn_layers,
+                               dropout_probability, nn.SiLU)
 
         self.save_hyperparameters()
 
-    def _get_layer(self, n_input_nodes, n_output_nodes):
-        _layers = []
-        _layers.append(nn.Linear(n_input_nodes, n_output_nodes))
-        _layers.append(nn.ReLU())
-        if self.dropout_probability > 0:
-            _layers.append(nn.Dropout(self.dropout_probability))
-        return _layers
-
-    def describe(self):
-        """
-        Output a name that captures the hyperparameters used
-        """
-        descriptors = []
-
-        # Type of optimizer
-        if self.optimizer_type.lower() == 'sgd':
-            descriptors.append('sgd')
+    @property
+    def n_input_nodes(self):
+        if self.use_volume:
+            return (self.n_dopants + 2) * self.max_layers
         else:
-            descriptors.append('adam')
+            return (self.n_dopants + 1) * self.max_layers
 
-        # Number of nodes/layers
-        nodes = []
-        nodes.append(self.n_input_nodes)
-        nodes.extend(self.n_hidden_nodes)
-        nodes.append(self.n_output_nodes)
-        descriptors.append('-'.join([str(i) for i in nodes]))
+    def forward(self, x, radii, radii_without_zero, **kwargs):
+        x = x * self.conc_factor
 
-        descriptors.append(f'lr-{self.learning_rate}')
-        descriptors.append(f'dropout-{self.dropout_probability:.2f}')
-        descriptors.append(f'l2_reg-{self.l2_regularization_weight:.2E}')
+        if self.use_volume:
+            volume = 4 / 3 * torch.pi * (radii[..., 1:]**3 -
+                                         radii[..., :-1]**3)
 
-        return '_'.join(descriptors)
+            # Normalize the volume
+            volume = volume / self.vol_factor
 
-    def forward(self, x, **kwargs):
-        out = self.nn(x)
+            # Concatenate the tensors to get the input
+            input = torch.cat([x, radii_without_zero, volume], dim=1)
+        else:
+            # Concatenate the tensors to get the input
+            input = torch.cat([x, radii_without_zero], dim=1)
+
+        # Make the prediction
+        out = self.nn(input)
         return out
+
+    def evaluate_step(self, batch: Data | Batch,
+                      **kwargs) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        Evaluates the model on a batch of data. This is used in training and validation.
+        """
+        x = batch.x
+        radii = batch.radii
+        radii_without_zero = batch.radii_without_zero
+
+        y_hat = self.forward(x, radii, radii_without_zero, **kwargs)
+
+        loss = self.loss_function(y_hat, batch.log_y)
+
+        return y_hat, loss

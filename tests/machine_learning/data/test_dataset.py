@@ -3,7 +3,7 @@ from NanoParticleTools.machine_learning.data.dataset import (
     NPMCDataset, get_required_fields)
 from NanoParticleTools.machine_learning.data.processors import (
     WavelengthSpectrumLabelProcessor, FeatureProcessor, LabelProcessor)
-from NanoParticleTools.machine_learning.models.mlp_model.data import VolumeFeatureProcessor
+from NanoParticleTools.machine_learning.models.mlp_model.data import TabularFeatureProcessor
 import pytest
 from pathlib import Path
 import os
@@ -22,7 +22,9 @@ def label_processor():
 
 @pytest.fixture
 def feature_processor():
-    return VolumeFeatureProcessor(3, possible_elements=['Yb', 'Nd', 'Mg'])
+    return TabularFeatureProcessor(max_layers=3,
+                                   include_volume=True,
+                                   possible_elements=['Yb', 'Nd', 'Mg'])
 
 
 def test_dataset(feature_processor, label_processor):
