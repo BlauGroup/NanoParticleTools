@@ -1,7 +1,8 @@
 from NanoParticleTools.machine_learning.models.hetero.data import DopantInteractionFeatureProcessor
-from torch_geometric.data import Batch
-from NanoParticleTools.inputs import SphericalConstraint
 from NanoParticleTools.machine_learning.data import SummedWavelengthRangeLabelProcessor
+from NanoParticleTools.inputs import SphericalConstraint
+from torch_geometric.data import Batch
+
 import torch
 import pytest
 
