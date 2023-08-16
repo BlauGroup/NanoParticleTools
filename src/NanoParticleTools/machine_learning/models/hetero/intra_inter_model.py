@@ -10,6 +10,8 @@ import torch
 import torch_geometric.nn as gnn
 import warnings
 from typing import Dict, List
+from sklearn.metrics.pairwise import euclidean_distances, cosine_similarity
+from torch.nn.functional import pairwise_distance
 
 
 class HeteroDCVRepresentationModule(torch.nn.Module):
@@ -203,7 +205,6 @@ class HeteroDCVRepresentationModule(torch.nn.Module):
                 k: nn.functional.silu(v)
                 for k, v in intermediate_x_dict.items()
             }
-
         if batch_dict and 'dopant' in batch_dict:
             out = self.aggregation(intermediate_x_dict['dopant'],
                                    batch_dict['dopant'])
@@ -386,3 +387,142 @@ class HeteroDCVModel(SpectrumModelBase):
             return batch.batch_dict["dopant"].size(0)
         else:
             return 1
+
+class AugmentHeteroDCVModel(HeteroDCVModel):
+
+    def forward(self, input_dict: Dict, 
+                augmented_input_dict: Dict
+                ):
+        dopant_types = input_dict['dopant_types']
+        dopant_concs  = input_dict['dopant_concs']
+        dopant_constraint_indices = input_dict['dopant_constraint_indices']
+        interaction_type_indices = input_dict['interaction_type_indices']
+        interaction_types = input_dict['interaction_types']
+        interaction_dopant_indices = input_dict['interaction_dopant_indices']
+        intraaction_type_indices = input_dict['intraaction_type_indices']
+        intraaction_types = input_dict['intraaction_types']
+        intraaction_dopant_indices = input_dict['intraaction_dopant_indices']
+        edge_index_dict = input_dict['edge_index_dict']
+        radii = input_dict['radii']
+        constraint_radii_idx = input_dict['constraint_radii_idx']
+        batch_dict = augmented_input_dict['batch_dict']
+
+
+        subdivided_dopant_types = augmented_input_dict['dopant_types']
+        subdivided_dopant_concs = augmented_input_dict['dopant_concs']
+        subdivided_dopant_constraint_indices = augmented_input_dict['dopant_constraint_indices']
+        subdivided_interaction_type_indices = augmented_input_dict['interaction_type_indices']
+        subdivided_interaction_types = augmented_input_dict['interaction_types']
+        subdivided_interaction_dopant_indices = augmented_input_dict['interaction_dopant_indices']
+        subdivided_intraaction_type_indices = augmented_input_dict['intraaction_type_indices']
+        subdivided_intraaction_types = augmented_input_dict['intraaction_types']
+        subdivided_intraaction_dopant_indices = augmented_input_dict['intraaction_dopant_indices']
+        subdivided_edge_index_dict = augmented_input_dict['edge_index_dict']
+        subdivided_radii = augmented_input_dict['radii']
+        subdivided_constraint_radii_idx = augmented_input_dict['constraint_radii_idx']
+        subdivided_batch_dict = augmented_input_dict['batch_dict']
+
+        representation = self.representation_module(
+            dopant_types, dopant_concs, dopant_constraint_indices,
+            interaction_type_indices, interaction_types,
+            interaction_dopant_indices, intraaction_type_indices,
+            intraaction_types, intraaction_dopant_indices, edge_index_dict,
+            radii, constraint_radii_idx, batch_dict)
+        out = self.readout(representation)
+
+        subdivision_representation = self.representation_module(
+            subdivided_dopant_types, subdivided_dopant_concs, subdivided_dopant_constraint_indices,
+            subdivided_interaction_type_indices, subdivided_interaction_types,
+            subdivided_interaction_dopant_indices, subdivided_intraaction_type_indices,
+            subdivided_intraaction_types, subdivided_intraaction_dopant_indices, subdivided_edge_index_dict,
+            subdivided_radii, subdivided_constraint_radii_idx, subdivided_batch_dict)
+        subdivision_out = self.readout(subdivision_representation)
+
+        return out, subdivision_out
+
+    def get_inputs(self, data: HeteroData) -> Dict:
+
+        input_dict = {'dopant_types': data['dopant'].types,
+                      'dopant_concs': data['dopant'].x,
+                      'dopant_constraint_indices': data['dopant'].constraint_indices,
+                      'interaction_type_indices': data['interaction'].type_indices,
+                      'interaction_types': data['interaction'].types,
+                      'interaction_dopant_indices': data['interaction'].dopant_indices,
+                      'intraaction_type_indices': data['intraaction'].type_indices,
+                      'intraaction_types': data['intraaction'].types,
+                      'intraaction_dopant_indices': data['intraaction'].dopant_indices,
+                      'edge_index_dict': data.edge_index_dict,
+                      'radii': data.radii,
+                      'constraint_radii_idx': data.constraint_radii_idx,
+                      'batch_dict': data.batch_dict}
+
+        augmented_input_dict = {'dopant_types': data['subdivided_dopant'].types,
+                                'dopant_concs': data['subdivided_dopant'].x,
+                                'dopant_constraint_indices': data['subdivided_dopant'].constraint_indices,
+                                'interaction_type_indices': data['subdivided_interaction'].type_indices,
+                                'interaction_types': data['subdivided_interaction'].types,
+                                'interaction_dopant_indices': data['subdivided_interaction'].dopant_indices,
+                                'intraaction_type_indices': data['subdivided_intraaction'].type_indices,
+                                'intraaction_types': data['subdivided_intraaction'].types,
+                                'intraaction_dopant_indices': data['subdivided_intraaction'].dopant_indices,
+                                'edge_index_dict': data.subdivided_edge_index_dict, #fix this
+                                'radii': data.subdivided_radii,
+                                'constraint_radii_idx': data.subdivided_constraint_radii_idx,
+                                'batch_dict': data.subdivided_batch_dict}
+        #iterate through subdivided_edge_index_dict and make sure keys match 
+        for new_key, old_key in zip(data.edge_index_dict.keys(),data.subdivided_edge_index_dict.keys()):
+            augmented_input_dict['edge_index_dict'][new_key] = augmented_input_dict['edge_index_dict'].pop(old_key)
+
+        return input_dict, augmented_input_dict
+
+    def get_representation(self, data: HeteroData):
+        input_dict, augmented_input_dict = self.get_inputs(data)
+        reps = self.representation_module(**input_dict)
+        augmented_reps = self.representation_module(**augmented_input_dict)
+        return reps, augmented_reps
+
+    def _evaluate_step(self, data):
+        rep, augmented_rep = self.get_representation(data)
+        loss = pairwise_distance(rep, augmented_rep)
+        return rep, augmented_rep, loss
+
+    def predict_step(self,
+                     batch: HeteroData | Batch,
+                     batch_idx: int | None = None) -> torch.Tensor:
+        """
+        Make a prediction for a batch of data.
+
+        Args:
+            batch (_type_): _description_
+            batch_idx (int | None, optional): _description_. Defaults to None.
+
+        Returns:
+            torch.Tensor: _description_
+        """
+        y_hat, augmented_y_hat = self(self.get_inputs(batch))
+        return y_hat
+
+    def _step(self,
+              prefix: str,
+              batch: HeteroData | Batch,
+              batch_idx: int | None = None,
+              log: bool = True):
+        rep, augmented_rep, loss = self._evaluate_step(batch)
+        loss = loss.mean(0)
+        # Determine the batch size
+        if batch.batch_dict is not None:
+            batch_size = batch.batch_dict["dopant"].size(0)
+        else:
+            batch_size = 1
+
+        # Log the loss
+        metric_dict = {f'{prefix}_loss': loss}
+        #if prefix != 'train':
+            # For the validation and test sets, log additional metrics
+            #metric_dict[f'{prefix}_cos_sim'] = cosine_similarity(
+            #    rep, augmented_rep, 1).mean(0)
+            #add other metrics if interested
+
+        if log:
+            self.log_dict(metric_dict, batch_size=batch_size)
+        return loss, metric_dict
