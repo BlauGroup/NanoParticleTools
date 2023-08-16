@@ -96,4 +96,7 @@ python -m pip install -e .
 ```
 Modifications should now be reflected when you run any functions in NanoParticleTools.
 
+```
+pytest --cov-report term-missing --cov=src tests/
+```
 Further guidance on contributing via Pull Requests will be added in the near future.
