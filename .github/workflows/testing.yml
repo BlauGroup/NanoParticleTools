@@ -30,6 +30,8 @@ jobs:
           pip install pytest-cov
       - name: Run tests
         run: |
-          python -m pytest --cov=src --cov-report=term-missing
+          python -m pytest --cov=src --cov-report=xml
         shell:
           bash
+      - name: Upload coverage to CodeCov
+        uses: codecov/codecov-action@v3
