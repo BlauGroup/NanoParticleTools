@@ -270,9 +270,11 @@ def train_uv_model(config,
             _, _loss_d = model._step('iid_test', batch, batch_idx, log=False)
             for key in _loss_d:
                 try:
-                    iid_test_metrics[key] += _loss_d[key].item() * data_module.batch_size
+                    iid_test_metrics[key] += _loss_d[key].item(
+                    ) * data_module.batch_size
                 except KeyError:
-                    iid_test_metrics[key] = _loss_d[key] * data_module.batch_size
+                    iid_test_metrics[
+                        key] = _loss_d[key] * data_module.batch_size
 
         # For the testing set, batches may not be all the same size due to drop_last=False,
         # so we need to account for that.
@@ -294,6 +296,7 @@ class NPMCTrainer():
         wandb_entity: Optional[str] = None,
         wandb_project: Optional[str] = None,
         wandb_save_dir: Optional[str] = None,
+        wandb_config: Optional[dict] = None,
         gpu: Optional[bool] = False,
         n_available_devices: Optional[int] = 4,
         train_single_fn: Optional[callable] = train_uv_model,
@@ -321,6 +324,17 @@ class NPMCTrainer():
         else:
             self.wandb_save_dir = wandb_save_dir
 
+        if wandb_config is None:
+            self.wandb_config = {}
+        else:
+            self.wandb_config = wandb_config
+
+        self.wandb_config.update({
+            'entity': self.wandb_entity,
+            'project': self.wandb_project,
+            'save_dir': self.wandb_save_dir
+        })
+
         self.gpu = gpu
         self.n_available_devices = n_available_devices
         self.models_per_device = models_per_device
@@ -341,12 +355,9 @@ class NPMCTrainer():
         else:
             trainer_device_config['accelerator'] = 'auto'
 
-        wandb_config = {
-            'name': wandb_name,
-            'entity': self.wandb_entity,
-            'project': self.wandb_project,
-            'save_dir': self.wandb_save_dir
-        }
+        wandb_config = self.wandb_config.copy()
+        wandb_config['name'] = wandb_name
+
         try:
             model = self.train_single_fn(
                 model_cls=self.model_cls,
@@ -355,10 +366,6 @@ class NPMCTrainer():
                 lr_scheduler=self.lr_scheduler,
                 lr_scheduler_kwargs=self.lr_scheduler_kwargs,
                 num_epochs=self.num_epochs,
-                ray_tune=False,
-                early_stop=False,
-                swa=False,
-                save_checkpoints=True,
                 wandb_config=wandb_config,
                 trainer_device_config=trainer_device_config,
                 **self.train_fn_kwargs)
