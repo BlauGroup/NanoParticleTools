@@ -46,6 +46,69 @@ def test_feature_processor():
         dp.is_graph()
 
 
+def test_feature_processor_spec_to_conc():
+    FeatureProcessor.__abstractmethods__ = set()
+    dp = FeatureProcessor(possible_elements=['Yb', 'Er', 'Nd'],
+                          fields=['a', 'b'])
+    dopant_specs = [(0, 0.5, 'Er', 'Y'), (1, 0.5, 'Yb', 'Y'),
+                    (1, 0.23, 'Nd', 'Y')]
+
+    with pytest.raises(ValueError):
+        dopant_concs = dp.dopant_specification_to_concentration(dopant_specs)
+
+    dopant_concs = dp.dopant_specification_to_concentration(dopant_specs,
+                                                            n_constraints=3)
+    assert dopant_concs == [{
+        'Er': 0.5,
+        'Yb': 0.0,
+        'Nd': 0.0
+    }, {
+        'Er': 0.0,
+        'Yb': 0.5,
+        'Nd': 0.23
+    }, {
+        'Er': 0.0,
+        'Yb': 0.0,
+        'Nd': 0.0
+    }]
+
+    dopant_concs = dp.dopant_specification_to_concentration(
+        dopant_specs, n_constraints=3, include_zeros=False)
+    assert dopant_concs == [{'Er': 0.5}, {'Yb': 0.5, 'Nd': 0.23}, {}]
+
+
+def test_feature_processor_conc_to_spec():
+    FeatureProcessor.__abstractmethods__ = set()
+    dp = FeatureProcessor(possible_elements=['Yb', 'Er', 'Nd'], fields=['a', 'b'])
+
+    dopant_concs = [{
+        'Er': 0.5,
+        'Yb': 0.0,
+        'Nd': 0.0
+    }, {
+        'Er': 0.0,
+        'Yb': 0.5,
+        'Nd': 0.23
+    }, {
+        'Er': 0.0,
+        'Yb': 0.0,
+        'Nd': 0.0
+    }]
+
+    dopant_specs = dp.dopant_concentration_to_specification(
+        dopant_concs, include_zeros=False)
+    assert dopant_specs == [(0, 0.5, 'Er', 'Y'), (1, 0.5, 'Yb', 'Y'),
+                            (1, 0.23, 'Nd', 'Y')]
+
+    dopant_specs = dp.dopant_concentration_to_specification(
+        dopant_concs, include_zeros=True)
+    assert dopant_specs == [(0, 0.5, 'Er', 'Y'), (0, 0.0, 'Yb', 'Y'),
+                            (0, 0.0, 'Nd', 'Y'), (1, 0.0, 'Er', 'Y'),
+                            (1, 0.5, 'Yb', 'Y'), (1, 0.23, 'Nd', 'Y'),
+                            (2, 0.0, 'Er', 'Y'), (2, 0.0, 'Yb', 'Y'),
+                            (2, 0.0, 'Nd', 'Y')]
+
+
 def test_energy_spectrum_label_processor():
     lp = EnergySpectrumLabelProcessor(log_constant=1)
     lp.required_fields == [
