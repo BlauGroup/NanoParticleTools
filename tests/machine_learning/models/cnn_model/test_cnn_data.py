@@ -67,18 +67,26 @@ def test_1d_cnn_feature_processor(doc_one, doc_two):
                                             max_np_radius=25,
                                             dims=1,
                                             full_nanoparticle=False,
-                                            possible_elements=['Yb', 'Er', 'Dy'])
+                                            possible_elements=['Yb', 'Er', 'Mg'])
     assert feature_processor.is_graph is True
     assert feature_processor.n_possible_elements == 3
 
     _data_dict = feature_processor.process_doc(doc_one)
     data = feature_processor.data_cls(**_data_dict)
     assert data.x.shape == (1, 3, 6)
+
     assert torch.allclose(data.x, torch.tensor([[0.499, 0.499, 0.499, 0.2, 0.2, 0],
                                                 [0.25, 0.25, 0.25, 0.1, 0.1, 0],
                                                 [0, 0, 0, 0, 0, 0]]))
 
     # doc two should not have any zeros since the bounds smaller than the particle
+    _data_dict = feature_processor.process_doc(doc_two)
+    data = feature_processor.data_cls(**_data_dict)
+    assert data.x.shape == (1, 3, 6)
+
+    assert torch.allclose(data.x, torch.tensor([[0.499, 0.499, 0.499, 0, 0, 0],
+                                                [0.02, 0.02, 0.02, 0, 0, 0],
+                                                [0, 0, 0, 0, 0, 0.25]]))
 
 
 def test_2d_cnn_feature_processor(doc_one):
