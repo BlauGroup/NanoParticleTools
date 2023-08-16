@@ -29,10 +29,10 @@ def get_plotting_fn(feature_processor):
         )
         if f is not None:
             plt.text(0.1,
-                    0.95,
-                    f'UV Intensity={np.power(10, -f)-100:.2f}',
-                    fontsize=20,
-                    transform=plt.gca().transAxes)
+                     0.95,
+                     f'UV Intensity={np.power(10, -f)-100:.2f}',
+                     fontsize=20,
+                     transform=plt.gca().transAxes)
         plt.show()
 
     return plotting_fn
