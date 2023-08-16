@@ -104,6 +104,48 @@ class FeatureProcessor(DataProcessor):
         r_outer = constraints[idx].radius
         return r_inner, r_outer
 
+    def dopant_specification_to_concentration(
+            self,
+            dopant_specification: List[Tuple],
+            n_constraints: int = None,
+            constraints: List[NanoParticleConstraint] = None,
+            include_zeros: bool = True):
+        if n_constraints is None and constraints is None:
+            raise ValueError('Must specify at least one of n_constraints or constraints')
+        elif n_constraints is None:
+            n_constraints = len(constraints)
+
+        if include_zeros:
+            dopant_concentration = [{el: 0
+                                    for el in self.possible_elements}
+                                    for _ in range(n_constraints)]
+        else:
+            dopant_concentration = [{} for _ in range(n_constraints)]
+
+        for layer_idx, dopant_conc, dopant, _ in dopant_specification:
+            if dopant_conc > 0:
+                dopant_concentration[layer_idx][dopant] = dopant_conc
+
+        return dopant_concentration
+
+    def dopant_concentration_to_specification(
+            self, dopant_concentration: List[Tuple],
+            include_zeros: bool = False):
+        if include_zeros:
+            dopant_specifications = [
+                (layer_idx, conc, el, 'Y')
+                for layer_idx, dopants in enumerate(dopant_concentration)
+                for el, conc in dopants.items() if el in self.possible_elements
+            ]
+        else:
+            dopant_specifications = [
+                (layer_idx, conc, el, 'Y')
+                for layer_idx, dopants in enumerate(dopant_concentration)
+                for el, conc in dopants.items() if el in self.possible_elements if conc > 0
+            ]
+
+        return dopant_specifications
+
     @staticmethod
     def get_volume(r):
         return 4 / 3 * np.pi * (r**3)
