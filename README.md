@@ -8,7 +8,7 @@
 [![Linting Status][linting-image]][linting-url]
 [![Testing Status][testing-image]][testing-url]
 [![Test Coverage][coverage-image]][coverage-url]
-[![Requires Python 3.8+](https://img.shields.io/badge/Python-3.8+-blue.svg?logo=python&logoColor=white)](https://python.org/downloads)
+[![Requires Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg?logo=python&logoColor=white)](https://python.org/downloads)
 
 
 NanoParticleTools tools is a python module that facilitates monte carlo simulation of Upconverting Nanoparticles (UCNP) using [RNMC](https://github.com/BlauGroup/RNMC).
