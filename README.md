@@ -1,3 +1,11 @@
+[linting-image]: https://github.com/BlauGroup/NanoParticleTools/actions/workflows/flake8.yml/badge.svg
+[linting-url]: https://github.com/BlauGroup/NanoParticleTools/actions/workflows/flake8.yml
+[testing-image]: https://github.com/BlauGroup/NanoParticleTools/actions/workflows/testing.yml/badge.svg
+[testing-url]: https://github.com/BlauGroup/NanoParticleTools/actions/workflows/testing.yml
+
+[![Testing Status][testing-image]][testing-url]
+[![Linting Status][linting-image]][linting-url]
+
 NanoParticleTools tools is a python module that facilitates monte carlo simulation of Upconverting Nanoparticles (UCNP) using [RNMC](https://github.com/BlauGroup/RNMC).
 
 # Using NanoParticleTools
