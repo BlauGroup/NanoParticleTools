@@ -246,13 +246,14 @@ class HeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
 
         return data
 
+
 class AugmentededHeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
 
     def inputs_from_constraints_and_concentration(
-            self, input_constraints: List[SphericalConstraint],
+            self,
+            input_constraints: List[SphericalConstraint],
             input_dopant_concentration: List[Dict],
-            augment_pass: bool = False
-    ) -> Tuple[Dict, torch.Tensor]:
+            augment_pass: bool = False) -> Tuple[Dict, torch.Tensor]:
         """
         Preprocess the inputs and constraints to ensure they
         form valid graphs.
@@ -264,7 +265,8 @@ class AugmentededHeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
         Args:
             input_constraints:
             input_dopant_concentration:
-            augment_pass: boolean that determines if this call is for augmented or non-augmented data
+            augment_pass: boolean that determines if this call is for
+            augmented or non-augmented data
         """
 
         # Build the dopant concentration
@@ -290,7 +292,7 @@ class AugmentededHeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
         _radii = [0] + [constraint.radius for constraint in constraints]
 
         # randomly assign number of subdivisions within range
-        if self.distribute_subdivisions and augment_pass: 
+        if self.distribute_subdivisions and augment_pass:
             num_subdivisions = random.randint(0, self.augment_subdivisions)
         else:
             num_subdivisions = self.augment_subdivisions
@@ -340,15 +342,18 @@ class AugmentededHeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
         constraints = MontyDecoder().process_decoded(constraints)
 
         dopant_concentration, radii_without_zero = self.inputs_from_constraints_and_concentration(
-            constraints, dopant_concentration, augment_pass = False)
-        
-        dopant_concentration_augmented, radii_without_zero_augmented = self.inputs_from_constraints_and_concentration(
-            constraints, dopant_concentration, augment_pass = True)
-        
-        return self.graph_from_inputs(dopant_concentration, radii_without_zero, dopant_concentration_augmented, radii_without_zero_augmented)
+            constraints, dopant_concentration, augment_pass=False)
+
+        (dopant_concentration_augmented, radii_without_zero_augmented
+         ) = self.inputs_from_constraints_and_concentration(
+             constraints, dopant_concentration, augment_pass=True)
+
+        return self.graph_from_inputs(dopant_concentration, radii_without_zero,
+                                      dopant_concentration_augmented,
+                                      radii_without_zero_augmented)
 
     def graph_from_inputs(self, dopant_concentration: Dict,
-                          radii_without_zero: torch.Tensor, 
+                          radii_without_zero: torch.Tensor,
                           dopant_concentration_augmented: Dict,
                           radii_without_zero_augmented: torch.Tensor) -> Dict:
         """
@@ -392,12 +397,15 @@ class AugmentededHeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
         data['constraint_radii_idx'] = radii_idx
 
         # repeat for subdivided particle
-        radii_subdivided = torch.cat(
-            (torch.tensor([0.0], requires_grad=False), radii_without_zero_augmented),
-            dim=0)
+        # yapf: disable
+        radii_subdivided = torch.cat((torch.tensor(
+            [0.0], requires_grad=False), radii_without_zero_augmented), dim=0)
+        # yapf: enable
+
         radii_idx_subdivided = torch.stack(
             (torch.arange(0,
-                          len(radii_subdivided) - 1), torch.arange(1, len(radii_subdivided))),
+                          len(radii_subdivided) - 1),
+             torch.arange(1, len(radii_subdivided))),
             dim=1)
         data['subdivided_radii_without_zero'] = radii_without_zero_augmented
         data['subdivided_radii'] = radii_subdivided
@@ -506,8 +514,7 @@ class AugmentededHeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
             [intraaction_counter, len(dopant_concs)]).reshape(2, 1)
         data['intraaction']['num_nodes'] = intraaction_counter
 
-        #Build interactions for subdivided particle
-
+        # Build interactions for subdivided particle
         subdivided_dopant_specifications = [
             (layer_idx, conc, el, None)
             for layer_idx, dopants in enumerate(dopant_concentration_augmented)
@@ -518,14 +525,18 @@ class AugmentededHeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
         subdivided_dopant_types = []
         subdivided_dopant_constraint_indices = []
         for constraint_indices, dopant_conc, dopant_el, _ in subdivided_dopant_specifications:
-            subdivided_dopant_types.append(self.dopants_dict[dopant_el]) #will this be the same for subdivided particle? 
+            subdivided_dopant_types.append(
+                self.dopants_dict[dopant_el]
+            )  # will this be the same for subdivided particle?
             subdivided_dopant_concs.append(dopant_conc)
             subdivided_dopant_constraint_indices.append(constraint_indices)
 
-        data['subdivided_dopant']['x'] = torch.tensor(subdivided_dopant_concs,
-                                           dtype=torch.float32,
-                                           requires_grad=self.input_grad)
-        data['subdivided_dopant']['types'] = torch.tensor(subdivided_dopant_types, dtype=torch.long)
+        data['subdivided_dopant']['x'] = torch.tensor(
+            subdivided_dopant_concs,
+            dtype=torch.float32,
+            requires_grad=self.input_grad)
+        data['subdivided_dopant']['types'] = torch.tensor(
+            subdivided_dopant_types, dtype=torch.long)
         data['subdivided_dopant']['constraint_indices'] = torch.tensor(
             subdivided_dopant_constraint_indices, dtype=torch.long)
         data['subdivided_dopant']['num_nodes'] = len(subdivided_dopant_concs)
@@ -546,7 +557,8 @@ class AugmentededHeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
         intraaction_counter = 0
         for i, type_i in enumerate(subdivided_dopant_types):
             for j, type_j in enumerate(subdivided_dopant_types):
-                if subdivided_dopant_constraint_indices[i] == subdivided_dopant_constraint_indices[j]:  # yapf: disable
+                if subdivided_dopant_constraint_indices[
+                        i] == subdivided_dopant_constraint_indices[j]:
                     # This is an intra-layer interaction
                     intraaction_type_indices.append([type_i, type_j])
                     intraaction_types.append(
@@ -571,8 +583,8 @@ class AugmentededHeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
 
         data['subdivided_interaction']['type_indices'] = torch.tensor(
             interaction_type_indices, dtype=torch.long)
-        data['subdivided_interaction']['types'] = torch.tensor(interaction_types,
-                                                    dtype=torch.long)
+        data['subdivided_interaction']['types'] = torch.tensor(
+            interaction_types, dtype=torch.long)
         data['subdivided_interaction']['dopant_indices'] = torch.tensor(
             interaction_dopant_indices, dtype=torch.long)
         data['subdivided_dopant', 'coupled_to',
@@ -584,16 +596,20 @@ class AugmentededHeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
                  interaction_edge_index_backward).reshape(-1,
                                                           2).transpose(0, 1)
         # Keep track of increment (so we can combine graphs)
-        data['subdivided_dopant', 'coupled_to', 'subdivided_interaction']['inc'] = torch.tensor(
-            [len(subdivided_dopant_concs), interaction_counter]).reshape(2, 1)
-        data['subdivided_interaction', 'coupled_to', 'subdivided_dopant']['inc'] = torch.tensor(
-            [interaction_counter, len(subdivided_dopant_concs)]).reshape(2, 1)
+        data['subdivided_dopant', 'coupled_to',
+             'subdivided_interaction']['inc'] = torch.tensor(
+                 [len(subdivided_dopant_concs),
+                  interaction_counter]).reshape(2, 1)
+        data['subdivided_interaction', 'coupled_to',
+             'subdivided_dopant']['inc'] = torch.tensor(
+                 [interaction_counter,
+                  len(subdivided_dopant_concs)]).reshape(2, 1)
         data['subdivided_interaction']['num_nodes'] = interaction_counter
 
         data['subdivided_intraaction']['type_indices'] = torch.tensor(
             intraaction_type_indices, dtype=torch.long)
-        data['subdivided_intraaction']['types'] = torch.tensor(intraaction_types,
-                                                    dtype=torch.long)
+        data['subdivided_intraaction']['types'] = torch.tensor(
+            intraaction_types, dtype=torch.long)
         data['subdivided_intraaction']['dopant_indices'] = torch.tensor(
             intraaction_dopant_indices, dtype=torch.long)
         data['subdivided_dopant', 'coupled_to',
@@ -605,10 +621,14 @@ class AugmentededHeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
                  intraaction_edge_index_backward).reshape(-1,
                                                           2).transpose(0, 1)
         # Keep track of increment (so we can combine graphs)
-        data['subdivided_dopant', 'coupled_to', 'subdivided_intraaction']['inc'] = torch.tensor(
-            [len(subdivided_dopant_concs), intraaction_counter]).reshape(2, 1)
-        data['subdivided_intraaction', 'coupled_to', 'subdivided_dopant']['inc'] = torch.tensor(
-            [intraaction_counter, len(subdivided_dopant_concs)]).reshape(2, 1)
+        data['subdivided_dopant', 'coupled_to',
+             'subdivided_intraaction']['inc'] = torch.tensor(
+                 [len(subdivided_dopant_concs),
+                  intraaction_counter]).reshape(2, 1)
+        data['subdivided_intraaction', 'coupled_to',
+             'subdivided_dopant']['inc'] = torch.tensor(
+                 [intraaction_counter,
+                  len(subdivided_dopant_concs)]).reshape(2, 1)
         data['subdivided_intraaction']['num_nodes'] = intraaction_counter
 
         return data

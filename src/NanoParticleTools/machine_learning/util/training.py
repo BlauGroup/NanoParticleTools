@@ -286,21 +286,22 @@ def train_uv_model(config,
 
     return model
 
+
 def train_uv_model_augment(config,
-                   model_cls,
-                   data_module,
-                   lr_scheduler,
-                   initial_model_path: Optional[str] = None,
-                   num_epochs: Optional[int] = 2000,
-                   augment_loss=False,
-                   ray_tune: Optional[bool] = False,
-                   early_stop: Optional[bool] = False,
-                   early_stop_patience: Optional[int] = 200,
-                   swa: Optional[bool] = False,
-                   save_checkpoints: Optional[bool] = True,
-                   wandb_config: Optional[dict] = None,
-                   trainer_device_config: Optional[dict] = None,
-                   additional_callbacks: Optional[List] = None):
+                           model_cls,
+                           data_module,
+                           lr_scheduler,
+                           initial_model_path: Optional[str] = None,
+                           num_epochs: Optional[int] = 2000,
+                           augment_loss=False,
+                           ray_tune: Optional[bool] = False,
+                           early_stop: Optional[bool] = False,
+                           early_stop_patience: Optional[int] = 200,
+                           swa: Optional[bool] = False,
+                           save_checkpoints: Optional[bool] = True,
+                           wandb_config: Optional[dict] = None,
+                           trainer_device_config: Optional[dict] = None,
+                           additional_callbacks: Optional[List] = None):
     """
         params
         model_cls:
@@ -336,7 +337,8 @@ def train_uv_model_augment(config,
     # if augment_loss:
     #     callbacks.append(LossAugmentCallback(aug_loss_epoch=augment_loss))
     if early_stop:
-        callbacks.append(EarlyStopping(monitor='val_loss', patience=early_stop_patience))
+        callbacks.append(
+            EarlyStopping(monitor='val_loss', patience=early_stop_patience))
     if swa:
         callbacks.append(StochasticWeightAveraging(swa_lrs=1e-3))
     if ray_tune:
@@ -395,6 +397,7 @@ def train_uv_model_augment(config,
     wandb.finish()
 
     return model
+
 
 class NPMCTrainer():
 
