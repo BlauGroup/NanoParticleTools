@@ -55,6 +55,41 @@ class NonLinearMLP(torch.nn.Module):
         return self.mlp(x)
 
 
+class LazyNonLinearMLP(torch.nn.Module):
+
+    def __init__(self,
+                 out_dim: int,
+                 mid_dim: Union[List[int], int],
+                 dropout_probability: float,
+                 activation_module: Optional[torch.nn.Module] = None):
+        super().__init__()
+        if isinstance(mid_dim, int):
+            mid_dim = [mid_dim]
+
+        if activation_module is None:
+            activation_module = torch.nn.SiLU
+
+        _nn = []
+        _nn.append(nn.LazyLinear(mid_dim[0]))
+        if activation_module is not None:
+            _nn.append(activation_module())
+        if dropout_probability > 0:
+            _nn.append(nn.Dropout(dropout_probability))
+        current_dim = mid_dim[0]
+        for _dim in mid_dim[1:]:
+            _nn.append(nn.Linear(current_dim, _dim))
+            if activation_module is not None:
+                _nn.append(activation_module())
+            if dropout_probability > 0:
+                _nn.append(nn.Dropout(dropout_probability))
+            current_dim = _dim
+        _nn.append(nn.Linear(current_dim, out_dim))
+        self.mlp = nn.Sequential(*_nn)
+
+    def forward(self, x):
+        return self.mlp(x)
+
+
 class BatchScaling(nn.Module):
 
     def __init__(self,
