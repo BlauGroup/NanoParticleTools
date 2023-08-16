@@ -19,12 +19,8 @@ def label_processor():
 
 @pytest.fixture
 def feature_processor():
-    return TabularFeatureProcessor(max_layers = 3, possible_elements=['Yb', 'Nd', 'Mg'])
-
-
-@pytest.fixture
-def graph_feature_processor():
-    return TabularFeatureProcessor(max_layers = 3, possible_elements=['Yb', 'Nd', 'Mg'])
+    return TabularFeatureProcessor(max_layers=3,
+                                   possible_elements=['Yb', 'Nd', 'Mg'])
 
 
 @pytest.fixture

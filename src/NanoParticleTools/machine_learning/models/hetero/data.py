@@ -11,6 +11,7 @@ import numpy as np
 import torch
 import random
 
+
 class NPHeteroData(HeteroData):
 
     def __cat_dim__(self,
@@ -150,9 +151,9 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
         constraints = input_constraints[:len(dopant_concentration)]
 
         _radii = [0] + [constraint.radius for constraint in constraints]
-        
+
         # randomly assign number of subdivisions within range
-        if self.distribute_subdivisions and self.augment_data: 
+        if self.distribute_subdivisions and self.augment_data:
             num_subdivisions = random.randint(0, self.augment_subdivisions)
         else:
             num_subdivisions = self.augment_subdivisions
@@ -170,7 +171,8 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
                         _radii.insert(i, aug_radius)
 
                         # additionally, duplicate the dopant concentration at this layer
-                        dopant_concentration.insert(i, dopant_concentration[i - 1])
+                        dopant_concentration.insert(
+                            i, dopant_concentration[i - 1])
                         break
 
         # Check for duplicate radii (these would cause 0 thickness layers)

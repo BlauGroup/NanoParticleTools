@@ -24,8 +24,6 @@ class HeteroDCVRepresentationModule(torch.nn.Module):
                  aggregation: str = 'sum',
                  **kwargs):
         """
-        
-
         Args:
             embed_dim (int, optional): _description_. Defaults to 16.
             n_message_passing (int, optional): _description_. Defaults to 3.
@@ -225,6 +223,8 @@ class HeteroDCVModel(SpectrumModelBase):
                  readout_layers: List[int] = None,
                  n_output_nodes: int = 1,
                  aggregation: str = 'sum',
+                 dropout_probability: float = 0,
+                 activation_module: torch.nn.Module = nn.SiLU,
                  **kwargs):
         """
         Args:
@@ -235,6 +235,11 @@ class HeteroDCVModel(SpectrumModelBase):
                 interaction. Also corresponds to the number of channels output by the
                 integrated interaction.
             readout_layers: The number of layers in the readout MLP.
+            n_output_nodes: The number of values output by the model.
+            aggregation: Options are 'sum' and 'mean'. Defaults to 'sum'.
+            dropout_probability: The probability of dropout in the readout.
+            activation_module: The activation function used in the readout.
+                Should be of type torch.nn.Module. Defaults to nn.ReLU.
 
         Inherited Args:
             l2_regularization_weight: The weight of the L2 regularization term in the loss function.
@@ -261,6 +266,9 @@ class HeteroDCVModel(SpectrumModelBase):
         self.embed_dim = embed_dim
         self.n_message_passing = n_message_passing
         self.nsigma = nsigma
+        self.n_output_nodes = n_output_nodes
+        self.dropout_probability = dropout_probability
+        self.activation_module = activation_module
 
         if readout_layers is None:
             readout_layers = [128]
@@ -274,8 +282,11 @@ class HeteroDCVModel(SpectrumModelBase):
             aggregation=aggregation,
             **kwargs)
 
-        self.readout = NonLinearMLP(embed_dim, n_output_nodes,
-                                    self.readout_layers, 0.25, nn.SiLU)
+        self.readout = NonLinearMLP(self.embed_dim,
+                                    self.n_output_nodes,
+                                    self.readout_layers,
+                                    self.dropout_probability,
+                                    self.activation_module)
 
         self.save_hyperparameters()
 

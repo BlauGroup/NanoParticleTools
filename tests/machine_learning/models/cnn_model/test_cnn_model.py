@@ -41,7 +41,7 @@ def test_1d_model(dataset):
                      n_dopants=3,
                      readout_layers=None,
                      dimension=1)
-    
+
     assert model.readout_layers == [128]
 
     y_hat, _ = model.evaluate_step(dataset[0])

@@ -11,7 +11,7 @@ def dopant_specifications_to_concentrations(
     """
     A helper function to convert from the dopant specifications, which are typically
     used to specify inputs to the NPMC simulator into the dopant concentrations which
-    are the output concentrations of the NPMC input generation. This output is commonly 
+    are the output concentrations of the NPMC input generation. This output is commonly
     used by the machine learning models.
 
     Args:

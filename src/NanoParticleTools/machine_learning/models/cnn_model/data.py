@@ -109,7 +109,7 @@ def to_nd_image(conc_tensor: torch.Tensor,
     zero_tensor = torch.zeros([image_dim] * dims + [n_dopants])
 
     # compute the distance from the center)
-    radius = torch.linspace(0, max_nonzero_radius, int(max_nonzero_radius//image_resolution+1))
+    radius = torch.linspace(0, max_nonzero_radius, int(max_nonzero_radius // image_resolution + 1))
     mg = torch.meshgrid(*[radius for _ in range(dims)], indexing='ij')
     radial_distance = torch.sqrt(
         torch.sum(torch.stack([torch.pow(_el, 2) for _el in mg]), dim=0))

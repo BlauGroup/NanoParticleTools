@@ -17,6 +17,7 @@ import sqlite3
 import warnings
 import shutil
 
+
 # Save 'trajectory_doc' to the trajectories store
 # (as specified in the JobStore)
 @job(trajectories='trajectory_doc')

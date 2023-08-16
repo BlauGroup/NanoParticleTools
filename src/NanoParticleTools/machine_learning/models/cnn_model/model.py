@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from NanoParticleTools.machine_learning.core import SpectrumModelBase
 from NanoParticleTools.machine_learning.modules.core import LazyNonLinearMLP
 
@@ -8,13 +8,37 @@ from NanoParticleTools.machine_learning.modules.core import LazyNonLinearMLP
 class CNNModel(SpectrumModelBase):
 
     def __init__(self,
-                 n_output_nodes=600,
+                 n_output_nodes=1,
                  dropout_probability: float = 0,
                  dimension: Optional[int] = 1,
                  activation_module: Optional[torch.nn.Module] = nn.ReLU,
-                 conv_params: Optional[List[List]] = None,
+                 conv_params: Optional[List[Tuple]] = None,
                  readout_layers: Optional[List[int]] = None,
                  **kwargs):
+        """
+        Args:
+            n_output_nodes: The number of values output by the model.
+            dropout_probability: The probability of dropout in the readout.
+            dimension: The dimensionality of the input image. Must be 1, 2, or 3.
+            activation_module: The activation function used in the readout.
+                Should be of type torch.nn.Module. Defaults to nn.ReLU.
+            conv_params: Tuples of (out_channels, kernel_size, stride) for each convolutional layer.
+            readout_layers: The number of layers in the readout MLP.
+
+        Inherited Args:
+            l2_regularization_weight: The weight of the L2 regularization term in the loss function.
+                This is passed to the torch optimizer
+            optimizer_type: The type of optimizer to use. options are 'sgd', 'adam', and 'amsgrad'.
+                if 'amsgrad' is selected, the pytorch adam optimizer is used with the `amsgrad=True`
+            learning_rate: The default learning rate for model training. The actual learning rate
+                used may be different depending on the actions of the learning rate scheduler
+            lr_scheduler: The learning rate scheduler class to use.
+            lr_scheduler_kwargs: The kwargs passed to the learning rate scheduler on initialization.
+            loss_function: The loss function to use for backpropagation in training.
+                MAE, MSE, and Cosine Similarity will be logged anyways.
+            additional_metadata: Additional metadata which will be logged with the model to
+                wandb.
+        """
 
         assert dimension > 0 and dimension <= 3
         if dimension == 1:
@@ -64,8 +88,10 @@ class CNNModel(SpectrumModelBase):
 
         self.representation_module = nn.Sequential(*modules)
 
-        self.readout = LazyNonLinearMLP(n_output_nodes, self.readout_layers,
-                                        0.25, self.activation_module)
+        self.readout = LazyNonLinearMLP(self.n_output_nodes,
+                                        self.readout_layers,
+                                        self.dropout_probability,
+                                        self.activation_module)
         self.save_hyperparameters()
 
     def forward(self, x, **kwargs):

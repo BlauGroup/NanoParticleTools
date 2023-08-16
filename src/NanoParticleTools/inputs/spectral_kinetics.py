@@ -556,13 +556,14 @@ class SpectralKinetics(MSONable):
                                 abs(effective_energy_gap), self.mpr_beta)
 
                         # TODO: Add SK_omitETtransitions to omit specific transitions
+                        # yapf: disable
                         if (energy_transfer_rate * donor_concentration *
-                                acceptor_concentration
-                            ) > self.energy_transfer_rate_threshold:
+                                acceptor_concentration) > self.energy_transfer_rate_threshold:
                             energy_transfers.append([
                                 combined_di, combined_dj, combined_ai,
                                 combined_aj, energy_transfer_rate
                             ])
+                        # yapf: enable
 
         energy_transfer_rates = np.array(np.vstack(energy_transfers))
         return energy_transfer_rates

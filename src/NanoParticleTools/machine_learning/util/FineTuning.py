@@ -1,37 +1,40 @@
 from NanoParticleTools.machine_learning.models.mlp_model.model import MLPSpectrumModel
 from NanoParticleTools.machine_learning.models.hetero.intra_inter_model import HeteroDCVModel
-import pytorch_lightning as pl
-from maggma.stores import MongoStore
 from NanoParticleTools.machine_learning.data.datamodule import NPMCDataModule
 from NanoParticleTools.machine_learning.data.dataset import NPMCDataset
-import torch
+
+from maggma.stores import MongoStore
+import pytorch_lightning as pl
 import numpy as np
+import torch
+
+from typing import List, Tuple, Dict
+
 
 def FreezeMLP(model: MLPSpectrumModel,
-               num_frozen_layers: int,
-               reset_thawed_layers: bool
-               ):
+              num_frozen_layers: int,
+              reset_thawed_layers: bool) -> MLPSpectrumModel:
     """
-    params
-    model: MLPSpectrumModel trained on LF data
-    num_frozen_layers: the number of layers to freeze
+    Args:
+        model: MLPSpectrumModel trained on LF data
+        num_frozen_layers: the number of layers to freeze
     """
-    iter_num = 0  
-    for name, param in model.named_parameters():
-        iter_num+=1
-        if iter_num < num_frozen_layers*2:
+    iter_num = 0
+    for _, param in model.named_parameters():
+        iter_num += 1
+        if iter_num < num_frozen_layers * 2:
             param.requires_grad = False
         else:
-            if reset_thawed_layers == True:
+            if reset_thawed_layers:
                 param = 0
     return model
-    
-def k_fold_validation_training(dataset: NPMCDataset, 
-                                    k: int):
+
+
+def k_fold_validation_training(dataset: NPMCDataset, k: int) -> Tuple[NPMCDataset, NPMCDataset]:
     """
-    params
-    training_set: NPMCDataset containing training data
-    k: number of k-folds
+    Args:
+        training_set: NPMCDataset containing training data
+        k: number of k-folds
     """
 
     # Get the number of samples in the dataset
@@ -55,11 +58,13 @@ def k_fold_validation_training(dataset: NPMCDataset,
 
         # Split the indices into training and validation sets
         validation_indices = shuffled_indices[start_idx:end_idx]
-        training_indices = shuffled_indices[:start_idx] + shuffled_indices[end_idx:]
+        training_indices = shuffled_indices[:start_idx] + shuffled_indices[
+            end_idx:]
 
         # Create subsets using the indices
         training_subset = torch.utils.data.Subset(dataset, training_indices)
-        validation_subset = torch.utils.data.Subset(dataset, validation_indices)
+        validation_subset = torch.utils.data.Subset(dataset,
+                                                    validation_indices)
 
         # Append subsets to the lists
         training_sets.append(training_subset)
@@ -69,21 +74,20 @@ def k_fold_validation_training(dataset: NPMCDataset,
 
 
 def FineTuneHeteroModel(model: HeteroDCVModel,
-               freeze_representation: bool,
-               reset_readout: bool
-               ):
+                        freeze_representation: bool,
+                        reset_readout: bool) -> HeteroDCVModel:
     """
-    params
-    model: HeteroDCVModel trained on LF data
-    freeze_representation: whether or not to freeze the representation (or just initialize)
-    reset_readout: whether or not to reset the readout layer (or just initialize)
+    Args:
+        model: HeteroDCVModel trained on LF data
+        freeze_representation: whether or not to freeze the representation (or just initialize)
+        reset_readout: whether or not to reset the readout layer (or just initialize)
     """
-    if reset_readout == True: 
-        for name, param in model.readout.named_parameters():
-            param = 0 # reset to random weights, or 0?
-    
-    if freeze_representation == True: 
-        for name, param in model.representation_module.named_parameters():
+    if reset_readout:
+        for _, param in model.readout.named_parameters():
+            param = 0  # reset to random weights, or 0?
+
+    if freeze_representation:
+        for _, param in model.representation_module.named_parameters():
             param.requires_grad = False
-            
+
     return model
