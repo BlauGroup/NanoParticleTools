@@ -145,7 +145,6 @@ class SpectrumModelBase(pl.LightningModule):
             return batch.batch[-1]
         else:
             return 1
-        return batch_size
 
     def _step(self,
               prefix: str,

@@ -70,10 +70,12 @@ class NPMCDataModule(pl.LightningDataModule):
         self.data_is_graph = data_is_graph(train_dataset)
         self.batch_size = batch_size
         self.loader_workers = loader_workers
-        self.feature_processor, self.label_processor = get_processors(train_dataset)
+        self.feature_processor, self.label_processor = get_processors(
+            train_dataset)
 
-        self.save_hyperparameters(
-            ignore=['train_dataset', 'val_dataset', 'test_dataset', 'iid_test_dataset'])
+        self.save_hyperparameters(ignore=[
+            'train_dataset', 'val_dataset', 'test_dataset', 'iid_test_dataset'
+        ])
 
     @property
     def persistent_workers(self):
@@ -111,7 +113,11 @@ class NPMCDataModule(pl.LightningDataModule):
             train_dataset, [train_size, validation_size, test_size],
             generator=torch.Generator().manual_seed(split_seed))
 
-        return cls(train_subset, val_subset, test_subset, split_seed, **kwargs)
+        return cls(train_subset,
+                   val_subset,
+                   test_subset,
+                   split_seed=split_seed,
+                   **kwargs)
 
     @classmethod
     def from_train_and_test_dataset(cls,
@@ -131,7 +137,10 @@ class NPMCDataModule(pl.LightningDataModule):
             train_dataset, [train_size, validation_size],
             generator=torch.Generator().manual_seed(split_seed))
 
-        return cls(train_subset, val_subset, test_dataset, split_seed,
+        return cls(train_subset,
+                   val_subset,
+                   test_dataset,
+                   split_seed=split_seed,
                    **kwargs)
 
     @staticmethod
