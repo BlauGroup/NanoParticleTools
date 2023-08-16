@@ -15,7 +15,6 @@ class CNNFeatureProcessor(FeatureProcessor):
                  max_np_radius: Optional[int] = 250,
                  dims: Optional[int] = 1,
                  full_nanoparticle: Optional[bool] = True,
-                 input_grad: Optional[bool] = False,
                  **kwargs):
         """
         :param possible_elements:
@@ -40,7 +39,6 @@ class CNNFeatureProcessor(FeatureProcessor):
 
         self.dims = dims
         self.full_nanoparticle = full_nanoparticle
-        self.input_grad = input_grad
 
     def dopant_specification_to_concentration_tensor(self,
                                                      dopant_specifications,

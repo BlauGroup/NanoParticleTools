@@ -49,7 +49,6 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
 
     def __init__(self,
                  include_zeros: bool = False,
-                 input_grad: bool = False,
                  asymmetric_interaction: bool = False,
                  augment_data: bool = False,
                  augment_prob: float = 0.5,
@@ -68,7 +67,6 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
                     i) All possible dopants (even if they have zero concentration)
                     ii) Empty constraints if they are "internal" (such that last (external)
                     control volume must be occupied
-            input_grad: Whether to .
             asymmetric_interaction: .
         """
         # yapf: disable
@@ -79,12 +77,12 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
         self.elements_map = dict([(_t[1], _t[0])
                                   for _t in enumerate(self.possible_elements)])
         self.include_zeros = include_zeros
-        self.input_grad = input_grad
         self.asymmetric_interaction = asymmetric_interaction
         self.augment_data = augment_data
         self.augment_prob = augment_prob
         self.augment_subdivisions = augment_subdivisions
         self.distribute_subdivisions = distribute_subdivisions
+
     @property
     @lru_cache
     def edge_type_map(self):

@@ -52,7 +52,11 @@ class DataProcessor(ABC, MSONable):
 
 class FeatureProcessor(DataProcessor):
 
-    def __init__(self, possible_elements=['Yb', 'Er', 'Nd'], **kwargs):
+    def __init__(self,
+                 possible_elements=['Yb', 'Er', 'Nd'],
+                 input_grad=False,
+                 **kwargs):
+        self.input_grad = input_grad
         self.possible_elements = possible_elements
         self.n_possible_elements = len(self.possible_elements)
         self.dopants_dict = {
