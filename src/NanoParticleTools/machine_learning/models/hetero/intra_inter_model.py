@@ -20,16 +20,20 @@ class HeteroDCVRepresentationModule(torch.nn.Module):
                  nsigma: int = 5,
                  interaction_embedding: bool = True,
                  conc_eps: float = 0.01,
-                 geometry_film_layers: List[int] = [16, 16],
                  n_dopants: int = 3,
                  aggregation: str = 'sum',
                  **kwargs):
         """
+        
+
         Args:
-            embed_dim: _description_.
-            n_message_passing: _description_.
-            nsigma: _description_.
-            volume_normalization: _description_.
+            embed_dim (int, optional): _description_. Defaults to 16.
+            n_message_passing (int, optional): _description_. Defaults to 3.
+            nsigma (int, optional): _description_. Defaults to 5.
+            interaction_embedding (bool, optional): _description_. Defaults to True.
+            conc_eps (float, optional): _description_. Defaults to 0.01.
+            n_dopants (int, optional): _description_. Defaults to 3.
+            aggregation: Options are 'sum' and 'mean'. Defaults to 'sum'.
         """
         super().__init__()
 
@@ -217,8 +221,9 @@ class HeteroDCVModel(SpectrumModelBase):
                  n_dopants: int = 3,
                  embed_dim: int = 16,
                  n_message_passing: int = 3,
-                 nsigma=5,
-                 readout_layers: List[int] = [128],
+                 nsigma: int = 5,
+                 readout_layers: List[int] = None,
+                 n_output_nodes: int = 1,
                  aggregation: str = 'sum',
                  **kwargs):
         """
@@ -256,6 +261,9 @@ class HeteroDCVModel(SpectrumModelBase):
         self.embed_dim = embed_dim
         self.n_message_passing = n_message_passing
         self.nsigma = nsigma
+
+        if readout_layers is None:
+            readout_layers = [128]
         self.readout_layers = readout_layers
 
         self.representation_module = HeteroDCVRepresentationModule(
@@ -266,8 +274,8 @@ class HeteroDCVModel(SpectrumModelBase):
             aggregation=aggregation,
             **kwargs)
 
-        self.readout = NonLinearMLP(embed_dim, 1, self.readout_layers, 0.25,
-                                    nn.SiLU)
+        self.readout = NonLinearMLP(embed_dim, n_output_nodes,
+                                    self.readout_layers, 0.25, nn.SiLU)
 
         self.save_hyperparameters()
 
