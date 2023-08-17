@@ -6,6 +6,14 @@ from typing import List, Tuple
 from NanoParticleTools.inputs.nanoparticle import NanoParticleConstraint
 from pymatgen.vis.structure_vtk import EL_COLORS
 
+DEFAULT_COLOR_MAP = {
+    'Yb': 'tab:blue',
+    'Er': 'tab:orange',
+    'Nd': 'tab:green',
+    'Other': 'lightgrey',
+    'Y': 'white'
+}
+
 
 def plot_nanoparticle_from_arrays(radii: np.array,
                                   concentrations: np.array,
@@ -20,10 +28,15 @@ def plot_nanoparticle_from_arrays(radii: np.array,
         (concentrations, 1 - concentrations.sum(axis=1, keepdims=True)),
         axis=1)
 
-    cmap = plt.colormaps["tab10"]
-    colors = cmap(np.arange(4))
-    # colors[:3] = colors[1:]
-    colors[-1] = [1, 1, 1, 1]
+    colors = [
+        DEFAULT_COLOR_MAP[el]
+        if el in DEFAULT_COLOR_MAP else DEFAULT_COLOR_MAP['Other']
+        for el in elements
+    ]
+    # cmap = plt.colormaps["tab10"]
+    # colors = cmap(np.arange(4))
+    # # colors[:3] = colors[1:]
+    # colors[-1] = [1, 1, 1, 1]
 
     fig = plt.figure(figsize=(5, 5), dpi=dpi)
     ax = fig.subplots()
