@@ -7,7 +7,7 @@ import math
 class NanoParticleSampler():
 
     def __init__(self,
-                 seed,
+                 seed: int = 0,
                  min_core_radius: Optional[float] = 40,
                  max_core_radius: Optional[float] = 40,
                  min_shell_thickness: Optional[float] = 10,
@@ -55,8 +55,14 @@ class NanoParticleSampler():
 
         return configurations
 
-    def one_random_configuration_template(self, excitation_wavelengths,
-                                          excitation_powers, dopants):
+    def one_random_configuration_template(
+            self, excitation_wavelengths: list[int | float] | int | float,
+            excitation_powers: list[int | float] | int | float,
+            dopants: list[str]):
+        if isinstance(excitation_wavelengths, (int, float)):
+            excitation_wavelengths = [excitation_wavelengths]
+        if isinstance(excitation_powers, (int, float)):
+            excitation_powers = [excitation_powers]
 
         # Pick a excitation wavelength and power
         excitation_wavelength = self.rng.choice(excitation_wavelengths)
