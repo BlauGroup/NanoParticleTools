@@ -2,6 +2,8 @@ from NanoParticleTools.util.helper import (
     dopant_specifications_to_concentrations,
     dopant_concentration_to_specifications)
 
+import pytest
+
 
 def test_dopant_specification_to_concentration():
     specs = [(0, 0.5, 'Yb', 'Y'), (0, 0.15, 'Er', 'Y'), (1, 0.35, 'Yb', 'Y'),
@@ -36,9 +38,23 @@ def test_dopant_specification_to_concentration():
     }, {
         'Yb': 0.35
     }, {}, {
-        'Nd': 0.91
+        'Nd': 0.91,
     }]
     assert concentrations == expected_concentrations
+
+    with pytest.warns(UserWarning):
+        concentrations = dopant_specifications_to_concentrations(
+            specs, 4, include_zeros=False, possible_elements=['Yb'])
+    expected_concentrations = [{
+        'Yb': 0.5,
+    }, {
+        'Yb': 0.35
+    }, {}, {}]
+    assert concentrations == expected_concentrations
+
+    with pytest.raises(ValueError):
+        concentrations = dopant_specifications_to_concentrations(
+            specs, 3, include_zeros=False)
 
 
 def test_dopant_concentration_to_specification():
