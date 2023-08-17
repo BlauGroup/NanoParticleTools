@@ -22,7 +22,7 @@ setup(name='NanoParticleTools',
           "pytorch-lightning",
           "ray",
           "wandb",
-          "gpuparallel"
+          "gpuparallel",
           "torch-geometric"
       ]
       )
