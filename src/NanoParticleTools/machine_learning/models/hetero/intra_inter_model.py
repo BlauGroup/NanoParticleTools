@@ -224,7 +224,7 @@ class HeteroDCVModel(SpectrumModelBase):
                  readout_layers: List[int] = None,
                  n_output_nodes: int = 1,
                  aggregation: str = 'sum',
-                 dropout_probability: float = 0,
+                 dropout_probability: float = 0.25,
                  activation_module: torch.nn.Module = nn.SiLU,
                  **kwargs):
         """
