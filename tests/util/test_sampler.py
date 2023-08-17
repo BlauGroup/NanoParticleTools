@@ -73,5 +73,5 @@ def test_generate_samples():
     assert len(samples) == 10
     assert samples[0][0] == 800
     assert samples[0][1] == 1e5
-    
+
     # TODO: check that the samples are valid (i.e valid total concs and # of layers)
