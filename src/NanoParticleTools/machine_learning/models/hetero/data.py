@@ -1,10 +1,9 @@
 from NanoParticleTools.machine_learning.data.processors import FeatureProcessor
 from NanoParticleTools.inputs.nanoparticle import SphericalConstraint
-from monty.serialization import MontyDecoder
 
 from torch_geometric.data.hetero_data import HeteroData, NodeOrEdgeStorage, EdgeStorage
 
-from typing import List, Any, Dict, Optional, Union, Tuple
+from typing import Any
 from functools import lru_cache
 from itertools import combinations_with_replacement
 import numpy as np
@@ -17,7 +16,7 @@ class NPHeteroData(HeteroData):
     def __cat_dim__(self,
                     key: str,
                     value: Any,
-                    store: Optional[NodeOrEdgeStorage] = None,
+                    store: NodeOrEdgeStorage | None = None,
                     *args,
                     **kwargs) -> Any:
         if 'indices' in key:
@@ -29,7 +28,7 @@ class NPHeteroData(HeteroData):
     def __inc__(self,
                 key: str,
                 value: Any,
-                store: Optional[NodeOrEdgeStorage] = None,
+                store: NodeOrEdgeStorage | None = None,
                 *args,
                 **kwargs) -> Any:
         if isinstance(store, EdgeStorage) and 'index' in key:
@@ -114,9 +113,9 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
         return edge_type_map
 
     def inputs_from_concentration_and_constraints(
-            self, input_constraints: List[SphericalConstraint],
-            input_dopant_concentration: List[Dict]
-    ) -> Tuple[Dict, torch.Tensor]:
+            self, input_constraints: list[SphericalConstraint],
+            input_dopant_concentration: list[dict]
+    ) -> tuple[dict, torch.Tensor]:
         """
         Preprocess the inputs and constraints to ensure they
         form valid graphs.
@@ -190,7 +189,7 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
 
         return dopant_concentration, radii_without_zero
 
-    def process_doc(self, doc: Dict) -> Dict:
+    def process_doc(self, doc: dict) -> dict:
         dopant_concentration = doc['dopant_concentration']
 
         constraints = doc['input']['constraints']
@@ -201,13 +200,13 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
 
         return self.graph_from_inputs(dopant_concentration, radii_without_zero)
 
-    def graph_from_inputs(self, dopant_concentration: Dict,
-                          radii_without_zero: torch.Tensor) -> Dict:
+    def graph_from_inputs(self, dopant_concentration: dict,
+                          radii_without_zero: torch.Tensor) -> dict:
         """
         Get a graph from the raw inputs
 
         Args:
-            dopant_concentration: Dictionary containing the dopant concentration
+            dopant_concentration: dictionary containing the dopant concentration
                 in each control volume.
             radii_without_zero: Outer radii of each control volume
         """

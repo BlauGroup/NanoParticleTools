@@ -1,7 +1,6 @@
 from NanoParticleTools.inputs import NanoParticleConstraint, SphericalConstraint
 from NanoParticleTools.machine_learning.data.processors import DataProcessor
 
-from typing import List, Union, Tuple, Optional
 from functools import lru_cache
 import torch
 from torch_geometric.data.data import Data
@@ -11,8 +10,8 @@ from monty.json import MontyDecoder
 class GraphFeatureProcessor(DataProcessor):
 
     def __init__(self,
-                 edge_attr_bias: Union[float, int] = 0.5,
-                 single_edge_attr: Optional[bool] = True,
+                 edge_attr_bias: float | int = 0.5,
+                 single_edge_attr: bool = True,
                  **kwargs):
         """
 
@@ -102,9 +101,8 @@ class GraphFeatureProcessor(DataProcessor):
         edge_attr = torch.vstack(edge_attributes)
         return {'edge_index': edge_index, 'edge_attr': edge_attr}
 
-    def get_data_graph(self, constraints: List[NanoParticleConstraint],
-                       dopant_specifications: List[Tuple[int, float, str,
-                                                         str]]):
+    def get_data_graph(self, constraints: list[NanoParticleConstraint],
+                       dopant_specifications: list[tuple[int, float, str, str]]):
 
         output_dict = self.get_node_features(constraints,
                                              dopant_specifications)
@@ -133,17 +131,16 @@ class GraphFeatureProcessor(DataProcessor):
 class GraphInteractionFeatureProcessor(DataProcessor):
 
     def __init__(self,
-                 edge_attr_bias: Union[float, int] = 0.5,
-                 interaction_sigma: Optional[float] = 20.0,
+                 edge_attr_bias: float | int = 0.5,
+                 interaction_sigma: float = 20.0,
                  **kwargs):
         """
-
         Args:
-            possible_elements (List[str], optional): _description_. Defaults to ['Yb', 'Er', 'Nd'].
-            edge_attr_bias (Union[float, int], optional): A bias added to the edge_attr before
+            possible_elements: All dopant elements that may exist in the data
+            edge_attr_bias: A bias added to the edge_attr before
                 applying 1/edge_attr. This serves to eliminate divide by zero and inf in the tensor.
                 Additionally, it acts as a weight on the self-interaction. Defaults to 0.5.
-            interaction_sigma (Optional[float], optional): _description_. Defaults to 20.0.
+            interaction_sigma: The sigma parameter for the gaussian interaction. Defaults to 20.0.
         """
         # yapf: disable
         super().__init__(fields=[
@@ -198,8 +195,8 @@ class GraphInteractionFeatureProcessor(DataProcessor):
         edge_attr = torch.vstack(edge_attributes)
         return {'edge_index': edge_index, 'edge_attr': edge_attr}
 
-    def get_data_graph(self, constraints: List[NanoParticleConstraint],
-                       dopant_specifications: List[Tuple[int, float, str,
+    def get_data_graph(self, constraints: list[NanoParticleConstraint],
+                       dopant_specifications: list[tuple[int, float, str,
                                                          str]]):
 
         output_dict = self.get_node_features(constraints,

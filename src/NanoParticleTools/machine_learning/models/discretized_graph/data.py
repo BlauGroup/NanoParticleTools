@@ -1,7 +1,6 @@
 from NanoParticleTools.inputs import NanoParticleConstraint
 from NanoParticleTools.machine_learning.data.processors import FeatureProcessor
 
-from typing import List, Union, Tuple, Optional, Any
 import torch
 from torch_geometric.data.data import Data
 from monty.json import MontyDecoder
@@ -10,11 +9,11 @@ from monty.json import MontyDecoder
 class GraphFeatureProcessor(FeatureProcessor):
 
     def __init__(self,
-                 resolution: Optional[float] = 0.1,
-                 full_nanoparticle: Optional[bool] = True,
-                 cutoff_distance: Optional[int] = 3,
-                 log_vol: Optional[bool] = True,
-                 shift_composition: Optional[bool] = False,
+                 resolution: float = 0.1,
+                 full_nanoparticle: bool = True,
+                 cutoff_distance: int = 3,
+                 log_vol: bool = True,
+                 shift_composition: bool = False,
                  **kwargs):
         """
         :param possible_elements:
@@ -33,8 +32,8 @@ class GraphFeatureProcessor(FeatureProcessor):
         self.shift_composition = shift_composition
 
     def get_node_features(
-        self, constraints: List[NanoParticleConstraint],
-        dopant_specifications: List[Tuple[int, float, str,
+        self, constraints: list[NanoParticleConstraint],
+        dopant_specifications: list[tuple[int, float, str,
                                           str]]) -> torch.Tensor:
         # Generate the tensor of concentrations for the original constraints.
         # Initialize it to 0
@@ -73,7 +72,7 @@ class GraphFeatureProcessor(FeatureProcessor):
         return {'x': node_features, 'volume': volume}
 
     def get_edge_features(
-            self, constraints: List[NanoParticleConstraint]) -> torch.Tensor:
+            self, constraints: list[NanoParticleConstraint]) -> torch.Tensor:
         # Determine connectivity using a cutoff
         radius = torch.arange(0, constraints[-1].radius, self.resolution)
         xy, yx = torch.meshgrid(radius, radius, indexing='xy')
@@ -95,8 +94,8 @@ class GraphFeatureProcessor(FeatureProcessor):
 
         return {'edge_index': edge_index, 'edge_attr': edge_attr}
 
-    def get_data_graph(self, constraints: List[NanoParticleConstraint],
-                       dopant_specifications: List[Tuple[int, float, str,
+    def get_data_graph(self, constraints: list[NanoParticleConstraint],
+                       dopant_specifications: list[tuple[int, float, str,
                                                          str]]):
 
         output_dict = self.get_node_features(constraints,
@@ -114,8 +113,8 @@ class GraphFeatureProcessor(FeatureProcessor):
         return self.get_data_graph(constraints, dopant_specifications)
 
     def volume(self,
-               radius: Union[List, int, torch.Tensor],
-               shell_width: Optional[float] = 0.01) -> torch.Tensor:
+               radius: list | int | torch.Tensor,
+               shell_width: float = 0.01) -> torch.Tensor:
         """
             Takes inner radius
             """

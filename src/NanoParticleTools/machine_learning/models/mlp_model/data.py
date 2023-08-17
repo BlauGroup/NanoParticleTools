@@ -2,11 +2,8 @@ from NanoParticleTools.machine_learning.data import FeatureProcessor as BaseFeat
 from typing import List
 from torch_geometric.data.data import Data
 
-import numpy as np
 import torch
 from monty.json import MontyDecoder
-
-from typing import Union
 
 
 class MLPFeatureProcessor(BaseFeatureProcessor):

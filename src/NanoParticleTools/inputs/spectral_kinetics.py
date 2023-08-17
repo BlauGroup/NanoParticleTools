@@ -1,5 +1,5 @@
 import math
-from typing import (Optional, List, Union, Sequence, Tuple)
+from typing import List, Sequence, Tuple
 
 import numpy as np
 from NanoParticleTools.util.constants import (h_CGS, c_CGS)
@@ -43,14 +43,14 @@ class SpectralKinetics(MSONable):
                  n_refract: float = 1.5,
                  volume_per_dopant_site: float = 7.23946667e-2,
                  min_dopant_distance: float = 3.867267554e-8,
-                 time_step: Optional[float] = 1e-4,
-                 num_steps: Optional[float] = 100,
-                 ode_max_error: Optional[float] = 1e-12,
-                 energy_transfer_rate_threshold: Optional[float] = 0.1,
-                 radiative_rate_threshold: Optional[float] = 0.0001,
-                 stokes_shift: Optional[float] = 150,
-                 excitation_wavelength: Optional[float] = 976,
-                 excitation_power: Optional[float] = 1e7,
+                 time_step: float = 1e-4,
+                 num_steps: float = 100,
+                 ode_max_error: float = 1e-12,
+                 energy_transfer_rate_threshold: float = 0.1,
+                 radiative_rate_threshold: float = 0.0001,
+                 stokes_shift: float = 150,
+                 excitation_wavelength: float = 976,
+                 excitation_power: float = 1e7,
                  **kwargs):
         """
         :param dopants:
@@ -578,8 +578,7 @@ class SpectralKinetics(MSONable):
 
     def run_kinetics(
             self,
-            initial_populations: Optional[Union[Sequence[Sequence[float]],
-                                                str]] = 'ground_state',
+            initial_populations: Sequence[Sequence[float]] | str = 'ground_state',
             t_span: Tuple[int, int] = None):
         if t_span is None:
             t_span = (0, 0.01)

@@ -1,6 +1,5 @@
 import torch
 from torch import nn
-from typing import Optional, List, Union
 import numpy as np
 
 
@@ -24,15 +23,12 @@ class NonLinearMLP(torch.nn.Module):
     def __init__(self,
                  in_dim: int,
                  out_dim: int,
-                 mid_dim: Union[List[int], int],
+                 mid_dim: list[int] | int,
                  dropout_probability: float,
-                 activation_module: Optional[torch.nn.Module] = None):
+                 activation_module: torch.nn.Module = torch.nn.SiLU):
         super().__init__()
         if isinstance(mid_dim, int):
             mid_dim = [mid_dim]
-
-        if activation_module is None:
-            activation_module = torch.nn.SiLU
 
         _nn = []
         _nn.append(nn.Linear(in_dim, mid_dim[0]))
@@ -59,15 +55,12 @@ class LazyNonLinearMLP(torch.nn.Module):
 
     def __init__(self,
                  out_dim: int,
-                 mid_dim: Union[List[int], int],
+                 mid_dim: list[int] | int,
                  dropout_probability: float,
-                 activation_module: Optional[torch.nn.Module] = None):
+                 activation_module: torch.nn.Module = torch.nn.SiLU):
         super().__init__()
         if isinstance(mid_dim, int):
             mid_dim = [mid_dim]
-
-        if activation_module is None:
-            activation_module = torch.nn.SiLU
 
         _nn = []
         _nn.append(nn.LazyLinear(mid_dim[0]))
@@ -111,7 +104,7 @@ class BatchScaling(nn.Module):
             self.register_buffer('running_mean',
                                  torch.zeros(num_features, **factory_kwargs))
             # self.register_buffer('running_var', torch.ones(num_features, **factory_kwargs))
-            self.running_mean: Optional[torch.Tensor]
+            self.running_mean: torch.Tensor | None
             # self.running_var: Optional[torch.Tensor]
             self.register_buffer(
                 'num_batches_tracked',
@@ -122,7 +115,7 @@ class BatchScaling(nn.Module):
                                  for k, v in factory_kwargs.items()
                                  if k != 'dtype'
                              }))
-            self.num_batches_tracked: Optional[torch.Tensor]
+            self.num_batches_tracked: torch.Tensor | None
         else:
             self.register_buffer("running_mean", None)
             # self.register_buffer("running_var", None)

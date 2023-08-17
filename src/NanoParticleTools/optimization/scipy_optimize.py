@@ -1,5 +1,6 @@
 from NanoParticleTools.util.visualization import plot_nanoparticle_from_arrays
 from NanoParticleTools.inputs.nanoparticle import SphericalConstraint
+from NanoParticleTools.machine_learning.data import FeatureProcessor
 
 from torch_geometric.data import HeteroData
 from scipy.optimize import Bounds
@@ -8,11 +9,12 @@ from scipy.optimize import LinearConstraint
 from matplotlib import pyplot as plt
 import numpy as np
 import torch
+import pytorch_lightning as pl
 
-from typing import Union
+from collections.abc import Callable
 
 
-def get_plotting_fn(feature_processor):
+def get_plotting_fn(feature_processor: FeatureProcessor) -> Callable:
     n_elements = len(feature_processor.possible_elements)
 
     def plotting_fn(x, f=None, accept=None):
@@ -38,7 +40,8 @@ def get_plotting_fn(feature_processor):
     return plotting_fn
 
 
-def get_bounds(n_constraints: int, n_elements: int, r_max: Union[int, float]):
+def get_bounds(n_constraints: int, n_elements: int,
+               r_max: int | float) -> Bounds:
     r"""
     Get the Bounds which are utilized by scipy minimize.
 
@@ -64,12 +67,13 @@ def get_bounds(n_constraints: int, n_elements: int, r_max: Union[int, float]):
     return bounds
 
 
-def get_linear_constraints(n_constraints,
-                           n_elements,
-                           min_thickness=5,
-                           max_thickness=50,
-                           min_core_size=10,
-                           max_core_size=50):
+def get_linear_constraints(
+        n_constraints: int,
+        n_elements: int,
+        min_thickness: int | float = 5,
+        max_thickness: int | float = 50,
+        min_core_size: int | float = 10,
+        max_core_size: int | float = 50) -> LinearConstraint:
     """
     Get the linear constraints which are utilized by scipy minimize.
 
@@ -78,9 +82,8 @@ def get_linear_constraints(n_constraints,
         n_elements: The number of possible dopants to the nanoparticle
         min_thickness: The minimum thickness of each layer/control volume
         max_thickness: The maximum thickness of each layer/control volume
-
-    Returns:
-        _type_: _description_
+        min_core_size: The minimum core size of the nanoparticle
+        max_core_size: The maximum core size of the nanoparticle
     """
     num_dopant_nodes = n_constraints * n_elements
     lower_constraint = []
@@ -117,7 +120,8 @@ def get_linear_constraints(n_constraints,
     return linear_constraint
 
 
-def x_to_data(inputs, feature_processor) -> HeteroData:
+def x_to_data(inputs: torch.Tensor,
+              feature_processor: FeatureProcessor) -> HeteroData:
     n_elements = len(feature_processor.possible_elements)
     n_constraints = len(inputs) // (n_elements + 1)
 
@@ -137,7 +141,9 @@ def x_to_data(inputs, feature_processor) -> HeteroData:
     return data
 
 
-def get_query_fn(model, feature_processor, return_stats=False):
+def get_query_fn(model: pl.LightningModule,
+                 feature_processor: FeatureProcessor,
+                 return_stats: bool = False) -> Callable:
 
     def model_fn(inputs):
         data = x_to_data(inputs, feature_processor)
@@ -152,7 +158,8 @@ def get_query_fn(model, feature_processor, return_stats=False):
     return model_fn
 
 
-def get_jac_fn(model, feature_processor):
+def get_jac_fn(model: pl.LightningModule,
+               feature_processor: FeatureProcessor) -> Callable:
 
     def jac_fn(inputs):
         data = x_to_data(inputs, feature_processor)
@@ -169,7 +176,9 @@ def get_jac_fn(model, feature_processor):
     return jac_fn
 
 
-def rand_np(n_constraints, feature_processor, r_max=50):
+def rand_np(n_constraints: int,
+            feature_processor: FeatureProcessor,
+            r_max: int | float = 50):
     x = np.random.rand(n_constraints, len(feature_processor.possible_elements))
     x_scale = np.random.rand(n_constraints, 1)
     concs = x / x.sum(axis=1, keepdims=True) * x_scale

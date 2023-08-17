@@ -4,8 +4,6 @@ import torch
 import warnings
 import os
 
-from typing import Tuple, Union, List
-
 SUNSET_SPECIES_TABLE = {
     1: ["Yb", "Er", "Mg"],
     2: ["Yb", "Er"],
@@ -16,7 +14,7 @@ SUNSET_SPECIES_TABLE = {
 
 
 def get_sunset_datasets(
-    sunset_ids: Union[int, List[int]],
+    sunset_ids: int | list[int],
     feature_processor_cls,
     label_processor_cls,
     data_path: str = "./",
@@ -24,7 +22,7 @@ def get_sunset_datasets(
     label_processor_kwargs=None,
     val_split_fraction: float = 0.15,
     random_split: int = 10
-) -> Tuple[NPMCDataset, NPMCDataset, NPMCDataset, NPMCDataset]:
+) -> tuple[NPMCDataset, NPMCDataset, NPMCDataset, NPMCDataset]:
     """
     Get the training, validation, iid testing, and ood testing datasets for SUNSET.
 

@@ -1,6 +1,5 @@
 import torch
 from torch_geometric.nn.conv import MessagePassing
-from typing import Optional, Union
 from torch_geometric.typing import Adj, OptTensor, PairTensor
 from torch import Tensor
 from torch import nn
@@ -12,7 +11,7 @@ class InteractionConv(MessagePassing):
     def __init__(self,
                  input_dim: int,
                  output_dim: int,
-                 nsigma: Optional[int] = 5,
+                 nsigma: int = 5,
                  **kwargs):
         super().__init__(node_dim=0, aggr='add', **kwargs)
 
@@ -38,7 +37,7 @@ class InteractionConv(MessagePassing):
         self.alpha_mlp = nn.Sequential(*alpha_mlp_layers)
 
     def forward(self,
-                x: Union[Tensor, PairTensor],
+                x: Tensor | PairTensor,
                 compositions: Tensor,
                 edge_index: Adj,
                 edge_attr: OptTensor = None):
@@ -99,10 +98,10 @@ class InteractionConv(MessagePassing):
 class InteractionBlock(torch.nn.Module):
 
     def __init__(self,
-                 sigma: Optional[torch.Tensor] = None,
-                 nsigma: Optional[int] = 5,
-                 tunable_sigma: Optional[bool] = False,
-                 tanh_approx: Optional[bool] = False):
+                 sigma: torch.Tensor | None = None,
+                 nsigma: int = 5,
+                 tunable_sigma: bool = False,
+                 tanh_approx: bool = False):
         super().__init__()
 
         if sigma is None:

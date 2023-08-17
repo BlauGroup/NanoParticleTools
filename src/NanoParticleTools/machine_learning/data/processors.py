@@ -4,7 +4,6 @@ from NanoParticleTools.inputs.spectral_kinetics import SpectralKinetics
 from NanoParticleTools.util.conversions import wavenumber_to_wavelength
 from NanoParticleTools.analysis.util import intensities_from_population
 
-from typing import Union, Dict, List, Tuple, Optional
 import torch
 import numpy as np
 from monty.json import MSONable
@@ -27,18 +26,19 @@ class DataProcessor(ABC, MSONable):
     Fields are specified to ensure they are present in documents
     """
 
-    def __init__(self, fields: List[str], inc_metadata: bool = False):
+    def __init__(self, fields: list[str], inc_metadata: bool = False):
         """
         :param fields: fields required in the document(s) to be processed
         """
         self.fields = fields
+        self.inc_metadata = inc_metadata
 
     @property
-    def required_fields(self) -> List[str]:
+    def required_fields(self) -> list[str]:
         return self.fields
 
     @abstractmethod
-    def process_doc(self, doc: Dict) -> Dict:
+    def process_doc(self, doc: dict) -> dict:
         raise NotImplementedError
 
     def get_item_from_doc(self, doc: dict, field: str):
@@ -106,9 +106,9 @@ class FeatureProcessor(DataProcessor):
 
     def dopant_specification_to_concentration(
             self,
-            dopant_specification: List[Tuple],
+            dopant_specification: list[tuple],
             n_constraints: int = None,
-            constraints: List[NanoParticleConstraint] = None,
+            constraints: list[NanoParticleConstraint] = None,
             include_zeros: bool = True):
         if n_constraints is None and constraints is None:
             raise ValueError('Must specify at least one of n_constraints or constraints')
@@ -129,7 +129,7 @@ class FeatureProcessor(DataProcessor):
         return dopant_concentration
 
     def dopant_concentration_to_specification(
-            self, dopant_concentration: List[Tuple],
+            self, dopant_concentration: list[tuple],
             include_zeros: bool = False):
         if include_zeros:
             dopant_specifications = [
@@ -165,12 +165,12 @@ class FeatureProcessor(DataProcessor):
 
 class LabelProcessor(DataProcessor):
 
-    def __init__(self, fields: List[str], use_metadata: bool = False):
+    def __init__(self, fields: list[str], use_metadata: bool = False):
         super().__init__(fields)
         self.use_metadata = use_metadata
 
     @property
-    def required_fields(self) -> List[str]:
+    def required_fields(self) -> list[str]:
         if self.use_metadata:
             return super().required_fields + ['metadata']
         else:
@@ -194,7 +194,7 @@ class EnergySpectrumLabelProcessor(LabelProcessor):
     """
     This Label processor returns a spectrum that is binned uniformly with respect to energy (I(E))
         Args:
-            spectrum_range (Tuple | List, optional): Range over which the spectrum should be
+            spectrum_range (tuple | list, optional): Range over which the spectrum should be
                 cropped. Defaults to (-40000, 20000).
             output_size (int, optional): Number of bins in the resultant spectra.
                 This quantity will be used as the # of output does in the NN. Defaults to 600.
@@ -214,7 +214,7 @@ class EnergySpectrumLabelProcessor(LabelProcessor):
     """
 
     def __init__(self,
-                 spectrum_range: Tuple | List = (-40000, 20000),
+                 spectrum_range: tuple | list = (-40000, 20000),
                  output_size: int = 600,
                  log_constant: float = 1e-3,
                  gaussian_filter: float = 0,
@@ -322,7 +322,7 @@ class TotalEnergyLabelProcessor(LabelProcessor):
     """
     This Label processor returns a spectrum that is binned uniformly with respect to energy (I(E))
         Args:
-            spectrum_range (Tuple | List, optional): Range over which the spectrum should be
+            spectrum_range (tuple | list, optional): Range over which the spectrum should be
                 cropped. Defaults to (-40000, 20000).
             output_size (int, optional): Number of bins in the resultant spectra.
                 This quantity will be used as the # of output does in the NN. Defaults to 600.
@@ -342,7 +342,7 @@ class TotalEnergyLabelProcessor(LabelProcessor):
     """
 
     def __init__(self,
-                 spectrum_range: Tuple | List = (-40000, 20000),
+                 spectrum_range: tuple | list = (-40000, 20000),
                  log_constant: float = 1e-3,
                  gaussian_filter: float = 0,
                  **kwargs):
@@ -395,7 +395,7 @@ class WavelengthSpectrumLabelProcessor(LabelProcessor):
     This Label processor returns a spectrum that is binned uniformly with respect to
     wavelength $I(\lambda{})$
         Args:
-            spectrum_range (Tuple | List, optional): Range over which the spectrum should be
+            spectrum_range (tuple | list, optional): Range over which the spectrum should be
                 cropped. Defaults to (-1000, 1000).
             output_size (int, optional): Number of bins in the resultant spectra.
                 This quantity will be used as the # of output does in the NN. Defaults to 600.
@@ -415,10 +415,10 @@ class WavelengthSpectrumLabelProcessor(LabelProcessor):
     """
 
     def __init__(self,
-                 spectrum_range: Union[Tuple, List] = (-1000, 1000),
-                 output_size: Optional[int] = 600,
-                 log_constant: Optional[float] = 1e-3,
-                 gaussian_filter: Optional[float] = None,
+                 spectrum_range: tuple[int, int] | list[int, int] = (-1000, 1000),
+                 output_size: int = 600,
+                 log_constant: float = 1e-3,
+                 gaussian_filter: float = None,
                  **kwargs):
         if gaussian_filter is None:
             gaussian_filter = 0
@@ -532,12 +532,12 @@ class SummedWavelengthRangeLabelProcessor(LabelProcessor):
             Example:
                 With 16 documents averaged, the lowest (non-zero) observation is 0.0625(1/16),
                 therefore choose 0.001 as the log_constant. . Defaults to 1e-3.
-        spectrum_ranges: Tuples specifying the range of wavelengths to sum over. The key is carried
+        spectrum_ranges: tuples specifying the range of wavelengths to sum over. The key is carried
             over to the output.
     """
 
     def __init__(self,
-                 in_range: Tuple[float, float] = (-2000, 1000),
+                 in_range: tuple[float, float] = (-2000, 1000),
                  in_bins: int = 600,
                  log_constant: float = 1e-3,
                  spectrum_ranges: dict = None,
@@ -654,12 +654,12 @@ class MultiFidelitySummedWavelengthRangeLabelProcessor(LabelProcessor):
             Example:
                 With 16 documents averaged, the lowest (non-zero) observation is 0.0625(1/16),
                 therefore choose 0.001 as the log_constant. . Defaults to 1e-3.
-        spectrum_ranges: Tuples specifying the range of wavelengths to sum over. The key is carried
+        spectrum_ranges: tuples specifying the range of wavelengths to sum over. The key is carried
             over to the output.
     """
 
     def __init__(self,
-                 in_range: Tuple[float, float] = (-2000, 1000),
+                 in_range: tuple[float, float] = (-2000, 1000),
                  in_bins: int = 600,
                  log_constant: float = 1e-3,
                  spectrum_ranges: dict = None,
@@ -792,7 +792,7 @@ class PopulationUVProcessor(LabelProcessor):
         self.log_constant = log_constant
         self.wavelength_range = wavelength_range
 
-    def process_doc(self, doc: Dict) -> Dict:
+    def process_doc(self, doc: dict) -> dict:
         uv_intensity = torch.tensor(
             uv_from_data_collection(
                 doc,

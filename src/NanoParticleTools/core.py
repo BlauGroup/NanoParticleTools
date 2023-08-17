@@ -1,5 +1,5 @@
 import sqlite3
-from typing import Optional, Sequence, Union
+from typing import Sequence
 import subprocess
 from NanoParticleTools.inputs import SpectralKinetics, DopedNanoparticle
 from NanoParticleTools.inputs.util import get_all_interactions, get_sites, get_species
@@ -167,7 +167,7 @@ class NPMCInput(MSONable):
     def __init__(self,
                  spectral_kinetics: SpectralKinetics,
                  nanoparticle: DopedNanoparticle,
-                 initial_states: Optional[Sequence[int]] = None):
+                 initial_states: Sequence[int] | None = None):
 
         self.spectral_kinetics = spectral_kinetics
         self.nanoparticle = nanoparticle
@@ -196,10 +196,10 @@ class NPMCInput(MSONable):
     def generate_initial_state_database(
             self,
             database_file: str,
-            one_site_interaction_factor: Optional[Union[float, int]] = 1,
-            two_site_interaction_factor: Optional[Union[float, int]] = 1,
-            interaction_radius_bound: Optional[Union[float, int]] = 3,
-            distance_factor_type: Optional[str] = 'inverse_cubic'):
+            one_site_interaction_factor: float | int = 1,
+            two_site_interaction_factor: float | int = 1,
+            interaction_radius_bound: float | int = 3,
+            distance_factor_type: str = 'inverse_cubic'):
         """
 
         Args:

@@ -3,7 +3,7 @@ from NanoParticleTools.inputs.spectral_kinetics import SpectralKinetics
 from NanoParticleTools.util.conversions import wavenumber_to_wavelength
 from functools import lru_cache
 import numpy as np
-from typing import Dict, List, Union, Tuple
+from typing import Dict, List, Tuple
 
 
 def get_wavelengths(sk: SpectralKinetics) -> np.ndarray:
@@ -29,7 +29,7 @@ def get_wavelengths(sk: SpectralKinetics) -> np.ndarray:
 
 def intensities_from_population(sk: SpectralKinetics,
                                 populations: np.ndarray,
-                                volume: Union[float, int],
+                                volume: float | int,
                                 last_n_avg: int = 200):
     """
     A helper function to compute the intensities from the population vs time.
@@ -63,7 +63,7 @@ def intensities_from_population(sk: SpectralKinetics,
 
 def mean_population_to_intensities(
         sk: SpectralKinetics, mean_populations: np.ndarray,
-        volume: Union[float, np.ndarray]) -> np.ndarray:
+        volume: float | np.ndarray) -> np.ndarray:
     """
     Use the mean population of each energy level to compute the mean intensity
     of each radiative transition.

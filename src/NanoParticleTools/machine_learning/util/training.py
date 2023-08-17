@@ -10,7 +10,6 @@ import wandb
 import pytorch_lightning as pl
 import os
 from ray.tune.schedulers import ASHAScheduler
-from typing import Optional, List, Union
 
 from NanoParticleTools.util.visualization import plot_nanoparticle
 
@@ -21,23 +20,24 @@ import torch
 from pandas import DataFrame
 from matplotlib import ticker as mticker
 from matplotlib.lines import Line2D
-import warnings
+
+from collections.abc import Callable
 
 
-def train_spectrum_model(config,
-                         model_cls,
-                         data_module,
+def train_spectrum_model(config: dict,
+                         model_cls: pl.LightningModule,
+                         data_module: pl.LightningDataModule,
                          lr_scheduler: torch.optim.lr_scheduler.
                          _LRScheduler = ReduceLROnPlateauWithWarmup,
-                         lr_scheduler_kwargs: Optional[dict] = None,
-                         num_epochs: Optional[int] = 2000,
-                         ray_tune: Optional[bool] = False,
-                         early_stop: Optional[bool] = False,
-                         swa: Optional[bool] = False,
-                         save_checkpoints: Optional[bool] = True,
-                         wandb_config: Optional[dict] = None,
-                         trainer_device_config: Optional[dict] = None,
-                         additional_callbacks: Optional[List] = None):
+                         lr_scheduler_kwargs: dict | None = None,
+                         num_epochs: int = 2000,
+                         ray_tune: bool = False,
+                         early_stop: bool = False,
+                         swa: bool = False,
+                         save_checkpoints: bool = True,
+                         wandb_config: dict | None = None,
+                         trainer_device_config: dict | None = None,
+                         additional_callbacks: list | None = None):
     """
         params
         model_cls:
@@ -147,22 +147,22 @@ def train_spectrum_model(config,
     return model
 
 
-def train_uv_model(config,
-                   model_cls,
-                   data_module,
+def train_uv_model(config: dict,
+                   model_cls: pl.LightningModule,
+                   data_module: pl.LightningDataModule,
                    lr_scheduler: torch.optim.lr_scheduler.
                    _LRScheduler = ReduceLROnPlateauWithWarmup,
                    lr_scheduler_kwargs: dict = None,
-                   initial_model: Optional[pl.LightningModule] = None,
-                   num_epochs: Optional[int] = 2000,
-                   ray_tune: Optional[bool] = False,
-                   early_stop: Optional[bool] = False,
-                   early_stop_patience: Optional[int] = 200,
-                   swa: Optional[bool] = False,
-                   save_checkpoints: Optional[bool] = True,
-                   wandb_config: Optional[dict] = None,
-                   trainer_device_config: Optional[dict] = None,
-                   additional_callbacks: Optional[List] = None):
+                   initial_model: pl.LightningModule = None,
+                   num_epochs: int = 2000,
+                   ray_tune: bool = False,
+                   early_stop: bool = False,
+                   early_stop_patience: int = 200,
+                   swa: bool = False,
+                   save_checkpoints: bool = True,
+                   wandb_config: dict | None = None,
+                   trainer_device_config: dict | None = None,
+                   additional_callbacks: list | None = None):
     """
         params
         model_cls:
@@ -287,21 +287,22 @@ def train_uv_model(config,
     return model
 
 
-def train_uv_model_augment(config,
-                           model_cls,
-                           data_module,
-                           lr_scheduler,
-                           initial_model_path: Optional[str] = None,
-                           num_epochs: Optional[int] = 2000,
-                           augment_loss=False,
-                           ray_tune: Optional[bool] = False,
-                           early_stop: Optional[bool] = False,
-                           early_stop_patience: Optional[int] = 200,
-                           swa: Optional[bool] = False,
-                           save_checkpoints: Optional[bool] = True,
-                           wandb_config: Optional[dict] = None,
-                           trainer_device_config: Optional[dict] = None,
-                           additional_callbacks: Optional[List] = None):
+def train_uv_model_augment(config: dict,
+                           model_cls: pl.LightningModule,
+                           data_module: pl.LightningDataModule,
+                           lr_scheduler: torch.optim.lr_scheduler.
+                           _LRScheduler = ReduceLROnPlateauWithWarmup,
+                           lr_scheduler_kwargs: dict = None,
+                           initial_model_path: str | None = None,
+                           num_epochs: int = 2000,
+                           ray_tune: bool = False,
+                           early_stop: bool = False,
+                           early_stop_patience: int = 200,
+                           swa: bool = False,
+                           save_checkpoints: bool = True,
+                           wandb_config: dict | None = None,
+                           trainer_device_config: dict | None = None,
+                           additional_callbacks: list | None = None):
     """
         params
         model_cls:
@@ -322,6 +323,7 @@ def train_uv_model_augment(config,
     # Make the model
     if initial_model_path is None:
         model = model_cls(lr_scheduler=lr_scheduler,
+                          lr_scheduler_kwargs=lr_scheduler_kwargs,
                           optimizer_type='adam',
                           **config)
     else:
@@ -405,14 +407,14 @@ class NPMCTrainer():
         self,
         data_module,
         model_cls,
-        wandb_entity: Optional[str] = None,
-        wandb_project: Optional[str] = None,
-        wandb_save_dir: Optional[str] = None,
-        wandb_config: Optional[dict] = None,
-        gpu: Optional[bool] = False,
-        n_available_devices: Optional[int] = 4,
-        train_single_fn: Optional[callable] = train_uv_model,
-        models_per_device: Optional[int] = 1,
+        wandb_entity: str | None = None,
+        wandb_project: str | None = None,
+        wandb_save_dir: str | None = None,
+        wandb_config: dict | None = None,
+        gpu: bool = False,
+        n_available_devices: int = 4,
+        train_single_fn: Callable = train_uv_model,
+        models_per_device: int = 1,
         num_epochs=2000,
         lr_scheduler=ReduceLROnPlateauWithWarmup,
         lr_scheduler_kwargs=None,
@@ -454,7 +456,7 @@ class NPMCTrainer():
 
     def train_one_model(self,
                         model_config: dict,
-                        wandb_name: Optional[str] = None,
+                        wandb_name: str | None = None,
                         device_id=None):
         if isinstance(device_id, str):
             device_id = int(device_id.split(':')[-1])
@@ -489,8 +491,8 @@ class NPMCTrainer():
         return model
 
     def train_many_models(self,
-                          model_configs: List[dict],
-                          wandb_name: Optional[Union[List, str]] = None):
+                          model_configs: list[dict],
+                          wandb_name: list | str | None = None):
         if wandb_name is None:
             wandb_name = [None] * len(model_configs)
         elif isinstance(wandb_name, str):

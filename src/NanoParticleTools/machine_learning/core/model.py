@@ -8,7 +8,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 import torch.nn.functional as F
 from torch import nn
 
-from typing import Any, Callable, Optional, Union, List
+from collections.abc import Callable
 
 
 class SpectrumModelBase(pl.LightningModule):
@@ -19,14 +19,13 @@ class SpectrumModelBase(pl.LightningModule):
 
     def __init__(self,
                  l2_regularization_weight: float = 0,
-                 optimizer_type: Optional[str] = None,
-                 learning_rate: Optional[float] = 1e-5,
+                 optimizer_type: str | None = None,
+                 learning_rate: float = 1e-5,
                  lr_scheduler: torch.optim.lr_scheduler.
                  _LRScheduler = ReduceLROnPlateauWithWarmup,
-                 lr_scheduler_kwargs: Optional[dict] = None,
-                 loss_function: Optional[Callable[[List, List],
-                                                  float]] = F.mse_loss,
-                 additional_metadata: Optional[dict] = {},
+                 lr_scheduler_kwargs: dict | None = None,
+                 loss_function: Callable[[list, list], float] = F.mse_loss,
+                 additional_metadata: dict | None = None,
                  **kwargs):
         """
         Args:
@@ -43,6 +42,9 @@ class SpectrumModelBase(pl.LightningModule):
             additional_metadata: Additional metadata which will be logged with the model to
                 wandb.
         """
+        if additional_metadata is None:
+            additional_metadata = {}
+
         super().__init__()
 
         if optimizer_type is None:
@@ -64,8 +66,8 @@ class SpectrumModelBase(pl.LightningModule):
 
     def configure_optimizers(
         self
-    ) -> Union[List[torch.optim.Optimizer],
-               List[torch.optim.lr_scheduler._LRScheduler]]:
+    ) -> tuple[list[torch.optim.Optimizer],
+               list[torch.optim.lr_scheduler._LRScheduler]]:
         """
         Configures optimizers and learning rate schedulers for the model.
 

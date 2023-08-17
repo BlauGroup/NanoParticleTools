@@ -10,19 +10,20 @@ from torch import nn
 import torch.nn.functional as F
 from torch.utils import data
 
-from typing import Callable, Optional, Union, List
-
 
 class MLPSpectrumModel(SpectrumModelBase):
 
     def __init__(self,
                  max_layers: int = 4,
                  n_dopants: int = 3,
-                 n_output_nodes: Optional[int] = 1,
-                 nn_layers: Optional[List[int]] = [128],
+                 n_output_nodes: int = 1,
+                 nn_layers: list[int] | None = None,
                  dropout_probability: float = 0,
                  use_volume: bool = True,
                  **kwargs):
+        if nn_layers is None:
+            nn_layers = [128]
+
         super().__init__(**kwargs)
 
         self.use_volume = use_volume

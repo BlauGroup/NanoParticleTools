@@ -1,4 +1,4 @@
-from typing import (Optional, Sequence, Union, Tuple, List, Dict)
+from typing import Sequence, Tuple, List, Dict
 from abc import ABC, abstractmethod
 
 import numpy as np
@@ -27,7 +27,7 @@ class NanoParticleConstraint(ABC, MSONable):
             Defaults to the structure of NaYF4.
     """
 
-    def __init__(self, host_structure: Optional[Structure] = None):
+    def __init__(self, host_structure: Structure | None = None):
         self.host_structure = host_structure
 
     def get_host_structure(self):
@@ -61,7 +61,7 @@ class NanoParticleConstraint(ABC, MSONable):
         raise NotImplementedError
 
     @abstractmethod
-    def sites_in_bounds(self, site_coords: Union[np.array, List],
+    def sites_in_bounds(self, site_coords: np.array | List,
                         center: List) -> np.array:
         """
         Checks a list of coordinates to check if they are within the bounds
@@ -102,8 +102,8 @@ class SphericalConstraint(NanoParticleConstraint):
     """
 
     def __init__(self,
-                 radius: Union[float, int],
-                 host_structure: Optional[Structure] = None):
+                 radius: float | int,
+                 host_structure: Structure | None = None):
         self.radius = radius
         super().__init__(host_structure)
 
@@ -120,7 +120,7 @@ class SphericalConstraint(NanoParticleConstraint):
         return [self.radius, self.radius, self.radius]
 
     def sites_in_bounds(self,
-                        site_coords: Union[np.array, List],
+                        site_coords: np.array | List,
                         center: List[float] = None) -> np.array:
         """
         Checks a list of coordinates to check if they are within the bounds
@@ -163,10 +163,10 @@ class PrismConstraint(NanoParticleConstraint):
     """
 
     def __init__(self,
-                 a: Union[float, int],
-                 b: Union[float, int],
-                 c: Union[float, int],
-                 host_structure: Optional[Structure] = None):
+                 a: float | int,
+                 b: float | int,
+                 c: float | int,
+                 host_structure: Structure | None = None):
         self.box_a = a
         self.box_b = b
         self.box_c = c
@@ -185,7 +185,7 @@ class PrismConstraint(NanoParticleConstraint):
         return [self.box_a, self.box_b, self.box_c]
 
     def sites_in_bounds(self,
-                        site_coords: Union[np.array, List],
+                        site_coords: np.array | List,
                         center: List[float] = None) -> np.array:
         """
         Checks a list of coordinates to check if they are within the bounds
@@ -224,7 +224,7 @@ class CubeConstraint(PrismConstraint):
     This could be used to define a cubic nanoparticle or a cubic shell.
     """
 
-    def __init__(self, a, host_structure: Optional[Structure] = None):
+    def __init__(self, a, host_structure: Structure | None = None):
         super().__init__(a, a, a, host_structure)
 
     def __str__(self) -> str:
@@ -240,13 +240,13 @@ class SphericalHarmonicsConstraint(NanoParticleConstraint):
     def __init__(self,
                  sh_bounds: Tensor,
                  irreps: SphericalTensor,
-                 host_structure: Optional[Structure] = None):
+                 host_structure: Structure | None = None):
         """
         For a spherical shell, trivially pass in a spherical harmonic with l=0
         Args:
             sh_bounds (torch.Tensor): _description_
             irreps (io.SphericalTensor): _description_
-            host_structure (Optional[Structure], optional): _description_.
+            host_structure (Structure | None, optional): _description_.
                 Defaults to None.
         """
         if missing_ml_package:
@@ -272,7 +272,7 @@ class SphericalHarmonicsConstraint(NanoParticleConstraint):
         raise NotImplementedError
 
     def sites_in_bounds(self,
-                        site_coords: Union[np.array, List],
+                        site_coords: np.array | List,
                         center: List[float] = None) -> np.array:
         """
         Checks a list of coordinates to check if they are within the bounds
@@ -328,8 +328,8 @@ class DopedNanoparticle(MSONable):
     def __init__(self,
                  constraints: Sequence[NanoParticleConstraint],
                  dopant_specification: Sequence[Tuple],
-                 seed: Optional[int] = 0,
-                 prune_hosts: Optional[bool] = False):
+                 seed: int = 0,
+                 prune_hosts: bool = False):
 
         # Check if there are zero constraints
         if len(constraints) == 0:
@@ -617,8 +617,8 @@ class DopedNanoparticle(MSONable):
         return _sites
 
     def dopant_concentrations(self,
-                              constraint_index: Optional[int] = None,
-                              replaced_species: Optional[str] = 'Y') -> Dict:
+                              constraint_index: int | None = None,
+                              replaced_species: str = 'Y') -> Dict:
         """
         Gets the dopant concentrations of all the dopants in the
         `constraint_index`-th constraint occupying the

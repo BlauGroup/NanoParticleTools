@@ -1,10 +1,9 @@
-from typing import Union, List
 import torch
 
 
 class QuantileLoss(torch.nn.Module):
 
-    def __init__(self, p: Union[torch.Tensor, float]) -> None:
+    def __init__(self, p: torch.Tensor | float) -> None:
         super().__init__()
 
         self.p = p

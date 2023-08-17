@@ -3,11 +3,6 @@ from NanoParticleTools.inputs.nanoparticle import SphericalConstraint
 import torch
 from monty.serialization import MontyDecoder
 
-from torch_geometric.data.hetero_data import HeteroData, NodeOrEdgeStorage, EdgeStorage
-
-from typing import List, Any, Dict, Optional, Union, Tuple
-from functools import lru_cache
-from itertools import combinations_with_replacement
 import numpy as np
 import random
 
@@ -15,9 +10,9 @@ import random
 class HeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
 
     def inputs_from_constraints_and_concentration(
-            self, input_constraints: List[SphericalConstraint],
-            input_dopant_concentration: List[Dict]
-    ) -> Tuple[Dict, torch.Tensor]:
+            self, input_constraints: list[SphericalConstraint],
+            input_dopant_concentration: list[dict]
+    ) -> tuple[dict, torch.Tensor]:
         """
         Preprocess the inputs and constraints to ensure they
         form valid graphs.
@@ -98,7 +93,7 @@ class HeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
                                           requires_grad=self.input_grad)
         return dopant_concentration, radii_without_zero
 
-    def process_doc(self, doc: Dict) -> Dict:
+    def process_doc(self, doc: dict) -> dict:
         dopant_concentration = doc['dopant_concentration']
 
         constraints = doc['input']['constraints']
@@ -109,8 +104,8 @@ class HeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
 
         return self.graph_from_inputs(dopant_concentration, radii_without_zero)
 
-    def graph_from_inputs(self, dopant_concentration: Dict,
-                          radii_without_zero: torch.Tensor) -> Dict:
+    def graph_from_inputs(self, dopant_concentration: dict,
+                          radii_without_zero: torch.Tensor) -> dict:
         """
         Get a graph from the raw inputs
 
@@ -251,9 +246,9 @@ class AugmentededHeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
 
     def inputs_from_constraints_and_concentration(
             self,
-            input_constraints: List[SphericalConstraint],
-            input_dopant_concentration: List[Dict],
-            augment_pass: bool = False) -> Tuple[Dict, torch.Tensor]:
+            input_constraints: list[SphericalConstraint],
+            input_dopant_concentration: list[dict],
+            augment_pass: bool = False) -> tuple[dict, torch.Tensor]:
         """
         Preprocess the inputs and constraints to ensure they
         form valid graphs.
@@ -335,7 +330,7 @@ class AugmentededHeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
                                           requires_grad=self.input_grad)
         return dopant_concentration, radii_without_zero
 
-    def process_doc(self, doc: Dict) -> Dict:
+    def process_doc(self, doc: dict) -> dict:
         dopant_concentration = doc['dopant_concentration']
 
         constraints = doc['input']['constraints']
@@ -352,10 +347,10 @@ class AugmentededHeteroDCVFeatureProcessor(DopantInteractionFeatureProcessor):
                                       dopant_concentration_augmented,
                                       radii_without_zero_augmented)
 
-    def graph_from_inputs(self, dopant_concentration: Dict,
+    def graph_from_inputs(self, dopant_concentration: dict,
                           radii_without_zero: torch.Tensor,
-                          dopant_concentration_augmented: Dict,
-                          radii_without_zero_augmented: torch.Tensor) -> Dict:
+                          dopant_concentration_augmented: dict,
+                          radii_without_zero_augmented: torch.Tensor) -> dict:
         """
         Get a graph from the raw inputs
 

@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Sequence, Tuple, Optional, Union, List, Set
+from typing import Sequence, Tuple, List, Set
 
 from jobflow import job
 from monty.json import MontyEncoder
@@ -24,14 +24,14 @@ import shutil
 def npmc_job(constraints: Sequence[NanoParticleConstraint],
              dopant_specifications: Sequence[Tuple[int, float, str, str]],
              doping_seed: int,
-             output_dir: Optional[str] = '.',
-             initial_states: Optional[Union[Sequence[int], None]] = None,
-             spectral_kinetics_args: Optional[dict] = {},
-             initial_state_db_args: Optional[dict] = {},
-             npmc_args: Optional[dict] = {},
-             override: Optional[bool] = False,
-             population_record_interval: Optional[float] = 1e-5,
-             metadata: Optional[dict] = {},
+             output_dir: str = '.',
+             initial_states: Sequence[int] | None = None,
+             spectral_kinetics_args: dict | None = None,
+             initial_state_db_args: dict | None = None,
+             npmc_args: dict | None = None,
+             override: bool = False,
+             population_record_interval: float = 1e-5,
+             metadata: dict | None = None,
              **kwargs) -> List[dict]:
     """
     :param constraints: Constraints from which to build the Nanoparticle.
@@ -67,6 +67,14 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
         states (in s)
     :return: List of trajectory documents
     """
+    if spectral_kinetics_args is None:
+        spectral_kinetics_args = {}
+    if initial_state_db_args is None:
+        initial_state_db_args = {}
+    if npmc_args is None:
+        npmc_args = {}
+    if metadata is None:
+        metadata = {}
 
     files = {
         'output_dir': output_dir,
@@ -224,7 +232,7 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
     return result_docs
 
 
-def tables_exist(cur, tables: Union[List, Set]):
+def tables_exist(cur, tables: List | Set):
     if isinstance(tables, list):
         expected_tables = set(tables)
     sql_search = " OR ".join([f"name='{table}'" for table in expected_tables])

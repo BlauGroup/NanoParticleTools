@@ -1,5 +1,4 @@
 import numpy as np
-from typing import Union
 
 from NanoParticleTools.util.constants import (
     h_CGS,
@@ -10,19 +9,19 @@ from NanoParticleTools.util.constants import (
 )
 
 
-def gaussian(x: Union[float, np.array], c: Union[float, np.array],
-             sigma: Union[float, np.array]) -> Union[float, np.array]:
+def gaussian(x: float | list, c: float | list,
+             sigma: float | list) -> float | list:
     """
     Calculates the value of a normalized gaussian
 
     Note: mimics the functionality of gauss() in Igor Pro
     Args:
-        x (float, np.array): x value to evaluate gaussian
-        c (float, np.array): centering constant for gaussian
-        sigma (float, np.array): standard deviation of gaussian
+        x: x value to evaluate gaussian
+        c: centering constant for gaussian
+        sigma : standard deviation of gaussian
 
     Returns:
-        (float, np.array): The value of a normalized gaussian
+        gaussian: The value of a normalized gaussian
     """
     # TODO: Investigate why calls to this function mostly use x==c
     return 1 / (sigma * np.sqrt(2 * np.pi)) * np.exp(-1 / 2 * np.power(

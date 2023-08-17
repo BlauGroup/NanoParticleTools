@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from torch.nn import functional as F
-from typing import Callable, Union, Optional, List
+from collections.abc import Callable
 import pytorch_lightning as pl
 from torch_geometric import nn as pyg_nn
 from torch_geometric.data import Batch, Data, HeteroData
@@ -12,26 +12,28 @@ from NanoParticleTools.machine_learning.modules.core import LazyNonLinearMLP
 
 class DiscreteGraphModel(SpectrumModelBase):
 
-    def __init__(
-            self,
-            input_channels=3,
-            n_output_nodes=400,
-            learning_rate: Optional[float] = 1e-5,
-            lr_scheduler: Optional[
-                Callable[[torch.optim.Optimizer],
-                         torch.optim.lr_scheduler._LRScheduler]] = None,
-            loss_function: Optional[Callable[[List, List],
-                                             float]] = F.mse_loss,
-            dropout_probability: float = 0,
-            activation_module: Optional[torch.nn.Module] = nn.SiLU,
-            mlp_layers=[128, 256],
-            mpnn_module: Optional[torch.nn.Module] = pyg_nn.GATv2Conv,
-            mpnn_kwargs: Optional[dict] = {'edge_dim': 3},
-            mpnn_operation: Optional[str] = 'x, edge_index, edge_attr -> x',
-            mpnn_channels=[64, 128],
-            readout_operation: Optional[str] = 'attn',
-            augment_loss: Optional[bool] = False,
-            **kwargs):
+    def __init__(self,
+                 input_channels=3,
+                 n_output_nodes=400,
+                 learning_rate: float = 1e-5,
+                 lr_scheduler: Callable[[torch.optim.Optimizer],
+                                        torch.optim.lr_scheduler._LRScheduler] | None = None,
+                 loss_function: Callable[[list, list], float] = F.mse_loss,
+                 dropout_probability: float = 0,
+                 activation_module: torch.nn.Module = nn.SiLU,
+                 mlp_layers: list[int] | None = None,
+                 mpnn_module: torch.nn.Module = pyg_nn.GATv2Conv,
+                 mpnn_kwargs: dict | None = None,
+                 mpnn_operation: str = 'x, edge_index, edge_attr -> x',
+                 mpnn_channels=[64, 128],
+                 readout_operation: str = 'attn',
+                 augment_loss: bool = False,
+                 **kwargs):
+        if mpnn_kwargs is None:
+            mpnn_kwargs = {'edge_dim': 3}
+
+        if mlp_layers is None:
+            mlp_layers = [128, 256]
         super().__init__(**kwargs)
 
         self.n_output_nodes = n_output_nodes
