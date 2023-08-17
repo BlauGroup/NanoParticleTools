@@ -3,11 +3,12 @@ from NanoParticleTools.machine_learning.data import SummedWavelengthRangeLabelPr
 from NanoParticleTools.machine_learning.models.mlp_model.data import TabularFeatureProcessor
 import torch
 
-DATA_PATH = (
-    '/Users/sivonxay/Library/CloudStorage/GoogleDrive-esivonxay@lbl.gov/'
-    'My Drive/Postdoc Work/Jupyter_Notebooks/Paper/Figure_2')
+import pytest
+
+DATA_PATH = None
 
 
+@pytest.mark.skip(reason="Data not available")
 def test_sunset_five():
     train_dataset, val_dataset, iid_test_dataset, ood_test_dataset = get_sunset_datasets(
         5,
@@ -36,6 +37,7 @@ def test_sunset_five():
     assert len(ood_test_dataset) == 206
 
 
+@pytest.mark.skip(reason="Data not available")
 def test_sunset_one():
     train_dataset, val_dataset, iid_test_dataset, ood_test_dataset = get_sunset_datasets(
         1,
@@ -65,6 +67,7 @@ def test_sunset_one():
     assert len(ood_test_dataset) == 279
 
 
+@pytest.mark.skip(reason="Data not available")
 def test_sunset_cat():
     train_dataset, val_dataset, iid_test_dataset, ood_test_dataset = get_sunset_datasets(
         [1, 5],
