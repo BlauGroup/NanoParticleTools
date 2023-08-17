@@ -29,11 +29,18 @@ def dopant_specifications_to_concentrations(
         empty_concentrations = [{} for _ in range(n_constraints)]
 
     for layer_idx, conc, el, _ in dopant_specification:
+        if el not in possible_elements:
+            warnings.warn(
+                f'A dopant specification requests an element {el} that is not in the'
+                f' possible elements {possible_elements}, skipping this dopant'
+            )
+            continue
         try:
             empty_concentrations[layer_idx][el] = conc
-        except KeyError:
-            warnings.warn(
-                'requested element not in possible elements, skipping')
+        except IndexError:
+            raise ValueError(
+                'A dopant specification requests a layer that is > than the number of constraints'
+            )
 
     return empty_concentrations
 
