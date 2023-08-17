@@ -20,9 +20,9 @@ setup(name='NanoParticleTools',
           "pytest",
           "torch",
           "pytorch-lightning",
-          "bayesian-optimization",
           "ray",
           "wandb",
           "gpuparallel"
+          "torch-geometric"
       ]
       )
