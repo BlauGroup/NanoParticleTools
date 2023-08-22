@@ -258,10 +258,38 @@ def train_uv_model(config: dict,
     wandb_logger.log_metrics(train_metrics)
 
     # Validation metrics
-    trainer.validate(dataloaders=data_module.val_dataloader(),
-                     ckpt_path='best')
-    # Test metrics
-    trainer.test(dataloaders=data_module.test_dataloader(), ckpt_path='best')
+    if data_module.val_dataset is not None:
+        val_metrics = {}
+        for batch_idx, batch in enumerate(data_module.val_dataloader()):
+            _, _loss_d = model._step('val', batch, batch_idx, log=False)
+            for key in _loss_d:
+                try:
+                    val_metrics[key] += _loss_d[key].item() * data_module.batch_size
+                except KeyError:
+                    val_metrics[key] = _loss_d[key] * data_module.batch_size
+
+        # For the testing set, batches may not be all the same size due to drop_last=False,
+        # so we need to account for that.
+        for key in val_metrics:
+            val_metrics[key] /= len(data_module.val_dataset)
+        wandb_logger.log_metrics(val_metrics)
+
+    # If a OOD test set is specified in the data module, we'll obtain the metrics for that as well
+    if data_module.test_dataset is not None:
+        ood_test_metrics = {}
+        for batch_idx, batch in enumerate(data_module.test_dataloader()):
+            _, _loss_d = model._step('test', batch, batch_idx, log=False)
+            for key in _loss_d:
+                try:
+                    ood_test_metrics[key] += _loss_d[key].item() * data_module.batch_size
+                except KeyError:
+                    ood_test_metrics[key] = _loss_d[key] * data_module.batch_size
+
+        # For the testing set, batches may not be all the same size due to drop_last=False,
+        # so we need to account for that.
+        for key in ood_test_metrics:
+            ood_test_metrics[key] /= len(data_module.test_dataset)
+        wandb_logger.log_metrics(ood_test_metrics)
 
     # If a IID test set is specified in the data module, we'll obtain the metrics for that as well
     if data_module.iid_test_dataset is not None:
