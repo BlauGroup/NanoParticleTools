@@ -42,7 +42,11 @@ def test_run_one_rate_eq():
 def test_run_and_save_one(hdf5_file):
     dopants = ['Yb', 'Er']
     dopant_concs = [0.5, 0.2]
-    run_and_save_one(dopants, dopant_concs, 0, 3, hdf5_file, 
+    run_and_save_one(dopants,
+                     dopant_concs,
+                     0,
+                     3,
+                     hdf5_file,
                      excitation_wavelength=900,
                      excitation_power=1e5,
                      include_spectra=True)
@@ -54,9 +58,16 @@ def test_run_and_save_one(hdf5_file):
 
 
 def test_save_load(hdf5_file):
-    data = {'metadata': {'simulation_time': 0.01,
-                         'dopant_concentration': {'Yb': 0.5, 'Er': 0.1}},
-            'populations': np.random.rand(10)}
+    data = {
+        'metadata': {
+            'simulation_time': 0.01,
+            'dopant_concentration': {
+                'Yb': 0.5,
+                'Er': 0.1
+            }
+        },
+        'populations': np.random.rand(10)
+    }
 
     save_data_to_hdf5(hdf5_file, 0, 0, data)
 
@@ -64,14 +75,22 @@ def test_save_load(hdf5_file):
     assert out['metadata'] == data['metadata']
     assert np.allclose(out['populations'], data['populations'])
 
-    data = {'metadata': {'simulation_time': 0.01,
-                         'dopant_concentration': {'Yb': 0.5, 'Er': 0.1}},
-            'populations': np.random.rand(10),
-            'wavelength_spectrum_y': np.random.rand(600)}
+    data = {
+        'metadata': {
+            'simulation_time': 0.01,
+            'dopant_concentration': {
+                'Yb': 0.5,
+                'Er': 0.1
+            }
+        },
+        'populations': np.random.rand(10),
+        'wavelength_spectrum_y': np.random.rand(600)
+    }
 
     save_data_to_hdf5(hdf5_file, 0, 1, data)
 
     out = load_data_from_hdf5(hdf5_file, 0, 1)
     assert out['metadata'] == data['metadata']
     assert np.allclose(out['populations'], data['populations'])
-    assert np.allclose(out['wavelength_spectrum_y'], data['wavelength_spectrum_y'])
+    assert np.allclose(out['wavelength_spectrum_y'],
+                       data['wavelength_spectrum_y'])

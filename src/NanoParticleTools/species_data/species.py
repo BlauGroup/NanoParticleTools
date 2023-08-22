@@ -7,6 +7,7 @@ from functools import lru_cache
 
 SPECIES_DATA_PATH = os.path.join(str(Path(__file__).absolute().parent), 'data')
 
+
 class EnergyLevel(MSONable):
     """
     Class to represent an energy level.
