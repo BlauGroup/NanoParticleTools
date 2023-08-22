@@ -42,7 +42,7 @@ def k_fold_validation_training(dataset: NPMCDataset, k: int) -> Tuple[NPMCDatase
 
     # Create a list of shuffled indices
     shuffled_indices = list(range(num_samples))
-    np.random.shuffle(shuffled_indices)
+    np.random.default_rng(random_seed).shuffle(shuffled_indices)
 
     # Calculate the size of each fold
     fold_size = num_samples // k
