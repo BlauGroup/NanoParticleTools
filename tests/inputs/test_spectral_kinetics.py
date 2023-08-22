@@ -154,3 +154,11 @@ def test_rate_equations():
         2.00971025e-19, 7.15003007e-20, 3.84920859e-21, -1.83440370e-20
     ])
     assert np.allclose(decay_sol[1][-1], expected_last_step)
+
+
+def test_all_elements():
+    elements = ["Yb", "Er", "Tm", "Nd", "Ho", "Eu", "Tb", "Sm", "Dy"]
+    dopants = [Dopant(el, 0.01) for el in elements]
+    sk = SpectralKinetics(dopants)
+
+    assert sk

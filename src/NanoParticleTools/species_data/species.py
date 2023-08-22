@@ -7,7 +7,6 @@ from functools import lru_cache
 
 SPECIES_DATA_PATH = os.path.join(str(Path(__file__).absolute().parent), 'data')
 
-
 class EnergyLevel(MSONable):
     """
     Class to represent an energy level.
@@ -88,9 +87,21 @@ class Dopant(MSONable):
         'Si': 'Surface4',
         'P': 'Surface5'
     }
+
     SURFACE_DOPANT_NAMES_TO_SYMBOLS = dict(
         zip(SURFACE_DOPANT_SYMBOLS_TO_NAMES.values(),
             SURFACE_DOPANT_SYMBOLS_TO_NAMES.keys()))
+
+    DEFAULT_N_LEVELS = {'Yb': 2,
+                        'Sm': 24,
+                        'Gd': 15,
+                        'Tm': 12,
+                        'Tb': 9,
+                        'Nd': 24,
+                        'Eu': 22,
+                        'Er': 34,
+                        'Dy': 22,
+                        'Ho': 23}
 
     def __init__(self,
                  symbol: str,
@@ -108,7 +119,10 @@ class Dopant(MSONable):
         # If more levels are specified than possible, use the max
         # number of levels instead
         if n_levels is None:
-            self.n_levels = len(self.species_data()['EnergyLevels'])
+            if self.symbol in self.DEFAULT_N_LEVELS:
+                self.n_levels = self.DEFAULT_N_LEVELS[self.symbol]
+            else:
+                self.n_levels = len(self.species_data()['EnergyLevels'])
         else:
             self.n_levels = min(n_levels,
                                 len(self.species_data()['EnergyLevels']))

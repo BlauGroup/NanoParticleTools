@@ -23,6 +23,7 @@ setup(name='NanoParticleTools',
           "ray",
           "wandb",
           "gpuparallel",
-          "torch-geometric"
+          "torch-geometric",
+          "h5py"
       ]
       )

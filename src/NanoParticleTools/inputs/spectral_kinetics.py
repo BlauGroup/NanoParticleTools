@@ -98,6 +98,16 @@ class SpectralKinetics(MSONable):
         self.excitation_power = excitation_power
         self.excitation_wavelength = excitation_wavelength
 
+        # Check if all dopants are non-negative
+        for dopant in dopants:
+            if dopant.molar_concentration < 0:
+                raise ValueError(
+                    'Error, all dopant concentrations must be non-negative.')
+
+        # Check if the sum of dopant concentrations is <= 1
+        if sum([dopant.molar_concentration for dopant in dopants]) > 1:
+            raise ValueError(
+                'Error, the sum of the dopant concentrations must be <= 1')
         self.dopants = dopants
 
     @property
@@ -579,7 +589,8 @@ class SpectralKinetics(MSONable):
     def run_kinetics(
             self,
             initial_populations: Sequence[Sequence[float]] | str = 'ground_state',
-            t_span: Tuple[int, int] = None):
+            t_span: Tuple[int, int] = None,
+            **kwargs):
         if t_span is None:
             t_span = (0, 0.01)
 
@@ -604,10 +615,12 @@ class SpectralKinetics(MSONable):
 
             return dNdt_fn
 
+        if 'method' not in kwargs:
+            kwargs['method'] = 'BDF'
         sol = solve_ivp(get_dNdt_fn(self),
                         t_span=t_span,
                         y0=initial_populations,
-                        method='BDF')
+                        **kwargs)
 
         return sol.t, sol.y.T
 
