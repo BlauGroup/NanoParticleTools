@@ -30,11 +30,12 @@ def FreezeMLP(model: MLPSpectrumModel,
     return model
 
 
-def k_fold_validation_training(dataset: NPMCDataset, k: int) -> Tuple[NPMCDataset, NPMCDataset]:
+def k_fold_validation_training(dataset: NPMCDataset, k: int, random_seed: int) -> Tuple[NPMCDataset, NPMCDataset]:
     """
     Args:
         training_set: NPMCDataset containing training data
         k: number of k-folds
+        random_seed: random seed for reproducible splits
     """
 
     # Get the number of samples in the dataset
@@ -42,7 +43,7 @@ def k_fold_validation_training(dataset: NPMCDataset, k: int) -> Tuple[NPMCDatase
 
     # Create a list of shuffled indices
     shuffled_indices = list(range(num_samples))
-    np.random.shuffle(shuffled_indices)
+    np.random.default_rng(random_seed).shuffle(shuffled_indices)
 
     # Calculate the size of each fold
     fold_size = num_samples // k
