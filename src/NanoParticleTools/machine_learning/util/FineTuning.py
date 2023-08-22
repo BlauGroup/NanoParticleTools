@@ -11,8 +11,7 @@ import torch
 from typing import List, Tuple, Dict
 
 
-def FreezeMLP(model: MLPSpectrumModel,
-              num_frozen_layers: int,
+def FreezeMLP(model: MLPSpectrumModel, num_frozen_layers: int,
               reset_thawed_layers: bool) -> MLPSpectrumModel:
     """
     Args:
@@ -30,7 +29,9 @@ def FreezeMLP(model: MLPSpectrumModel,
     return model
 
 
-def k_fold_validation_training(dataset: NPMCDataset, k: int, random_seed: int) -> Tuple[NPMCDataset, NPMCDataset]:
+def k_fold_validation_training(
+        dataset: NPMCDataset, k: int,
+        random_seed: int) -> Tuple[NPMCDataset, NPMCDataset]:
     """
     Args:
         training_set: NPMCDataset containing training data
@@ -74,8 +75,7 @@ def k_fold_validation_training(dataset: NPMCDataset, k: int, random_seed: int) -
     return training_sets, validation_sets
 
 
-def FineTuneHeteroModel(model: HeteroDCVModel,
-                        freeze_representation: bool,
+def FineTuneHeteroModel(model: HeteroDCVModel, freeze_representation: bool,
                         reset_readout: bool) -> HeteroDCVModel:
     """
     Args:
