@@ -30,11 +30,12 @@ def FreezeMLP(model: MLPSpectrumModel,
     return model
 
 
-def k_fold_validation_training(dataset: NPMCDataset, k: int) -> Tuple[NPMCDataset, NPMCDataset]:
+def k_fold_validation_training(dataset: NPMCDataset, k: int, random_seed: int) -> Tuple[NPMCDataset, NPMCDataset]:
     """
     Args:
         training_set: NPMCDataset containing training data
         k: number of k-folds
+        random_seed: random seed for reproducible splits
     """
 
     # Get the number of samples in the dataset
