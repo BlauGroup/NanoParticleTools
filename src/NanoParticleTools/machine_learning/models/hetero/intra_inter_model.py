@@ -538,8 +538,8 @@ class AugmentHeteroDCVModel(HeteroDCVModel):
         metric_dict = {f'{prefix}_loss': loss}
         if prefix != 'train':
             # For the validation and test sets, log additional metrics
-            metric_dict[f'{prefix}_cos_sim'] = cosine_similarity(
-                rep, augmented_rep, 1).mean(0)
+            metric_dict[f'{prefix}_cos_sim'] = float(cosine_similarity(
+                rep, augmented_rep, 1).mean(0))
             # add other metrics if interested
 
         if log:
