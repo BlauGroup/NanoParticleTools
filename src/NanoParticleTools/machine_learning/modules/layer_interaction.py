@@ -100,7 +100,7 @@ class InteractionBlock(torch.nn.Module):
     def __init__(self,
                  sigma: torch.Tensor | None = None,
                  nsigma: int = 5,
-                 tunable_sigma: bool = False,
+                 tunable_sigma: bool = True,
                  tanh_approx: bool = False):
         super().__init__()
 
@@ -108,8 +108,9 @@ class InteractionBlock(torch.nn.Module):
             if nsigma is None:
                 # defaulting to 5 sigmas
                 nsigma = 5
-            # Initialize the parameters uniformly between (roughly) 6.3-32000
-            sigma = torch.logspace(0.9, 4.5, nsigma, dtype=torch.float64)
+
+            # Initialize the sigma values to a default
+            sigma = torch.linspace(8, 100, nsigma)
         else:
             assert sigma.size(
                 0) == nsigma, "Mismatch between nsigma and the size of sigma"
