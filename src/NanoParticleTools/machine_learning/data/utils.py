@@ -21,7 +21,8 @@ def get_sunset_datasets(
     feature_processor_kwargs=None,
     label_processor_kwargs=None,
     val_split_fraction: float = 0.15,
-    random_split: int = 10
+    random_split: int = 10,
+    dataset_kwargs: dict = None,
 ) -> tuple[NPMCDataset, NPMCDataset, NPMCDataset, NPMCDataset]:
     """
     Get the training, validation, iid testing, and ood testing datasets for SUNSET.
@@ -39,6 +40,12 @@ def get_sunset_datasets(
     """
     if isinstance(sunset_ids, int):
         sunset_ids = [sunset_ids]
+
+    _dataset_kwargs = {'gpu_training': False,
+                       'cache_in_memory': True}
+
+    if dataset_kwargs is not None:
+        _dataset_kwargs.update(dataset_kwargs)
 
     if feature_processor_kwargs is None:
         feature_processor_kwargs = {}
@@ -69,7 +76,7 @@ def get_sunset_datasets(
                                                     f"SUNSET-{i}.json"),
                                        feature_processor,
                                        label_processor,
-                                       cache_in_memory=True)
+                                       **_dataset_kwargs)
 
         # split the training dataset into a training and validation set
         val_size = int(len(training_dataset) * val_split_fraction)
@@ -82,13 +89,13 @@ def get_sunset_datasets(
                                                     f"SUNSET-{i}-IID.json"),
                                        feature_processor,
                                        label_processor,
-                                       cache_in_memory=True)
+                                       **_dataset_kwargs)
 
         ood_test_dataset = NPMCDataset(os.path.join(data_path,
                                                     f"SUNSET-{i}-OOD.json"),
                                        feature_processor,
                                        label_processor,
-                                       cache_in_memory=True)
+                                       **_dataset_kwargs)
 
         train_datasets.append(train_dataset)
         val_datasets.append(val_dataset)
