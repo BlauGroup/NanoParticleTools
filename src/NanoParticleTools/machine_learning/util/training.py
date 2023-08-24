@@ -102,11 +102,12 @@ def train_spectrum_model(config: dict,
                          callbacks=callbacks,
                          **trainer_device_config)
 
-    trainer.fit(model=model, datamodule=data_module)
+    trainer.fit(model=model, datamodule=data_module.cuda())
 
     # Load the best model checkpoint, set it to evaluation mode, and then evaluate the metrics
     # for the training, validation, and test sets
     model = model_cls.load_from_checkpoint(checkpoint_callback.best_model_path)
+    model.cuda()
     model.eval()
 
     # Train metrics

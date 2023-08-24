@@ -501,9 +501,14 @@ class AugmentHeteroDCVModel(HeteroDCVModel):
         return reps, augmented_reps
 
     def _evaluate_step(self, data):
+        #prediction loss
+        input_dict, augmented_input_dict = self.get_inputs(data)
+        out, subdivision_out = self(input_dict, augmented_input_dict)
+        prediction_loss = F.mse_loss(out, data['log_y'])
+        #representation loss
         rep, augmented_rep = self.get_representation(data)
-        loss = pairwise_distance(rep, augmented_rep)
-        return rep, augmented_rep, loss
+        representation_loss = pairwise_distance(rep, augmented_rep)        
+        return rep, augmented_rep, prediction_loss, representation_loss
 
     def predict_step(self,
                      batch: HeteroData | Batch,
@@ -526,7 +531,8 @@ class AugmentHeteroDCVModel(HeteroDCVModel):
               batch: HeteroData | Batch,
               batch_idx: int | None = None,
               log: bool = True):
-        rep, augmented_rep, loss = self._evaluate_step(batch)
+        rep, augmented_rep, prediction_loss, representation_loss = self._evaluate_step(batch)
+        loss = prediction_loss + representation_loss
         loss = loss.mean(0)
         # Determine the batch size
         if batch.batch_dict is not None:
@@ -536,6 +542,9 @@ class AugmentHeteroDCVModel(HeteroDCVModel):
 
         # Log the loss
         metric_dict = {f'{prefix}_loss': loss}
+        metric_dict = {f'{prefix}prediction_loss': prediction_loss}
+        metric_dict = {f'{prefix}representation_loss': representation_loss}
+        
         if prefix != 'train':
             # For the validation and test sets, log additional metrics
             metric_dict[f'{prefix}_cos_sim'] = float(cosine_similarity(
