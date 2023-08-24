@@ -8,6 +8,7 @@ from NanoParticleTools.machine_learning.modules.core import LazyNonLinearMLP
 class CNNModel(SpectrumModelBase):
 
     def __init__(self,
+                 n_dopants: int = 3,
                  n_output_nodes=1,
                  dropout_probability: float = 0,
                  dimension: Optional[int] = 1,
@@ -61,6 +62,7 @@ class CNNModel(SpectrumModelBase):
 
         super().__init__(**kwargs)
 
+        self.n_dopants = n_dopants
         self.img_dimension = dimension
         self.dropout_probability = dropout_probability
         self.activation_module = activation_module
@@ -72,7 +74,7 @@ class CNNModel(SpectrumModelBase):
 
         # Build the CNN
         modules = []
-        in_channels = 3  # There are 3 dopants in our initial image
+        in_channels = self.n_dopants  # There are 3 dopants in our initial image
         for _conv_params in conv_params:
             modules.append(
                 conv_module(in_channels=in_channels,
