@@ -28,29 +28,45 @@ def get_parity_plot(model,
         fig = plt.figure(**fig_kwargs)
         ax = fig.add_subplot(111)
 
-    uv_pred, uv_true = get_predictions(model, data_module.train_dataloader(),
-                                       log, log_constant)
-    ax.plot(uv_true.flatten(),
-            uv_pred.flatten(),
-            'o',
-            alpha=0.2,
-            label='Train Data')
+    if data_module.train_dataset is not None:
+        uv_pred, uv_true = get_predictions(model,
+                                           data_module.train_dataloader(), log,
+                                           log_constant)
+        ax.plot(uv_true.flatten(),
+                uv_pred.flatten(),
+                'o',
+                alpha=0.2,
+                label='Train Data')
 
-    uv_pred, uv_true = get_predictions(model, data_module.val_dataloader(),
-                                       log, log_constant)
-    ax.plot(uv_true.flatten(),
-            uv_pred.flatten(),
-            'X',
-            alpha=0.2,
-            label='Val Data')
+    if data_module.val_dataset is not None:
+        uv_pred, uv_true = get_predictions(model, data_module.val_dataloader(),
+                                           log, log_constant)
+        ax.plot(uv_true.flatten(),
+                uv_pred.flatten(),
+                'X',
+                alpha=0.2,
+                label='Val Data')
 
-    uv_pred, uv_true = get_predictions(model, data_module.test_dataloader(),
-                                       log, log_constant)
-    ax.plot(uv_true.flatten(),
-            uv_pred.flatten(),
-            'D',
-            alpha=0.2,
-            label='Test Data')
+    if data_module.iid_test_dataset is not None:
+        uv_pred, uv_true = get_predictions(model,
+                                           data_module.iid_test_dataloader(),
+                                           log, log_constant)
+        ax.plot(uv_true.flatten(),
+                uv_pred.flatten(),
+                'D',
+                alpha=0.2,
+                label='ID Test Data')
+
+    if data_module.test_dataset is not None:
+        uv_pred, uv_true = get_predictions(model,
+                                           data_module.test_dataloader(), log,
+                                           log_constant)
+        ax.plot(uv_true.flatten(),
+                uv_pred.flatten(),
+                'D',
+                alpha=0.2,
+                label='OOD Test Data')
+
     ax.plot([0, max(max(ax.get_xlim()), max(ax.get_ylim()))],
             [0, max(max(ax.get_xlim()), max(ax.get_ylim()))], 'k--')
 
