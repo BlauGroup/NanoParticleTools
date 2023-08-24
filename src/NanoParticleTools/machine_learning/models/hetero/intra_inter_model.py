@@ -501,13 +501,13 @@ class AugmentHeteroDCVModel(HeteroDCVModel):
         return reps, augmented_reps
 
     def _evaluate_step(self, data):
-        #prediction loss
+        # Prediction loss
         input_dict, augmented_input_dict = self.get_inputs(data)
         out, subdivision_out = self(input_dict, augmented_input_dict)
         prediction_loss = F.mse_loss(out, data['log_y'])
-        #representation loss
+        # Representation loss
         rep, augmented_rep = self.get_representation(data)
-        representation_loss = pairwise_distance(rep, augmented_rep)        
+        representation_loss = pairwise_distance(rep, augmented_rep)
         return rep, augmented_rep, prediction_loss, representation_loss
 
     def predict_step(self,
@@ -544,7 +544,7 @@ class AugmentHeteroDCVModel(HeteroDCVModel):
         metric_dict = {f'{prefix}_loss': loss}
         metric_dict = {f'{prefix}prediction_loss': prediction_loss}
         metric_dict = {f'{prefix}representation_loss': representation_loss}
-        
+
         if prefix != 'train':
             # For the validation and test sets, log additional metrics
             metric_dict[f'{prefix}_cos_sim'] = float(cosine_similarity(
