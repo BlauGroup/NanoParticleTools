@@ -14,7 +14,7 @@ def download_model(name, run_id, entity, project, overwrite=False):
     return f'{model_path}/{name}.ckpt'
 
 
-def model_from_file(model_path, model_cls):
-    model = model_cls.load_from_checkpoint(model_path)
+def model_from_file(model_path, model_cls, map_location_string):
+    model = model_cls.load_from_checkpoint(model_path, map_location=torch.device(map_location_string))
     model.eval()
     return model

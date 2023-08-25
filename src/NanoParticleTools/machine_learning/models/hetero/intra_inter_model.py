@@ -532,8 +532,11 @@ class AugmentHeteroDCVModel(HeteroDCVModel):
               batch_idx: int | None = None,
               log: bool = True):
         rep, augmented_rep, prediction_loss, representation_loss = self._evaluate_step(batch)
-        loss = prediction_loss + representation_loss
-        loss = loss.mean(0)
+        sigma_pred = prediction_loss.var(0)
+        sigma_representation = representation_loss.var(0)
+        prediction_loss = prediction_loss.mean(0)
+        representation_loss = representation_loss.mean(0)
+        loss = prediction_loss/sigma_pred + representation_loss/sigma_representation
         # Determine the batch size
         if batch.batch_dict is not None:
             batch_size = batch.batch_dict["dopant"].size(0)
@@ -542,14 +545,14 @@ class AugmentHeteroDCVModel(HeteroDCVModel):
 
         # Log the loss
         metric_dict = {f'{prefix}_loss': loss}
-        metric_dict = {f'{prefix}prediction_loss': prediction_loss}
-        metric_dict = {f'{prefix}representation_loss': representation_loss}
+        metric_dict = {f'{prefix}_prediction_loss': prediction_loss}
+        metric_dict = {f'{prefix}_representation_loss': representation_loss}
 
-        if prefix != 'train':
-            # For the validation and test sets, log additional metrics
-            metric_dict[f'{prefix}_cos_sim'] = float(cosine_similarity(
-                rep, augmented_rep, 1).mean(0))
-            # add other metrics if interested
+        # if prefix != 'train':
+        #     # For the validation and test sets, log additional metrics
+        #     metric_dict[f'{prefix}_cos_sim'] = float(cosine_similarity(
+        #         rep, augmented_rep, 1).mean(0))
+        #     # add other metrics if interested
 
         if log:
             self.log_dict(metric_dict, batch_size=batch_size)
