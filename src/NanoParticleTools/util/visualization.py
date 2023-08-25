@@ -10,6 +10,7 @@ DEFAULT_COLOR_MAP = {
     'Yb': 'tab:blue',
     'Er': 'tab:orange',
     'Nd': 'tab:green',
+    'Tm': 'tab:red',
     'Other': 'lightgrey',
     'Y': 'white'
 }
