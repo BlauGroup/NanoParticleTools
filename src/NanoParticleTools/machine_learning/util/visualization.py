@@ -1,5 +1,6 @@
 from matplotlib import pyplot as plt
 import torch
+from torch.nn.functional import mse_loss
 
 
 def get_predictions(model, dataloader, log=False, log_constant=10):
@@ -37,6 +38,7 @@ def get_parity_plot(model,
                 'o',
                 alpha=0.2,
                 label='Train Data')
+        train_loss = mse_loss(uv_pred, uv_true)
 
     if data_module.val_dataset is not None:
         uv_pred, uv_true = get_predictions(model, data_module.val_dataloader(),
@@ -46,6 +48,7 @@ def get_parity_plot(model,
                 'X',
                 alpha=0.2,
                 label='Val Data')
+        val_loss = mse_loss(uv_pred, uv_true)
 
     if data_module.iid_test_dataset is not None:
         uv_pred, uv_true = get_predictions(model,
@@ -56,6 +59,7 @@ def get_parity_plot(model,
                 'D',
                 alpha=0.2,
                 label='ID Test Data')
+        iid_loss = mse_loss(uv_pred, uv_true)
 
     if data_module.test_dataset is not None:
         uv_pred, uv_true = get_predictions(model,
@@ -66,6 +70,7 @@ def get_parity_plot(model,
                 'D',
                 alpha=0.2,
                 label='OOD Test Data')
+        ood_loss = mse_loss(uv_pred, uv_true)
 
     ax.plot([0, max(max(ax.get_xlim()), max(ax.get_ylim()))],
             [0, max(max(ax.get_xlim()), max(ax.get_ylim()))], 'k--')
@@ -73,3 +78,4 @@ def get_parity_plot(model,
     ax.set_xlabel('NPMC UV Intensity', fontsize=18)
     ax.set_ylabel('ML Predicted UV Intensity', fontsize=18)
     ax.legend(fontsize=11)
+    return train_loss, val_loss, iid_loss, ood_loss

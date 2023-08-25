@@ -1,6 +1,7 @@
 import os
 import wandb
 import warnings
+import torch
 
 
 def download_model(name, run_id, entity, project, overwrite=False):
@@ -15,8 +16,15 @@ def download_model(name, run_id, entity, project, overwrite=False):
     return f'{model_path}/{name}.ckpt'
 
 
-def model_from_file(model_path, model_cls):
-    model = model_cls.load_from_checkpoint(model_path, strict=False)
+def model_from_file(model_path,
+                    model_cls,
+                    map_location_string: None | str = None):
+    map_device = None
+    if map_location_string is not None:
+        map_device = torch.device(map_location_string)
+    model = model_cls.load_from_checkpoint(model_path,
+                                           strict=False,
+                                           map_location=map_device)
     model.eval()
     return model
 
@@ -32,7 +40,8 @@ def get_models(entity, project, tags, model_cls, sort_by_name=True):
     runs = api.runs(path=f"{entity}/{project}")
 
     runs = list(filter_runs(runs, tags))
-    runs = sorted(runs, key=lambda run: run.name)
+    if sort_by_name:
+        runs = sorted(runs, key=lambda run: run.name)
 
     models = []
     for run in runs:
