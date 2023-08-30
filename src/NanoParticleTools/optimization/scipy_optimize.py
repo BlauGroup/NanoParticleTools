@@ -1,4 +1,3 @@
-
 from NanoParticleTools.inputs.nanoparticle import SphericalConstraint
 from NanoParticleTools.machine_learning.data import FeatureProcessor
 
@@ -121,16 +120,19 @@ def get_query_fn(model: pl.LightningModule,
                  feature_processor: FeatureProcessor,
                  max_np_radii: int | float,
                  return_stats: bool = False) -> Callable:
+    device = model.device
 
     def model_fn(inputs):
-        data = x_to_data(inputs, feature_processor, max_np_radii)
+        nonlocal device
+
+        data = x_to_data(inputs, feature_processor, max_np_radii).to(device)
         if return_stats:
             return model.predict_step(data, return_stats=return_stats)
         else:
             # We return the negative of the prediction because we
             # want to maximize the objective function
-            return -model.predict_step(data,
-                                       return_stats=return_stats).detach()
+            return -model.predict_step(
+                data, return_stats=return_stats).cpu().detach()
 
     return model_fn
 
@@ -140,18 +142,21 @@ def get_jac_fn(
     feature_processor: FeatureProcessor,
     max_np_radii: int | float,
 ) -> Callable:
+    device = model.device
 
     def jac_fn(inputs):
-        data = x_to_data(inputs, feature_processor, max_np_radii)
+        nonlocal device
+
+        data = x_to_data(inputs, feature_processor, max_np_radii).to(device)
         data['dopant'].x.requires_grad = True
         data['radii_without_zero'].requires_grad = True
 
         # We use the negative of the prediction, since we want to maximize
-        y_hat = -model.predict_step(data)
+        y_hat = -model.predict_step(data).to(device)
         y_hat.backward()
         return np.concatenate(
-            (data['dopant'].x.grad.flatten().detach().numpy(),
-             data['radii_without_zero'].grad.flatten().detach().numpy() /
+            (data['dopant'].x.grad.cpu().flatten().detach().numpy(),
+             data['radii_without_zero'].grad.cpu().flatten().detach().numpy() /
              max_np_radii))
 
     return jac_fn

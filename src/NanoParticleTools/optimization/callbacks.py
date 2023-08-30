@@ -39,6 +39,7 @@ def get_plotting_fn(feature_processor: FeatureProcessor) -> Callable:
 
 def save_to_store(store: Store,
                   feature_processor: FeatureProcessor,
+                  n_constraints: int,
                   metadata: dict | None = None) -> Callable:
     """
     A helper function which saves the iteration history of a scipy optimization
@@ -72,14 +73,14 @@ def save_to_store(store: Store,
             f=f,
             accept=accept,
             n_dopants=feature_processor.n_possible_elements,
-            n_constraints=int(
-                len(x) // (feature_processor.n_possible_elements + 1)),
+            n_constraints=n_constraints,
             dopants=feature_processor.possible_elements,
             metadata=metadata,
             iteration_counter=iteration_counter,
         )
 
-        store.update(_d, key='uuid')
+        with store:
+            store.update(_d, key='uuid')
         iteration_counter += 1
 
     return save_fn

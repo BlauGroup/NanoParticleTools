@@ -35,7 +35,12 @@ def filter_runs(runs, tags):
             yield run
 
 
-def get_models(entity, project, tags, model_cls, sort_by_name=True):
+def get_models(entity,
+               project,
+               tags,
+               model_cls,
+               sort_by_name=True,
+               map_location_string='cpu'):
     api = wandb.Api()
     runs = api.runs(path=f"{entity}/{project}")
 
@@ -65,9 +70,13 @@ def get_models(entity, project, tags, model_cls, sort_by_name=True):
         os.rename(f'{model_path}/model.ckpt', model_file)
 
         try:
-            model = model_from_file(model_file, model_cls)
-        except RuntimeError:
-            model = model_from_file(model_file, model_cls, map_location_string='cpu')
+            model = model_from_file(model_file,
+                                    model_cls,
+                                    map_location_string=map_location_string)
+        except Exception as e:
+            model = model_from_file(model_file,
+                                    model_cls,
+                                    map_location_string='cpu')
 
         models.append(model)
 
