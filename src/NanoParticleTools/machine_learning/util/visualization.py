@@ -29,6 +29,7 @@ def get_parity_plot(model,
         fig = plt.figure(**fig_kwargs)
         ax = fig.add_subplot(111)
 
+    metrics = {}
     if data_module.train_dataset is not None:
         uv_pred, uv_true = get_predictions(model,
                                            data_module.train_dataloader(), log,
@@ -37,8 +38,9 @@ def get_parity_plot(model,
                 uv_pred.flatten(),
                 'o',
                 alpha=0.2,
-                label='Train Data')
-        train_loss = mse_loss(uv_pred, uv_true)
+                label='Train Data',
+                color='tab:blue')
+        metrics['train_mse'] = mse_loss(uv_pred, uv_true)
 
     if data_module.val_dataset is not None:
         uv_pred, uv_true = get_predictions(model, data_module.val_dataloader(),
@@ -47,8 +49,9 @@ def get_parity_plot(model,
                 uv_pred.flatten(),
                 'X',
                 alpha=0.2,
-                label='Val Data')
-        val_loss = mse_loss(uv_pred, uv_true)
+                label='Val Data',
+                color='tab:orange')
+        metrics['val_mse'] = mse_loss(uv_pred, uv_true)
 
     if data_module.iid_test_dataset is not None:
         uv_pred, uv_true = get_predictions(model,
@@ -58,8 +61,9 @@ def get_parity_plot(model,
                 uv_pred.flatten(),
                 'D',
                 alpha=0.2,
-                label='ID Test Data')
-        iid_loss = mse_loss(uv_pred, uv_true)
+                label='ID Test Data',
+                color='tab:green')
+        metrics['id_test_mse'] = mse_loss(uv_pred, uv_true)
 
     if data_module.test_dataset is not None:
         uv_pred, uv_true = get_predictions(model,
@@ -69,8 +73,9 @@ def get_parity_plot(model,
                 uv_pred.flatten(),
                 'D',
                 alpha=0.2,
-                label='OOD Test Data')
-        ood_loss = mse_loss(uv_pred, uv_true)
+                label='OOD Test Data',
+                color='tab:red')
+        metrics['ood_test_mse'] = mse_loss(uv_pred, uv_true)
 
     ax.plot([0, max(max(ax.get_xlim()), max(ax.get_ylim()))],
             [0, max(max(ax.get_xlim()), max(ax.get_ylim()))], 'k--')
@@ -78,4 +83,4 @@ def get_parity_plot(model,
     ax.set_xlabel('NPMC UV Intensity', fontsize=18)
     ax.set_ylabel('ML Predicted UV Intensity', fontsize=18)
     ax.legend(fontsize=11)
-    return train_loss, val_loss, iid_loss, ood_loss
+    return metrics
