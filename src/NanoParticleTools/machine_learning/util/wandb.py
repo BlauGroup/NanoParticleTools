@@ -50,7 +50,7 @@ def get_models(entity, project, tags, model_cls, sort_by_name=True):
         # find best artifact
         best_artifact = None
         for artifact in artifacts:
-            if 'best' in artifact._aliases:
+            if 'best_k' in artifact._aliases:
                 best_artifact = artifact
                 break
 
@@ -64,7 +64,11 @@ def get_models(entity, project, tags, model_cls, sort_by_name=True):
         model_file = f'{model_path}/{run.name}.ckpt'
         os.rename(f'{model_path}/model.ckpt', model_file)
 
-        model = model_from_file(model_file, model_cls)
+        try:
+            model = model_from_file(model_file, model_cls)
+        except RuntimeError:
+            model = model_from_file(model_file, model_cls, map_location_string='cpu')
+
         models.append(model)
 
     return models
