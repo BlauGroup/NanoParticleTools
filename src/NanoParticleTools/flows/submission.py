@@ -1,3 +1,6 @@
+from NanoParticleTools.inputs.nanoparticle import NanoParticleConstraint
+from NanoParticleTools.flows.flows import get_npmc_flow
+
 import numpy as np
 import uuid
 from copy import deepcopy
@@ -5,11 +8,10 @@ from jobflow import JobStore
 from fireworks import LaunchPad
 from atomate.common.powerups import add_priority
 from jobflow.managers.fireworks import flow_to_workflow
-from NanoParticleTools.flows.flows import get_npmc_flow
 
 
-def submit_job(constraints,
-               dopant_specifications,
+def submit_job(constraints: list[NanoParticleConstraint],
+               dopant_specifications: list[tuple[int, float, str, str]],
                lp: LaunchPad,
                store: JobStore,
                excitation_wavelength=800,
@@ -18,7 +20,34 @@ def submit_job(constraints,
                priority: int = None,
                doping_seed: int = None,
                base_seed: int = None,
-               npmc_runner_kwargs: dict = None):
+               npmc_runner_kwargs: dict = None,
+               initial_state_db_kwargs: dict = None,
+               add_to_launchpad: bool = True):
+    """
+
+    Args:
+        constraints: A list of constraints which are used to specify the control
+            volumes of the nanoparticle.
+        dopant_specifications: A list of tuples which specify the dopants (and
+            their quantity) for each contraint in the nanoparticle.
+        lp: The fireworks launchpad to which the workflow will be added and run
+        store: Store for which the simulation results will be stored.
+        excitation_wavelength: Excitation wavelength for these simulations
+        excitation_power: Excitation power for these simulations
+        metadata: Metadata to be added to the workflow and saved along with the output
+        priority: The fireworks priority for this workflow
+        doping_seed: The random seed used for placing dopants in the NP lattice
+        base_seed: The base random seed used for sampling events in MC.
+            If N simulations are run, the seeds used will be base_seed to base_seed + N
+        npmc_runner_kwargs: Keyword arguments to be passed to the NPMC runner
+        initial_state_db_kwargs: Keyword arguments to be passed to the NPMCInput.
+            This is used to specify the interaction radius bound or to change the
+            relative weights of single site transitions vs two site (Energy Transfer)
+            transitions.
+        add_to_launchpad: Whether or not to add the workflow to the launchpad.
+            Setting this to false is useful for debugging, since it will return
+            the workflow and not modify the launchpad.
+    """
 
     # if no seeds are specified, generate random ones
     if doping_seed is None:
@@ -33,7 +62,7 @@ def submit_job(constraints,
         'thread_count': 4,
         'simulation_time': 0.01,
     }
-    if npmc_runner_kwargs is not None:
+    if npmc_runner_kwargs is None:
         npmc_runner_kwargs = {}
     npmc_args.update(npmc_runner_kwargs)
 
@@ -42,7 +71,8 @@ def submit_job(constraints,
         'excitation_power': excitation_power
     }
 
-    initial_state_db_args = {'interaction_radius_bound': 3}
+    if initial_state_db_kwargs is None:
+        initial_state_db_kwargs = {'interaction_radius_bound': 3}
 
     np_uuid = str(uuid.uuid4())
 
@@ -55,7 +85,7 @@ def submit_job(constraints,
                          dopant_specifications=dopant_specifications,
                          doping_seed=doping_seed,
                          spectral_kinetics_args=spectral_kinetics_args,
-                         initial_state_db_args=initial_state_db_args,
+                         initial_state_db_args=initial_state_db_kwargs,
                          npmc_args=npmc_args,
                          output_dir='./scratch',
                          metadata=_metadata)
@@ -63,4 +93,8 @@ def submit_job(constraints,
     wf = flow_to_workflow(flow, store=store)
     if priority is not None:
         wf = add_priority(wf, priority)
-    lp.add_wf(wf)
+
+    if add_to_launchpad:
+        lp.add_wf(wf)
+
+    return wf
