@@ -74,8 +74,6 @@ class DopantInteractionFeatureProcessor(FeatureProcessor):
             'formula_by_constraint', 'dopant_concentration', 'input'], **kwargs)
         # yapf: enable
 
-        self.elements_map = dict([(_t[1], _t[0])
-                                  for _t in enumerate(self.possible_elements)])
         self.include_zeros = include_zeros
         self.asymmetric_interaction = asymmetric_interaction
         self.augment_data = augment_data
