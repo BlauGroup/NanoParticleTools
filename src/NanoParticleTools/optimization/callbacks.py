@@ -32,7 +32,7 @@ def get_plotting_fn(feature_processor: FeatureProcessor) -> Callable:
                      f'UV Intensity={np.power(10, -f)-100:.2f}',
                      fontsize=20,
                      transform=plt.gca().transAxes)
-        plt.show()
+        return plt
 
     return plotting_fn
 
