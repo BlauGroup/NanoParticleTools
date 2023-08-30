@@ -40,7 +40,8 @@ def get_models(entity,
                tags,
                model_cls,
                sort_by_name=True,
-               map_location_string='cpu'):
+               map_location_string='cpu',
+               overwrite=True):
     api = wandb.Api()
     runs = api.runs(path=f"{entity}/{project}")
 
@@ -65,9 +66,12 @@ def get_models(entity,
             continue
 
         # Download the artifact
-        model_path = best_artifact.download('./checkpoints')
-        model_file = f'{model_path}/{run.name}.ckpt'
-        os.rename(f'{model_path}/model.ckpt', model_file)
+        if os.path.exists(f'./checkpoints/{run.name}.ckpt') and not overwrite:
+            model_file = f'./checkpoints/{run.name}.ckpt'
+        else:
+            model_path = best_artifact.download('./checkpoints')
+            model_file = f'{model_path}/{run.name}.ckpt'
+            os.rename(f'{model_path}/model.ckpt', model_file)
 
         try:
             model = model_from_file(model_file,
