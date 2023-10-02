@@ -218,6 +218,14 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
                            f' Expected {npmc_args["num_sims"]} trajectories, '
                            f'found {len(data[0].keys())}.')
 
+    # Check that all the simulations are complete
+    if 'simulation_time' in npmc_args.keys():
+        for seed, simulation_time in data[0].items():
+            if simulation_time < npmc_args['simulation_time']:
+                raise RuntimeError(f'Run did not successfully complete.'
+                                   f' Simulation {seed} did not complete. Simulated'
+                                   f' {simulation_time} s of {npmc_args["simulation_time"]} s')
+
     # get population by shell
 
     # Generate documents
