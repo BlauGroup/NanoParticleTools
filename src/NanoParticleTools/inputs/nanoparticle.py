@@ -384,6 +384,12 @@ class DopedNanoparticle(MSONable):
                     site for site in constraint.get_host_structure().sites
                     if site.species_string in dopants_dict.keys()
                 ]
+
+                if len(_sites) == 0:
+                    # Need at least one site for a valid pymatgen structure.
+                    # Just keep the first site from the host structure
+                    _sites = [constraint.get_host_structure().sites[0]]
+
                 constraint.host_structure = Structure.from_sites(_sites)
 
         self._sites = None
