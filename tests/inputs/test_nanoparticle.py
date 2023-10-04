@@ -77,7 +77,10 @@ def test_nanoparticle_with_empty():
                             prune_hosts=True)
     dnp.generate()
     assert len(dnp.dopant_sites) == 18015
-    assert len(dnp.sites) == 39579
+    assert len(dnp.sites) == 59790
+    assert dnp.dopant_concentrations()['Yb'] == 0.24609466465964208
+    assert dnp.dopant_concentrations()['Er'] == 0.011975246696772036
+    assert dnp.dopant_concentrations()['Nd'] == 0.04323465462451915
 
 
 def test_empty_nanoparticle():

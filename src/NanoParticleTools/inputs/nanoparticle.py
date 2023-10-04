@@ -378,18 +378,15 @@ class DopedNanoparticle(MSONable):
                              'The result will be zero intensity for everything')
 
         if prune_hosts:
-            for dopants_dict, constraint in zip(conc_by_layer_and_species,
-                                                constraints):
+            replaced_els = []
+            for dopants_dict in conc_by_layer_and_species:
+                replaced_els.extend(list(dopants_dict.keys()))
+            replaced_els = list(set(replaced_els))
+            for constraint in constraints:
                 _sites = [
                     site for site in constraint.get_host_structure().sites
-                    if site.species_string in dopants_dict.keys()
+                    if site.species_string in replaced_els
                 ]
-
-                if len(_sites) == 0:
-                    # Need at least one site for a valid pymatgen structure.
-                    # Just keep the first site from the host structure
-                    _sites = [constraint.get_host_structure().sites[0]]
-
                 constraint.host_structure = Structure.from_sites(_sites)
 
         self._sites = None
