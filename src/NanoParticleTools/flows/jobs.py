@@ -176,22 +176,23 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
                 'Existing run found, but some files are missing. ')
             fresh_start = True
 
-    if override or os.path.exists(output_dir) is False or fresh_start:
-        if os.path.exists(output_dir):
-            # delete the directory, so we can start from scratch
-            shutil.rmtree(output_dir)
+    if fresh_start:
+        if override or os.path.exists(output_dir) is False:
+            if os.path.exists(output_dir):
+                # delete the directory, so we can start from scratch
+                shutil.rmtree(output_dir)
 
-        # Make the directory
-        os.mkdir(output_dir)
+            # Make the directory
+            os.mkdir(output_dir)
 
-        npmc_input.generate_initial_state_database(
-            files['initial_state_db_path'], **_initial_state_db_args)
-        npmc_input.generate_nano_particle_database(files['np_db_path'])
-        with open(files['npmc_input'], 'w') as f:
-            json.dump(npmc_input, f, cls=MontyEncoder)
-    else:
-        raise RuntimeError(
-            'Existing run found. Override is set to false, terminating')
+            npmc_input.generate_initial_state_database(
+                files['initial_state_db_path'], **_initial_state_db_args)
+            npmc_input.generate_nano_particle_database(files['np_db_path'])
+            with open(files['npmc_input'], 'w') as f:
+                json.dump(npmc_input, f, cls=MontyEncoder)
+        else:
+            raise RuntimeError(
+                'Existing run found. Override is set to false, terminating')
 
     # Initialize the wrapper class to run NPMC
     npmc_runner = NPMCRunner(
