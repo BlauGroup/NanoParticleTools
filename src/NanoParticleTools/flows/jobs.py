@@ -176,7 +176,7 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
                 'Existing run found, but some files are missing. ')
             fresh_start = True
 
-    if fresh_start:
+    if fresh_start or os.path.exists(output_dir) is False:
         if override or os.path.exists(output_dir) is False:
             if os.path.exists(output_dir):
                 # delete the directory, so we can start from scratch
