@@ -377,6 +377,7 @@ class DopedNanoparticle(MSONable):
             raise ValueError('There are no dopants being placed, this is an empty particle.'
                              'The result will be zero intensity for everything')
 
+        self.prune_hosts = prune_hosts
         if prune_hosts:
             replaced_els = []
             for dopants_dict in conc_by_layer_and_species:
