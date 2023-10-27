@@ -63,6 +63,33 @@ def test_doped_nanoparticle():
     assert len(dnp.sites) == 56
 
 
+def test_doped_near_one():
+    with pytest.raises(ValueError):
+        constraints = [SphericalConstraint(10)]
+        dopants = [(0, 0.1, 'Yb', 'Y'), (0, 1, 'Er', 'Y')]
+        dnp = DopedNanoparticle(constraints, dopants)
+
+    with pytest.raises(ValueError):
+        constraints = [SphericalConstraint(10)]
+        dopants = [(0, 2e-4, 'Yb', 'Y'), (0, 1, 'Er', 'Y')]
+        dnp = DopedNanoparticle(constraints, dopants)
+
+    constraints = [SphericalConstraint(10)]
+    dopants = [(0, 0.33334, 'Yb', 'Y'), (0, 0.666667, 'Er', 'Y')]
+    dnp = DopedNanoparticle(constraints, dopants)
+    assert dnp.dopant_specification[0][1] == pytest.approx(0.333337, abs=1e-6)
+    assert dnp.dopant_specification[1][1] == pytest.approx(0.666662, abs=1e-6)
+
+    constraints = [SphericalConstraint(10), SphericalConstraint(20)]
+    dopants = [(0, 0.33334, 'Yb', 'Y'), (0, 0.666667, 'Er', 'Y'),
+               (1, .20001, 'Yb', 'Y'), (1, 0.8, 'Er', 'Y')]
+    dnp = DopedNanoparticle(constraints, dopants)
+    assert dnp.dopant_specification[0][1] == pytest.approx(0.333337, abs=1e-6)
+    assert dnp.dopant_specification[1][1] == pytest.approx(0.666662, abs=1e-6)
+    assert dnp.dopant_specification[2][1] == pytest.approx(0.200007, abs=1e-6)
+    assert dnp.dopant_specification[3][1] == pytest.approx(0.799992, abs=1e-6)
+
+
 def test_nanoparticle_with_empty():
     constraints = [
         SphericalConstraint(40),

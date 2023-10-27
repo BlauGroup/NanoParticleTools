@@ -140,7 +140,9 @@ class SphericalConstraint(NanoParticleConstraint):
         if center is None:
             center = [0, 0, 0]
 
-        distances_from_center = np.linalg.norm(np.subtract(site_coords, center), axis=1)
+        distances_from_center = np.linalg.norm(np.subtract(
+            site_coords, center),
+                                               axis=1)
         return distances_from_center <= self.radius
 
     def __str__(self) -> str:
@@ -333,7 +335,8 @@ class DopedNanoparticle(MSONable):
 
         # Check if there are zero constraints
         if len(constraints) == 0:
-            raise ValueError('There are no constraints, this particle is empty')
+            raise ValueError(
+                'There are no constraints, this particle is empty')
         self.constraints = constraints
 
         self.seed = seed if seed is not None else 0
@@ -349,8 +352,7 @@ class DopedNanoparticle(MSONable):
         conc_by_layer_and_species = [{} for _ in self.constraints]
         for i, dopant_conc, _, replace_el in dopant_specification:
             if dopant_conc < 0:
-                raise ValueError(
-                    'Dopant concentration cannot be negative')
+                raise ValueError('Dopant concentration cannot be negative')
             if dopant_conc > 1:
                 raise ValueError(
                     'Dopant concentration cannot be greater than 1')
@@ -369,13 +371,27 @@ class DopedNanoparticle(MSONable):
                 if total_replaced_conc > 0:
                     dopants_present = True
                 if total_replaced_conc > 1:
-                    raise ValueError(
-                        f"Dopant concentration in constraint {layer_i}"
-                        f" on {replaced_el} sites exceeds 100%")
+                    if total_replaced_conc - 1 < 1e-4:
+                        # within some tolerance, just rescale the concentrations
+                        # This is most likely a numerical representation/rounding issue
+                        scale_factor = 1 / (total_replaced_conc + 1e-7)
+                        for i in range(len(dopant_specification)):
+                            dopant_spec = dopant_specification[i]
+                            if dopant_spec[0] == layer_i:
+                                dopant_specification[i] = (layer_i,
+                                                           dopant_spec[1] *
+                                                           scale_factor,
+                                                           dopant_spec[2],
+                                                           dopant_spec[3])
+                    else:
+                        raise ValueError(
+                            f"Dopant concentration in constraint {layer_i}"
+                            f" on {replaced_el} sites exceeds 100%")
 
         if not dopants_present:
-            raise ValueError('There are no dopants being placed, this is an empty particle.'
-                             'The result will be zero intensity for everything')
+            raise ValueError(
+                'There are no dopants being placed, this is an empty particle.'
+                'The result will be zero intensity for everything')
 
         self.prune_hosts = prune_hosts
         if prune_hosts:
