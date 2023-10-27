@@ -84,30 +84,6 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
         'npmc_input': os.path.join(output_dir, 'npmc_input.json')
     }
 
-    # Generate Nanoparticle
-    nanoparticle = DopedNanoparticle(constraints, dopant_specifications,
-                                     doping_seed, prune_hosts=True)
-    nanoparticle.generate()
-
-    # Initialize Spectral Kinetics class to calculate transition rates
-    dopants = [
-        Dopant(key, concentration)
-        for key, concentration in nanoparticle.dopant_concentrations().items()
-    ]
-    spectral_kinetics = SpectralKinetics(dopants, **spectral_kinetics_args)
-
-    # Create an NPMCInput class
-    npmc_input = NPMCInput(spectral_kinetics, nanoparticle, initial_states)
-
-    # Write files
-    _initial_state_db_args = {
-        'one_site_interaction_factor': 1,
-        'two_site_interaction_factor': 1,
-        'interaction_radius_bound': 3,
-        'distance_factor_type': 'inverse_cubic'
-    }
-    _initial_state_db_args.update(initial_state_db_args)
-
     # Check if output dir exists. If so, check if the input files match
     fresh_start = False
     if os.path.exists(output_dir):
@@ -139,23 +115,22 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
                 warnings.warn(f'Existing run found, but missing {missing} table.'
                               f'Re-initializing the simulation')
                 fresh_start = True
+            # # Check the number of sites
+            # num_dopant_site_db = len(list(cur.execute('SELECT * from sites')))
+            # num_dopant_sites = len(nanoparticle.dopant_sites)
+            # if num_dopant_sites != num_dopant_site_db:
+            #     warnings.warn(
+            #         'Existing run found, num sites does not match.'
+            #         ' Simulation must begin from scratch')
 
-            # Check the number of sites
-            num_dopant_site_db = len(list(cur.execute('SELECT * from sites')))
-            num_dopant_sites = len(nanoparticle.dopant_sites)
-            if num_dopant_sites != num_dopant_site_db:
-                warnings.warn(
-                    'Existing run found, num sites does not match.'
-                    ' Simulation must begin from scratch')
-
-            # Check the number of interactions
-            num_interactions_db = len(
-                list(cur.execute('SELECT * from interactions')))
-            num_interactions = len(get_all_interactions(spectral_kinetics))
-            if num_interactions != num_interactions_db:
-                warnings.warn(
-                    'Existing run found, number of interactions does not '
-                    'match. Simulation must begin from scratch')
+            # # Check the number of interactions
+            # num_interactions_db = len(
+            #     list(cur.execute('SELECT * from interactions')))
+            # num_interactions = len(get_all_interactions(spectral_kinetics))
+            # if num_interactions != num_interactions_db:
+            #     warnings.warn(
+            #         'Existing run found, number of interactions does not '
+            #         'match. Simulation must begin from scratch')
 
             cur.close()
 
@@ -178,6 +153,30 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
 
     if fresh_start or os.path.exists(output_dir) is False:
         if override or os.path.exists(output_dir) is False:
+            # Generate Nanoparticle
+            nanoparticle = DopedNanoparticle(constraints, dopant_specifications,
+                                             doping_seed, prune_hosts=True)
+            nanoparticle.generate()
+
+            # Initialize Spectral Kinetics class to calculate transition rates
+            dopants = [
+                Dopant(key, concentration)
+                for key, concentration in nanoparticle.dopant_concentrations().items()
+            ]
+            spectral_kinetics = SpectralKinetics(dopants, **spectral_kinetics_args)
+
+            # Create an NPMCInput class
+            npmc_input = NPMCInput(spectral_kinetics, nanoparticle, initial_states)
+
+            # Write files
+            _initial_state_db_args = {
+                'one_site_interaction_factor': 1,
+                'two_site_interaction_factor': 1,
+                'interaction_radius_bound': 3,
+                'distance_factor_type': 'inverse_cubic'
+            }
+            _initial_state_db_args.update(initial_state_db_args)
+
             if os.path.exists(output_dir):
                 # delete the directory, so we can start from scratch
                 shutil.rmtree(output_dir)
