@@ -52,11 +52,25 @@ def test_constraint_as_dict():
 
     # check the structure is not present
     assert constraint_dict['host_structure'] is None
+    assert constraint_dict['a'] == pytest.approx(60)
 
     structure = get_wse2_structure()
     constraint = SphericalConstraint(20, host_structure=structure)
     constraint_dict = constraint.as_dict()
     assert constraint_dict['host_structure'] is not None
+    assert constraint_dict['radius'] == pytest.approx(20)
+
+    new_constraint = SphericalConstraint.from_dict(constraint_dict)
+    assert new_constraint.host_structure is not None
+    assert new_constraint.host_structure.composition.reduced_formula == 'WSe2'
+
+    structure = get_disordered_nayf4_structure(False, False)
+    constraint = SphericalConstraint(20, host_structure=structure)
+    constraint_dict = constraint.as_dict()
+
+    new_constraint = SphericalConstraint.from_dict(constraint_dict)
+    assert constraint_dict['host_structure'] is not None
+    assert new_constraint.host_structure.composition.reduced_formula == 'NaYF3'
 
 
 def test_doped_nanoparticle():
