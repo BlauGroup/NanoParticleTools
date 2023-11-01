@@ -4,6 +4,7 @@ from pathlib import Path
 import os
 import numpy as np
 from functools import lru_cache
+from pymatgen.core import DummySpecies
 
 SPECIES_DATA_PATH = os.path.join(str(Path(__file__).absolute().parent), 'data')
 
@@ -81,28 +82,37 @@ class Dopant(MSONable):
             calculation. If not specified, all levels will be used.
     """
 
+    # The naming convention should always start with an X, since the symbol
+    # cannot start with an existing element's symbol
     SURFACE_DOPANT_SYMBOLS_TO_NAMES = {
-        'Na': 'Surface',
-        'Mg': 'Surface6',
-        'Al': 'Surface3',
-        'Si': 'Surface4',
-        'P': 'Surface5'
+        'Xsurfaceone': 'Surface',
+        'Xsurfacethree': 'Surface3',
+        'Xsurfacefour': 'Surface4',
+        'Xsurfacefive': 'Surface5',
+        'Xsurfacesix': 'Surface6',
+    }
+
+    SURFACE_DOPANT_SYMBOLS_TO_SPECIES = {
+        key: DummySpecies(key)
+        for key in SURFACE_DOPANT_SYMBOLS_TO_NAMES.keys()
     }
 
     SURFACE_DOPANT_NAMES_TO_SYMBOLS = dict(
         zip(SURFACE_DOPANT_SYMBOLS_TO_NAMES.values(),
             SURFACE_DOPANT_SYMBOLS_TO_NAMES.keys()))
 
-    DEFAULT_N_LEVELS = {'Yb': 2,
-                        'Sm': 24,
-                        'Gd': 15,
-                        'Tm': 12,
-                        'Tb': 9,
-                        'Nd': 24,
-                        'Eu': 22,
-                        'Er': 34,
-                        'Dy': 22,
-                        'Ho': 23}
+    DEFAULT_N_LEVELS = {
+        'Yb': 2,
+        'Sm': 24,
+        'Gd': 15,
+        'Tm': 12,
+        'Tb': 9,
+        'Nd': 24,
+        'Eu': 22,
+        'Er': 34,
+        'Dy': 22,
+        'Ho': 23
+    }
 
     def __init__(self,
                  symbol: str,

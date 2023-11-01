@@ -2,9 +2,14 @@ from typing import Sequence, Tuple, List, Dict
 from abc import ABC, abstractmethod
 
 import numpy as np
-from pymatgen.core import (Structure, Site, Lattice, Molecule)
+from pymatgen.core import (Structure, Site, Lattice, Molecule, DummySpecies,
+                           Composition)
+
 from monty.json import MSONable
 from NanoParticleTools.species_data.species import Dopant
+from functools import lru_cache
+from collections import Counter
+
 try:
     from e3nn.io import SphericalTensor
     from torch import Tensor
@@ -38,6 +43,8 @@ class NanoParticleConstraint(ABC, MSONable):
 
     def as_dict(self) -> dict:
         _d = super().as_dict()
+        # Set a default value for host_structure
+        _d['host_structure'] = _d.get('host_structure', None)
         if self.host_structure is not None:
             if self.host_structure.composition.reduced_formula == 'NaYF4':
                 # If this is the default structure, don't save it
@@ -141,7 +148,8 @@ class SphericalConstraint(NanoParticleConstraint):
             center = [0, 0, 0]
 
         distances_from_center = np.linalg.norm(np.subtract(
-            site_coords, center), axis=1)
+            site_coords, center),
+                                               axis=1)
         return distances_from_center <= self.radius
 
     def __str__(self) -> str:
@@ -168,9 +176,9 @@ class PrismConstraint(NanoParticleConstraint):
                  b: float | int,
                  c: float | int,
                  host_structure: Structure | None = None):
-        self.box_a = a
-        self.box_b = b
-        self.box_c = c
+        self.a = a
+        self.b = b
+        self.c = c
         super().__init__(host_structure)
 
     def bounding_box(self):
@@ -183,7 +191,7 @@ class PrismConstraint(NanoParticleConstraint):
         Returns:
             List[float]: The box dimensions in the form [x_max, y_max, z_max]
         """
-        return [self.box_a, self.box_b, self.box_c]
+        return [self.a, self.b, self.c]
 
     def sites_in_bounds(self,
                         site_coords: np.array | List,
@@ -208,15 +216,15 @@ class PrismConstraint(NanoParticleConstraint):
 
         centered_coords = np.subtract(site_coords, center)
         abs_coords = np.abs(centered_coords)
-        within_a = abs_coords[:, 0] <= self.box_a / 2
-        within_b = abs_coords[:, 1] <= self.box_b / 2
-        within_c = abs_coords[:, 2] <= self.box_c / 2
+        within_a = abs_coords[:, 0] <= self.a / 2
+        within_b = abs_coords[:, 1] <= self.b / 2
+        within_c = abs_coords[:, 2] <= self.c / 2
 
         return within_a & within_b & within_c
 
     def __str__(self) -> str:
-        return (f"PrismConstraint(a={self.box_a}, "
-                f"b={self.box_b}, c={self.box_c})")
+        return (f"PrismConstraint(a={self.a}, "
+                f"b={self.b}, c={self.c})")
 
 
 class CubeConstraint(PrismConstraint):
@@ -225,11 +233,11 @@ class CubeConstraint(PrismConstraint):
     This could be used to define a cubic nanoparticle or a cubic shell.
     """
 
-    def __init__(self, a, host_structure: Structure | None = None):
+    def __init__(self, a, host_structure: Structure | None = None, **kwargs):
         super().__init__(a, a, a, host_structure)
 
     def __str__(self) -> str:
-        return f"CubeConstraint(a={self.box_a})"
+        return f"CubeConstraint(a={self.a})"
 
 
 class SphericalHarmonicsConstraint(NanoParticleConstraint):
@@ -250,6 +258,8 @@ class SphericalHarmonicsConstraint(NanoParticleConstraint):
             host_structure (Structure | None, optional): _description_.
                 Defaults to None.
         """
+        raise NotImplementedError
+
         if missing_ml_package:
             raise ImportError(
                 "e3nn or torch is not installed. Please make sure both "
@@ -270,7 +280,7 @@ class SphericalHarmonicsConstraint(NanoParticleConstraint):
         """
         # Will need to figure out how to get the largest distance in
         # the 3 cartesian coordinates
-        raise NotImplementedError
+        pass
 
     def sites_in_bounds(self,
                         site_coords: np.array | List,
@@ -292,15 +302,25 @@ class SphericalHarmonicsConstraint(NanoParticleConstraint):
         """
         if center is None:
             center = [0, 0, 0]
-        raise NotImplementedError
+        pass
 
     def __str__(self) -> str:
-        raise NotImplementedError
+        pass
 
 
 class DopedNanoparticle(MSONable):
     """
     A class that defines a nanoparticle with dopants.
+
+    Note, when specifying dopants, be very careful with doping with host
+    elements (usually when using disordered species). This code has not been
+    tested for more complex disorders.
+
+    For example: if there are 2 inequivalent sites that both have partial
+    occupancies of the same two elements. You might attempt to use
+    dopant_specifications = [(0, 0.25, 'Na', 'Y'), (0, 0.25, 'Y', 'Na)]
+    but this may be different from:
+    dopant_specifications = [(0, 0.25, 'Y', 'Na), (0, 0.25, 'Na', 'Y')]
 
     Args:
         constraints (Sequence[NanoParticleConstraint]): A list of constraints
@@ -337,6 +357,13 @@ class DopedNanoparticle(MSONable):
             raise ValueError(
                 'There are no constraints, this particle is empty')
         self.constraints = constraints
+        host_species = []
+        for constraint in constraints:
+            host_species.extend(
+                list(set(constraint.get_host_structure().species)))
+
+        host_species = [el.symbol for el in set(host_species)]
+        self.host_species = host_species
 
         self.seed = seed if seed is not None else 0
 
@@ -349,19 +376,23 @@ class DopedNanoparticle(MSONable):
         # are valid ( 0 <= x <= 1)
         # Bin the dopant concentration
         conc_by_layer_and_species = [{} for _ in self.constraints]
-        for i, dopant_conc, _, replace_el in dopant_specification:
+        for i, dopant_conc, new_el, replace_el in dopant_specification:
             if dopant_conc < 0:
                 raise ValueError('Dopant concentration cannot be negative')
             if dopant_conc > 1:
                 raise ValueError(
                     'Dopant concentration cannot be greater than 1')
-            try:
-                conc_by_layer_and_species[i][replace_el] += dopant_conc
-            except KeyError:
+
+            if new_el not in self.host_species:
                 try:
-                    conc_by_layer_and_species[i][replace_el] = dopant_conc
+                    conc_by_layer_and_species[i][replace_el] += dopant_conc
                 except KeyError:
-                    conc_by_layer_and_species[i] = {replace_el: dopant_conc}
+                    try:
+                        conc_by_layer_and_species[i][replace_el] = dopant_conc
+                    except KeyError:
+                        conc_by_layer_and_species[i] = {
+                            replace_el: dopant_conc
+                        }
 
         # Check if all concentrations are valid
         dopants_present = False
@@ -411,6 +442,28 @@ class DopedNanoparticle(MSONable):
         self._dopant_concentration = [{} for _ in self.constraints]
 
     @property
+    @lru_cache
+    def composition(self) -> Composition:
+        if not self.has_structure:
+            raise RuntimeError('Nanoparticle not generated.'
+                               ' Please use the generate() function')
+
+        el_counts = Counter([site.specie for site in self.sites])
+        composition = Composition(dict(el_counts))
+        return composition
+
+    @property
+    @lru_cache
+    def dopant_composition(self) -> Composition:
+        if not self.has_structure:
+            raise RuntimeError('Nanoparticle not generated.'
+                               ' Please use the generate() function')
+
+        el_counts = Counter([site.specie for site in self.dopant_sites])
+        composition = Composition(dict(el_counts))
+        return composition
+
+    @property
     def has_structure(self) -> bool:
         """
         Checks whether the nanoparticle structure has been generated.
@@ -422,20 +475,6 @@ class DopedNanoparticle(MSONable):
             return self._sites is not None
 
         return False
-
-    def as_dict(self) -> Dict:
-        """
-        Returns a dictionary representation of the nanoparticle. If the
-        structure was generated, delete the data that wasn't required by the
-        class definition.
-
-        Returns:
-            dict: Dictionary representation of the nanoparticle.
-        """
-        if self.has_structure:
-            # Delete generated data if it exists
-            del self._sites, self.dopant_indices, self._dopant_concentration
-        return super().as_dict()
 
     def generate(self):
         """
@@ -509,6 +548,7 @@ class DopedNanoparticle(MSONable):
                                    translated_coords[site_index]))
 
             nanoparticle_sites.append(_sites)
+
         self._sites = nanoparticle_sites
         self.dopant_indices = [[] for _ in self.constraints]
         self._dopant_concentration = [{} for _ in self.constraints]
@@ -561,12 +601,13 @@ class DopedNanoparticle(MSONable):
         for i in dopant_sites:
             self._sites[constraint_index][i].species = {dopant_species: 1}
 
-        # Keep track of concentrations in each shell
-        self._dopant_concentration[constraint_index][dopant_species] = len(
-            dopant_sites) / n_host_sites
+        if dopant_species not in self.host_species:
+            # Keep track of concentrations in each shell
+            self._dopant_concentration[constraint_index][dopant_species] = len(
+                dopant_sites) / n_host_sites
 
-        # Keep track of sites with dopants
-        self.dopant_indices[constraint_index].extend(dopant_sites)
+            # Keep track of sites with dopants
+            self.dopant_indices[constraint_index].extend(dopant_sites)
 
     def to_file(self, fmt: str = "xyz", name: str = "nanoparticle.xyz"):
         """
@@ -579,11 +620,11 @@ class DopedNanoparticle(MSONable):
                 Defaults to "xyz".
             name (str, None): _description_. Defaults to "nanoparticle.xyz".
         """
-        if self.has_structure is False:
+        if not self.has_structure:
             raise RuntimeError('Nanoparticle not generated.'
                                ' Please use the generate() function')
         _np = Molecule.from_sites(self.sites)
-        _ = _np.to(fmt, name)
+        _ = _np.to(fmt=fmt, filename=name)
 
     def dopants_to_file(self,
                         fmt: str = "xyz",
@@ -599,11 +640,11 @@ class DopedNanoparticle(MSONable):
                 Defaults to "dopant_nanoparticle.xyz".
 
         """
-        if self.has_structure is False:
+        if not self.has_structure:
             raise RuntimeError('Nanoparticle not generated.'
                                ' Please use the generate() function')
         _np = Molecule.from_sites(self.dopant_sites)
-        _ = _np.to(fmt, name)
+        _ = _np.to(fmt=fmt, filename=name)
 
     @property
     def sites(self) -> Sequence[Site]:
@@ -613,7 +654,7 @@ class DopedNanoparticle(MSONable):
         Returns:
             Sequence[Site]: List of all the sites in the nanoparticle
         """
-        if self.has_structure is False:
+        if not self.has_structure:
             raise RuntimeError('Nanoparticle not generated.'
                                ' Please use the generate() function')
         return [_site for sites in self._sites for _site in sites]
@@ -626,7 +667,7 @@ class DopedNanoparticle(MSONable):
         Returns:
             Sequence[Site]: List of all the dopant sites in the nanoparticle
         """
-        if self.has_structure is False:
+        if not self.has_structure:
             raise RuntimeError('Nanoparticle not generated.'
                                ' Please use the generate() function')
         _sites = []
@@ -654,7 +695,7 @@ class DopedNanoparticle(MSONable):
             Dict: Returns the a dictionary of the dopants and
                 their concentrations
         """
-        if self.has_structure is False:
+        if not self.has_structure:
             raise RuntimeError('Nanoparticle not generated.'
                                ' Please use the generate() function')
         if constraint_index is None:
@@ -715,5 +756,76 @@ def get_wse2_structure() -> Structure:
     positions = [[0.3333, 0.6667, 0.6384], [0.3333, 0.6667, 0.8616],
                  [0.6667, 0.3333, 0.1384], [0.6667, 0.3333, 0.3616],
                  [0.3333, 0.6667, 0.25], [0.6667, 0.3333, 0.75]]
+
+    return Structure(lattice, species=species, coords=positions)
+
+
+def get_disordered_nayf4_structure(
+        charge_decorated: bool = False,
+        include_partial_occupancy: bool = False) -> Structure:
+    """
+    Get a Structure object for a single unit cell of disordered P63/m NaYF4.
+
+
+    Args:
+        charge_decorated: Whether or not to add charges to the structure
+        include_partial_occupancy: Whether or not to include disorder on the sites.
+            When using this structure to generate a nanoparticle with Ln doping on Y sties,
+            it is easiest to discard the partial occupancies and then add them in the doping stage.
+            First, create a structure with this flag set to false, then for each constraint, the
+            first dopant specified should be Na at 0.25, which creates the 3:1 Y:Na ratio.
+
+            Example:
+            ```
+            struct = get_disordered_nayf4_structure(False, False)
+            constraints = [SphericalConstraint(50, host_structure = struct),
+                           SphericalConstraint(90, host_structure = struct)]
+            dopant_specifications = [(0, 0.25, 'Na', 'Y'), (0, 0.75, 'Yb', 'Y'), (0, 0.25, 'Er', 'Y'),
+                                     (1, 0.25, 'Na', 'Y'), (0, 0.1, 'Yb', 'Y'), (0, 0.02, 'Er', 'Y')]
+            ```
+
+    Returns:
+        A structure
+    """
+    lattice = Lattice.hexagonal(a=5.9688, c=3.5090)
+    if charge_decorated:
+        if include_partial_occupancy:
+            # yapf: disable
+            species = [{'Na1+': 0.25, DummySpecies(): 0.75}, {'Na1+': 0.25, DummySpecies(): 0.75},
+                       {'Na1+': 0.25, DummySpecies(): 0.75}, {'Na1+': 0.25, DummySpecies(): 0.75},
+                       {'Y3+': 0.75, 'Na1+': 0.25}, {'Y3+': 0.75, 'Na1+': 0.25},
+                       {'F1-': 1}, {'F1-': 1}, {'F1-': 1}, {'F1-': 1}, {'F1-': 1}, {'F1-': 1}]
+            # yapf: enable
+        else:
+            # yapf: disable
+            species = [{'Na1+': 1}, {'Na1+': 1},
+                       {'Y3+': 1}, {'Y3+': 1},
+                       {'F1-': 1}, {'F1-': 1}, {'F1-': 1}, {'F1-': 1}, {'F1-': 1}, {'F1-': 1}]
+            # yapf: enable
+
+    else:
+        if include_partial_occupancy:
+            # yapf: disable
+            species = [{'Na': 0.25, DummySpecies(): 0.75}, {'Na': 0.25, DummySpecies(): 0.75},
+                       {'Na': 0.25, DummySpecies(): 0.75}, {'Na': 0.25, DummySpecies(): 0.75},
+                       {'Y': 0.75, 'Na': 0.25}, {'Y': 0.75, 'Na': 0.25},
+                       {'F': 1}, {'F': 1}, {'F': 1}, {'F': 1}, {'F': 1}, {'F': 1}]
+            # yapf: enable
+        else:
+            species = ['Na', 'Na', 'Y', 'Y', 'F', 'F', 'F', 'F', 'F', 'F']
+
+    if include_partial_occupancy:
+        positions = [[0, 0, 0.0950], [0, 0, 0.4050], [0, 0, 0.5950],
+                     [0, 0, 0.9050], [0.3333, 0.6667, 0.7500],
+                     [0.6667, 0.3333, 0.2500], [0.0849, 0.6834, 0.2500],
+                     [0.3166, 0.4015, 0.2500], [0.4015, 0.0849, 0.7500],
+                     [0.5985, 0.9151, 0.2500], [0.6834, 0.5985, 0.7500],
+                     [0.9151, 0.3166, 0.7500]]
+    else:
+        positions = [[0, 0, 0.0950], [0, 0, 0.5950], [0.3333, 0.6667, 0.7500],
+                     [0.6667, 0.3333, 0.2500], [0.0849, 0.6834, 0.2500],
+                     [0.3166, 0.4015, 0.2500], [0.4015, 0.0849, 0.7500],
+                     [0.5985, 0.9151, 0.2500], [0.6834, 0.5985, 0.7500],
+                     [0.9151, 0.3166, 0.7500]]
 
     return Structure(lattice, species=species, coords=positions)
