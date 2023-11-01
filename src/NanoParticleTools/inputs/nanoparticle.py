@@ -148,8 +148,7 @@ class SphericalConstraint(NanoParticleConstraint):
             center = [0, 0, 0]
 
         distances_from_center = np.linalg.norm(np.subtract(
-            site_coords, center),
-                                               axis=1)
+            site_coords, center), axis=1)
         return distances_from_center <= self.radius
 
     def __str__(self) -> str:
@@ -780,8 +779,10 @@ def get_disordered_nayf4_structure(
             struct = get_disordered_nayf4_structure(False, False)
             constraints = [SphericalConstraint(50, host_structure = struct),
                            SphericalConstraint(90, host_structure = struct)]
-            dopant_specifications = [(0, 0.25, 'Na', 'Y'), (0, 0.75, 'Yb', 'Y'), (0, 0.25, 'Er', 'Y'),
-                                     (1, 0.25, 'Na', 'Y'), (0, 0.1, 'Yb', 'Y'), (0, 0.02, 'Er', 'Y')]
+            dopant_specifications = [(0, 0.25, 'Na', 'Y'), # place the Na disorder in 1:3 ratio
+                                     (0, 0.75, 'Yb', 'Y'), (0, 0.25, 'Er', 'Y'),
+                                     (1, 0.25, 'Na', 'Y'), # place the Na disorder in 1:3 ratio
+                                     (0, 0.1, 'Yb', 'Y'), (0, 0.02, 'Er', 'Y')]
             ```
 
     Returns:
