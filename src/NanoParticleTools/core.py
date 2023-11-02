@@ -123,6 +123,18 @@ create_interupt_cutoff_sql = """
 
 class NPMCInput(MSONable):
 
+    def __init__(self,
+                 spectral_kinetics: SpectralKinetics,
+                 nanoparticle: DopedNanoparticle,
+                 initial_states: Sequence[int] | None = None):
+
+        self.spectral_kinetics = spectral_kinetics
+        self.nanoparticle = nanoparticle
+        if initial_states is None:
+            self.initial_states = [0 for _ in self.sites]
+        else:
+            self.initial_states = initial_states
+
     def load_trajectory(self, seed, database_file):
         with sqlite3.connect(database_file) as con:
             cur = con.cursor()
@@ -163,18 +175,6 @@ class NPMCInput(MSONable):
                     [site_id_1, site_id_2, interaction_id, _time])
 
             self.trajectories = trajectories
-
-    def __init__(self,
-                 spectral_kinetics: SpectralKinetics,
-                 nanoparticle: DopedNanoparticle,
-                 initial_states: Sequence[int] | None = None):
-
-        self.spectral_kinetics = spectral_kinetics
-        self.nanoparticle = nanoparticle
-        if initial_states is None:
-            self.initial_states = [0 for _ in self.sites]
-        else:
-            self.initial_states = initial_states
 
     @property
     @lru_cache

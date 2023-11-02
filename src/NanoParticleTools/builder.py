@@ -442,7 +442,7 @@ class MultiFidelityAveragingBuilder(UCNPBuilder):
 
             # count the total items in the dict
             total_items = sum([len(v) for v in unduplicated_dict.values()])
-            if total_items != self.n_docs_filter:
+            if total_items < self.n_docs_filter:
                 continue
 
             yield unduplicated_dict, docs_to_avg
