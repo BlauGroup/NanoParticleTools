@@ -103,7 +103,7 @@ def add_priority(original_wf, root_priority, child_priority=None):
     """
     Note: To avoid package bloat, since atomate heavily used in this
         library, this function is copied from atomate.common.powerups.
-          
+
     Adds priority to a workflow
 
     Args:
