@@ -6,7 +6,6 @@ import uuid
 from copy import deepcopy
 from jobflow import JobStore
 from fireworks import LaunchPad
-from atomate.common.powerups import add_priority
 from jobflow.managers.fireworks import flow_to_workflow
 
 
@@ -98,3 +97,29 @@ def submit_job(constraints: list[NanoParticleConstraint],
         lp.add_wf(wf)
 
     return wf
+
+
+def add_priority(original_wf, root_priority, child_priority=None):
+    """
+    Note: To avoid package bloat, since atomate heavily used in this
+        library, this function is copied from atomate.common.powerups.
+          
+    Adds priority to a workflow
+
+    Args:
+        original_wf (Workflow): original WF
+        root_priority (int): priority of first (root) job(s)
+        child_priority(int): priority of all child jobs. Defaults to
+            root_priority
+
+    Returns:
+       Workflow: priority-decorated workflow
+    """
+    child_priority = child_priority or root_priority
+    root_fw_ids = original_wf.root_fw_ids
+    for fw in original_wf.fws:
+        if fw.fw_id in root_fw_ids:
+            fw.spec["_priority"] = root_priority
+        else:
+            fw.spec["_priority"] = child_priority
+    return original_wf
