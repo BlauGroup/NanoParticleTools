@@ -14,8 +14,10 @@ import sys
 import json
 import h5py
 
+import logging
 
-def get_parser():
+
+def get_diff_kinetics_parser():
     parser = argparse.ArgumentParser()
 
     parser.add_argument('-n',
@@ -85,6 +87,35 @@ def get_parser():
     return parser
 
 
+def get_templates(args):
+    for sample_id in range(args.num_samples):
+        # Pick a number of dopants
+        n_dopants = np.random.choice(range(1, args.max_dopants + 1))
+
+        # Pick the dopants
+        dopants = np.random.choice(args.dopants, n_dopants, replace=False)
+
+        # Get the dopant concentrations, normalizing the total concentration to 0-1
+        total_conc = np.random.uniform(0, 1)
+        dopant_concs = np.random.uniform(0, 1, n_dopants)
+        dopant_concs = total_conc * dopant_concs / np.sum(dopant_concs)
+
+        # sample a wavelength
+        wavelength = np.random.uniform(*args.excitation_wavelength)
+
+        # sample a power
+        power = np.random.uniform(*args.excitation_power)
+        yield {
+            # 'sample_id': sample_id,
+            # 'group_id': sample_id // args.max_data_per_group,
+            # 'data_id': sample_id % args.max_data_per_group,
+            'dopants': dopants,
+            'dopant_concs': dopant_concs,
+            'excitation_wavelength': wavelength,
+            'excitation_power': power
+        }
+
+
 def run_one_rate_eq(dopants: list[Dopant],
                     excitation_wavelength: int,
                     excitation_power: float,
@@ -128,9 +159,10 @@ def run_one_rate_eq(dopants: list[Dopant],
             'simulation_time': t[-1],
             'excitation_wavelength': excitation_wavelength,
             'excitation_power': excitation_power,
-            'dopant_concentrations':
-            {dopant.symbol: dopant.molar_concentration
-             for dopant in dopants}
+            'dopant_concentrations': {
+                dopant.symbol: dopant.molar_concentration
+                for dopant in dopants
+            }
         }
     }
     out_dict['populations'] = final_pop
@@ -152,11 +184,14 @@ def run_one_rate_eq(dopants: list[Dopant],
 
 
 def run_and_save_one(dopants: list[str], dopant_concs: list[float],
-                     group_id: int, data_i: int, file: h5py.File, **kwargs):
+                     group_id: int, data_id: int, sample_id: int,
+                     file: h5py.File, **kwargs):
     dopants = [Dopant(el, x) for el, x in zip(dopants, dopant_concs)]
+
+    logging.info(f'Running Sample {sample_id}')
     out_dict = run_one_rate_eq(dopants, **kwargs)
 
-    save_data_to_hdf5(file, group_id, data_i, out_dict)
+    save_data_to_hdf5(file, group_id, data_id, out_dict)
 
     return out_dict
 

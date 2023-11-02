@@ -3,8 +3,7 @@ from NanoParticleTools.analysis import (get_spectrum_energy_from_dndt,
                                         get_spectrum_wavelength_from_dndt,
                                         average_dndt, intensities_from_docs)
 
-from maggma.core import Builder
-from maggma.core import Store
+from maggma.core import Builder, Store
 from maggma.utils import grouper
 from typing import Iterator, List, Dict, Optional, Iterable, Tuple
 from bson import uuid

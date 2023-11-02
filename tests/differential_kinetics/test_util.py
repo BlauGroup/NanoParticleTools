@@ -1,8 +1,6 @@
-from NanoParticleTools.differential_kinetics import (get_parser,
-                                                     run_one_rate_eq,
-                                                     run_and_save_one,
-                                                     save_data_to_hdf5,
-                                                     load_data_from_hdf5)
+from NanoParticleTools.differential_kinetics.util import (
+    get_diff_kinetics_parser, run_one_rate_eq, run_and_save_one,
+    save_data_to_hdf5, load_data_from_hdf5, get_templates)
 from NanoParticleTools.species_data import Dopant
 
 import numpy as np
@@ -17,7 +15,8 @@ def hdf5_file(tmp_path):
 
 
 def test_parser():
-    args = get_parser().parse_args(['-n', '10', '-m', '2', '-o', 'test.h5'])
+    args = get_diff_kinetics_parser().parse_args(
+        ['-n', '10', '-m', '2', '-o', 'test.h5'])
     assert args.num_samples == 10
     assert args.max_dopants == 2
     assert args.output_file == 'test.h5'
@@ -25,6 +24,13 @@ def test_parser():
     assert args.excitation_wavelength == (700, 1500)
     assert args.excitation_power == (10, 1e6)
     assert args.dopants == ["Yb", "Er", "Tm", "Nd", "Ho", "Eu", "Sm", "Dy"]
+
+
+def test_get_templates():
+    args = get_diff_kinetics_parser().parse_args(
+        ['-n', '10', '-m', '2', '-o', 'test.h5'])
+    templates = get_templates(args)
+    assert len(list(templates)) == 10
 
 
 def test_run_one_rate_eq():
@@ -44,9 +50,10 @@ def test_run_and_save_one(hdf5_file):
     dopant_concs = [0.5, 0.2]
     run_and_save_one(dopants,
                      dopant_concs,
-                     0,
-                     3,
-                     hdf5_file,
+                     group_id=0,
+                     data_id=3,
+                     sample_id=3,
+                     file=hdf5_file,
                      excitation_wavelength=900,
                      excitation_power=1e5,
                      include_spectra=True)
