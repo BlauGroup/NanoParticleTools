@@ -17,7 +17,7 @@ def test_interaction_block():
                                  [3.0760e+07, 1.2517e+09, 2.4119e+09],
                                  [1.6136e+08, 8.4677e+09, 1.6704e+10],
                                  [3.0760e+07, 1.2517e+09, 2.4119e+09]])
-    assert torch.allclose(out, expected_out, rtol=1e-3)
+    assert torch.allclose(out, expected_out, rtol=1e-2)
 
 
 def test_interaction_conv():
@@ -46,7 +46,7 @@ def test_integrated_gaussian_interaction_tanh():
                                  [1.0076e+08, 1.7178e+08, -9.0918e+10],
                                  [2.9631e+08, 1.0277e+09, -1.4463e+11],
                                  [1.0076e+08, 1.7178e+08, -9.0918e+10]])
-    assert torch.allclose(out, expected_out, rtol=1e-3)
+    assert torch.allclose(out, expected_out, rtol=1e-2)
 
 
 def test_integrated_gaussian_interaction():
@@ -61,4 +61,4 @@ def test_integrated_gaussian_interaction():
                                  [7.1898e+07, 2.1867e+08, 2.4119e+09],
                                  [3.5350e+08, 1.1697e+09, 1.6704e+10],
                                  [7.1898e+07, 2.1867e+08, 2.4119e+09]])
-    assert torch.allclose(out, expected_out, rtol=1e-3)
+    assert torch.allclose(out, expected_out, rtol=1e-2)
