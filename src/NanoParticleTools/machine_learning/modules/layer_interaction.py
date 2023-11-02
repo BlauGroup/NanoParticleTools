@@ -15,7 +15,7 @@ class InteractionConv(MessagePassing):
                  **kwargs):
         super().__init__(node_dim=0, aggr='add', **kwargs)
 
-        self.interaction_block = InteractionBlock(nsigma)
+        self.interaction_block = InteractionBlock(nsigma=nsigma)
         # self.message_mlp = nn.Linear(2*input_dim+sigma.size(0), output_dim)
         message_in_dim = 2 * input_dim + self.interaction_block.output_dim
         message_mlp_layers = [
