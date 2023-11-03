@@ -17,6 +17,13 @@ setup(name='NanoParticleTools',
           "jobflow",
           "atomate2",
           "maggma",
-          "pytest"
+          "pytest",
+          "torch",
+          "pytorch-lightning",
+          "ray",
+          "wandb",
+          "gpuparallel",
+          "torch-geometric<=2.3.1",
+          "h5py"
       ]
       )

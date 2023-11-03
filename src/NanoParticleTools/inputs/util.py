@@ -2,19 +2,15 @@ from functools import lru_cache
 
 import numpy as np
 
-from NanoParticleTools.inputs.spectral_kinetics import SpectralKinetics
-from NanoParticleTools.inputs.nanoparticle import DopedNanoparticle
+from NanoParticleTools.inputs import (DopedNanoparticle, SpectralKinetics)
 from NanoParticleTools.species_data.species import Dopant
 from pymatgen.core import Composition
 from collections import Counter
 
-from typing import List, Union, Tuple
 
-
-def specie_energy_level_to_combined_energy_level(species: Union[str, int,
-                                                                Dopant],
+def specie_energy_level_to_combined_energy_level(species: str | int | Dopant,
                                                  energy_level: int,
-                                                 dopants: List[Dopant]) -> int:
+                                                 dopants: list[Dopant]) -> int:
     if isinstance(species, str):
         for i, dopant in enumerate(dopants):
             if dopant.symbol == species:
@@ -38,7 +34,7 @@ def specie_energy_level_to_combined_energy_level(species: Union[str, int,
 
 
 @lru_cache(maxsize=None)
-def get_energy_level_maps(sk: SpectralKinetics) -> Tuple[dict, dict, dict]:
+def get_energy_level_maps(sk: SpectralKinetics) -> tuple[dict, dict, dict]:
     energy_level_map = {}
     energy_level_to_species_id = {}
     energy_level_to_species_name = {}
@@ -72,7 +68,7 @@ def combined_energy_level_to_specie_name(sk: SpectralKinetics,
     return energy_level_to_species_name[energy_level]
 
 
-def get_non_radiative_interactions(sk: SpectralKinetics) -> List[dict]:
+def get_non_radiative_interactions(sk: SpectralKinetics) -> list[dict]:
     _interactions = []
 
     rows, cols = np.where(sk.non_radiative_rate_matrix != 0)
@@ -97,7 +93,7 @@ def get_non_radiative_interactions(sk: SpectralKinetics) -> List[dict]:
     return _interactions
 
 
-def get_radiative_interactions(sk: SpectralKinetics) -> List[dict]:
+def get_radiative_interactions(sk: SpectralKinetics) -> list[dict]:
     _interactions = []
 
     rows, cols = np.where(sk.radiative_rate_matrix != 0)
@@ -122,7 +118,7 @@ def get_radiative_interactions(sk: SpectralKinetics) -> List[dict]:
     return _interactions
 
 
-def get_magnetic_dipole_interactions(sk: SpectralKinetics) -> List[dict]:
+def get_magnetic_dipole_interactions(sk: SpectralKinetics) -> list[dict]:
     _interactions = []
 
     rows, cols = np.where(sk.magnetic_dipole_rate_matrix != 0)
@@ -147,7 +143,7 @@ def get_magnetic_dipole_interactions(sk: SpectralKinetics) -> List[dict]:
     return _interactions
 
 
-def get_energy_transfer_interactions(sk: SpectralKinetics) -> List[dict]:
+def get_energy_transfer_interactions(sk: SpectralKinetics) -> list[dict]:
     _interactions = []
     for di, dj, ai, aj, rate in sk.energy_transfer_rate_matrix:
         _d = {

@@ -1,5 +1,5 @@
 import math
-from typing import (Optional, List, Union, Sequence, Tuple)
+from typing import List, Sequence, Tuple
 
 import numpy as np
 from NanoParticleTools.util.constants import (h_CGS, c_CGS)
@@ -14,6 +14,9 @@ from NanoParticleTools.inputs.photo_physics import (
 from scipy.integrate import solve_ivp
 from functools import lru_cache
 from monty.json import MSONable
+import time
+
+import logging
 
 
 class SpectralKinetics(MSONable):
@@ -43,14 +46,14 @@ class SpectralKinetics(MSONable):
                  n_refract: float = 1.5,
                  volume_per_dopant_site: float = 7.23946667e-2,
                  min_dopant_distance: float = 3.867267554e-8,
-                 time_step: Optional[float] = 1e-4,
-                 num_steps: Optional[float] = 100,
-                 ode_max_error: Optional[float] = 1e-12,
-                 energy_transfer_rate_threshold: Optional[float] = 0.1,
-                 radiative_rate_threshold: Optional[float] = 0.0001,
-                 stokes_shift: Optional[float] = 150,
-                 excitation_wavelength: Optional[float] = 976,
-                 excitation_power: Optional[float] = 1e7,
+                 time_step: float = 1e-4,
+                 num_steps: float = 100,
+                 ode_max_error: float = 1e-12,
+                 energy_transfer_rate_threshold: float = 0.1,
+                 radiative_rate_threshold: float = 0.0001,
+                 stokes_shift: float = 150,
+                 excitation_wavelength: float = 976,
+                 excitation_power: float = 1e7,
                  **kwargs):
         """
         :param dopants:
@@ -98,7 +101,18 @@ class SpectralKinetics(MSONable):
         self.excitation_power = excitation_power
         self.excitation_wavelength = excitation_wavelength
 
+        # Check if all dopants are non-negative
+        for dopant in dopants:
+            if dopant.molar_concentration < 0:
+                raise ValueError(
+                    'Error, all dopant concentrations must be non-negative.')
+
+        # Check if the sum of dopant concentrations is <= 1
+        if sum([dopant.molar_concentration for dopant in dopants]) > 1:
+            raise ValueError(
+                'Error, the sum of the dopant concentrations must be <= 1')
         self.dopants = dopants
+        self.logger = logging.getLogger(type(self).__name__)
 
     @property
     def mpr_gamma(self) -> float:
@@ -556,13 +570,14 @@ class SpectralKinetics(MSONable):
                                 abs(effective_energy_gap), self.mpr_beta)
 
                         # TODO: Add SK_omitETtransitions to omit specific transitions
+                        # yapf: disable
                         if (energy_transfer_rate * donor_concentration *
-                                acceptor_concentration
-                            ) > self.energy_transfer_rate_threshold:
+                                acceptor_concentration) > self.energy_transfer_rate_threshold:
                             energy_transfers.append([
                                 combined_di, combined_dj, combined_ai,
                                 combined_aj, energy_transfer_rate
                             ])
+                        # yapf: enable
 
         energy_transfer_rates = np.array(np.vstack(energy_transfers))
         return energy_transfer_rates
@@ -577,16 +592,16 @@ class SpectralKinetics(MSONable):
 
     def run_kinetics(
             self,
-            initial_populations: Optional[Union[Sequence[Sequence[float]],
-                                                str]] = 'ground_state',
-            t_span: Tuple[int, int] = None):
+            initial_populations: Sequence[Sequence[float]] | str = 'ground_state',
+            t_span: Tuple[int, int] = None,
+            **kwargs):
         if t_span is None:
             t_span = (0, 0.01)
 
         if isinstance(initial_populations, (list, np.ndarray)):
             # check if supplied populations is the proper length
             if len(initial_populations) == self.total_n_levels:
-                print('Using user input initial population')
+                self.logger.info('Using user input initial population')
             else:
                 raise ValueError(
                     "Supplied Population is invalid. Expected length of {self.total_n_levels, "
@@ -604,10 +619,16 @@ class SpectralKinetics(MSONable):
 
             return dNdt_fn
 
+        if 'method' not in kwargs:
+            kwargs['method'] = 'BDF'
+
+        start_time = time.time()
         sol = solve_ivp(get_dNdt_fn(self),
                         t_span=t_span,
                         y0=initial_populations,
-                        method='BDF')
+                        **kwargs)
+        end_time = time.time()
+        self.logger.info(f'Found solution in {end_time-start_time:.2f} seconds')
 
         return sol.t, sol.y.T
 

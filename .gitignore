@@ -6,3 +6,11 @@ scratch
 .vscode/
 
 .coverage
+
+env/
+
+testing_data/
+training_data/
+project.csv
+artifacts/
+wandb/

@@ -2,9 +2,9 @@ from monty.json import MSONable
 import json
 from pathlib import Path
 import os
-from typing import Optional, Dict, List, Union
 import numpy as np
 from functools import lru_cache
+from pymatgen.core import DummySpecies
 
 SPECIES_DATA_PATH = os.path.join(str(Path(__file__).absolute().parent), 'data')
 
@@ -18,6 +18,7 @@ class EnergyLevel(MSONable):
         label (str): The label of the energy level
         energy (float): The energy of the energy level in $cm^{-1}$.
     """
+
     def __init__(self, element: str, label: str, energy: float):
         self.element = element
         self.label = label
@@ -40,6 +41,7 @@ class Transition(MSONable):
         final_level (EnergyLevel): The final energy level of the transition.
         line_strength (float): The line strength of the transition.
     """
+
     def __init__(self, initial_level: EnergyLevel, final_level: EnergyLevel,
                  line_strength: float):
         self.initial_level = initial_level
@@ -80,21 +82,42 @@ class Dopant(MSONable):
             calculation. If not specified, all levels will be used.
     """
 
+    # The naming convention should always start with an X, since the symbol
+    # cannot start with an existing element's symbol
     SURFACE_DOPANT_SYMBOLS_TO_NAMES = {
-        'Na': 'Surface',
-        'Mg': 'Surface6',
-        'Al': 'Surface3',
-        'Si': 'Surface4',
-        'P': 'Surface5'
+        'Xsurfaceone': 'Surface',
+        'Xsurfacethree': 'Surface3',
+        'Xsurfacefour': 'Surface4',
+        'Xsurfacefive': 'Surface5',
+        'Xsurfacesix': 'Surface6',
     }
+
+    SURFACE_DOPANT_SYMBOLS_TO_SPECIES = {
+        key: DummySpecies(key)
+        for key in SURFACE_DOPANT_SYMBOLS_TO_NAMES.keys()
+    }
+
     SURFACE_DOPANT_NAMES_TO_SYMBOLS = dict(
         zip(SURFACE_DOPANT_SYMBOLS_TO_NAMES.values(),
             SURFACE_DOPANT_SYMBOLS_TO_NAMES.keys()))
 
+    DEFAULT_N_LEVELS = {
+        'Yb': 2,
+        'Sm': 24,
+        'Gd': 15,
+        'Tm': 12,
+        'Tb': 9,
+        'Nd': 24,
+        'Eu': 22,
+        'Er': 34,
+        'Dy': 22,
+        'Ho': 23
+    }
+
     def __init__(self,
                  symbol: str,
                  molar_concentration: float,
-                 n_levels: Optional[int] = None):
+                 n_levels: int | None = None):
         if symbol in self.SURFACE_DOPANT_NAMES_TO_SYMBOLS:
             symbol = self.SURFACE_DOPANT_NAMES_TO_SYMBOLS[symbol]
         self.symbol = symbol
@@ -107,9 +130,13 @@ class Dopant(MSONable):
         # If more levels are specified than possible, use the max
         # number of levels instead
         if n_levels is None:
-            self.n_levels = len(self.energy_levels)
+            if self.symbol in self.DEFAULT_N_LEVELS:
+                self.n_levels = self.DEFAULT_N_LEVELS[self.symbol]
+            else:
+                self.n_levels = len(self.species_data()['EnergyLevels'])
         else:
-            self.n_levels = min(n_levels, len(self.energy_levels))
+            self.n_levels = min(n_levels,
+                                len(self.species_data()['EnergyLevels']))
 
     def check_intrinsic_data(self) -> bool:
         """
@@ -126,27 +153,26 @@ class Dopant(MSONable):
             raise ValueError(
                 'Error: The number of eigenvectors does not match'
                 'the number of intermediate coupling coefficients')
-        elif len(self.energy_levels) > self.intermediate_coupling_coefficients.shape[0]:
+        elif len(self.energy_levels
+                 ) > self.intermediate_coupling_coefficients.shape[0]:
             raise ValueError(
                 'Error: The number of Energy levels does not match the number'
-                ' of intermediate coupling coefficients'
-            )
+                ' of intermediate coupling coefficients')
         elif len(self.energy_levels) > len(self.slj):
             raise ValueError(
                 'Error: The number of Energy levels does not match the number'
-                ' of SLJ rows'
-            )
+                ' of SLJ rows')
         return True
 
     @lru_cache
-    def species_data(self) -> Dict[str, Union[List[str], List[float]]]:
+    def species_data(self) -> dict[str, tuple[list[str], list[float]]]:
         """
         Loads the species data from the json file. Since many dopants are
         likely to be created and the data used many times, the data
         is cached using lru_cache.
 
         Returns:
-            Dict[str, Union[List[str], List[float]]]: The species data in the
+            The species data in the
                 form of a dictionary with the keys:
                 ['EnergyLevelLabels', 'EnergyLevels', 'SLJ', 'absFWHM',
                 'lineStrengths', 'TransitionLabels', 'JO_params',
@@ -164,22 +190,22 @@ class Dopant(MSONable):
 
     @property
     @lru_cache
-    def energy_levels(self) -> List[EnergyLevel]:
+    def energy_levels(self) -> list[EnergyLevel]:
         """
         Gets a list of all the energy levels for this dopant.
 
         Returns:
-            List[EnergyLevel]: The EnergyLevel objects.
+            list[EnergyLevel]: The EnergyLevel objects.
         """
         return [
             EnergyLevel(self.symbol, i, j)
             for i, j in zip(self.species_data()['EnergyLevelLabels'],
                             self.species_data()['EnergyLevels'])
-        ]
+        ][:self.n_levels]
 
     @property
     @lru_cache
-    def absFWHM(self) -> List[float]:
+    def absFWHM(self) -> list[float]:
         return self.species_data()['absFWHM']
 
     @property
@@ -189,7 +215,7 @@ class Dopant(MSONable):
 
     @property
     @lru_cache
-    def judd_ofelt_parameters(self) -> List[float]:
+    def judd_ofelt_parameters(self) -> list[float]:
         if 'JO_params' not in self.species_data():
             return []
         return self.species_data()['JO_params']
@@ -210,12 +236,12 @@ class Dopant(MSONable):
 
     @property
     @lru_cache
-    def transitions(self) -> List[Transition]:
+    def transitions(self) -> list[Transition]:
         """
         Get the list of all transitions between all energy levels.
 
         Returns:
-            List[Transition]: List of Transitions
+            list[Transition]: list of Transitions
         """
         energy_level_map = dict([(_el.label, _el)
                                  for _el in self.energy_levels])
@@ -243,9 +269,9 @@ class Dopant(MSONable):
         return transitions
 
     @property
-    def volume_concentration(
-            self,
-            volume_per_dopant_site: Optional[float] = 7.23946667e-2) -> float:
+    def volume_concentration(self,
+                             volume_per_dopant_site: float = 7.23946667e-2
+                             ) -> float:
         """
         Gets the volue a single dopant occupies
 

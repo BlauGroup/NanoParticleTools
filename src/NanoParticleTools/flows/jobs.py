@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Sequence, Tuple, Optional, Union, List, Set
+from typing import Sequence, Tuple, List, Set
 
 from jobflow import job
 from monty.json import MontyEncoder
@@ -9,14 +9,14 @@ from NanoParticleTools.analysis import SimulationReplayer
 from NanoParticleTools.core import (NPMCInput, NPMCRunner,
                                     create_interupt_state_sql,
                                     create_interupt_cutoff_sql)
-from NanoParticleTools.inputs.nanoparticle import (DopedNanoparticle,
-                                                   NanoParticleConstraint)
-from NanoParticleTools.inputs.spectral_kinetics import SpectralKinetics
+from NanoParticleTools.inputs import (SpectralKinetics, DopedNanoparticle,
+                                      NanoParticleConstraint)
 from NanoParticleTools.species_data.species import Dopant
 from NanoParticleTools.inputs.util import get_all_interactions
 import sqlite3
 import warnings
 import shutil
+
 
 # Save 'trajectory_doc' to the trajectories store
 # (as specified in the JobStore)
@@ -24,13 +24,14 @@ import shutil
 def npmc_job(constraints: Sequence[NanoParticleConstraint],
              dopant_specifications: Sequence[Tuple[int, float, str, str]],
              doping_seed: int,
-             output_dir: Optional[str] = '.',
-             initial_states: Optional[Union[Sequence[int], None]] = None,
-             spectral_kinetics_args: Optional[dict] = {},
-             initial_state_db_args: Optional[dict] = {},
-             npmc_args: Optional[dict] = {},
-             override: Optional[bool] = False,
-             population_record_interval: Optional[float] = 1e-5,
+             output_dir: str = '.',
+             initial_states: Sequence[int] | None = None,
+             spectral_kinetics_args: dict | None = None,
+             initial_state_db_args: dict | None = None,
+             npmc_args: dict | None = None,
+             override: bool = False,
+             population_record_interval: float = 1e-5,
+             metadata: dict | None = None,
              **kwargs) -> List[dict]:
     """
     :param constraints: Constraints from which to build the Nanoparticle.
@@ -66,6 +67,14 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
         states (in s)
     :return: List of trajectory documents
     """
+    if spectral_kinetics_args is None:
+        spectral_kinetics_args = {}
+    if initial_state_db_args is None:
+        initial_state_db_args = {}
+    if npmc_args is None:
+        npmc_args = {}
+    if metadata is None:
+        metadata = {}
 
     files = {
         'output_dir': output_dir,
@@ -74,30 +83,6 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
         'np_db_path': os.path.join(output_dir, 'np.sqlite'),
         'npmc_input': os.path.join(output_dir, 'npmc_input.json')
     }
-
-    # Generate Nanoparticle
-    nanoparticle = DopedNanoparticle(constraints, dopant_specifications,
-                                     doping_seed, prune_hosts=True)
-    nanoparticle.generate()
-
-    # Initialize Spectral Kinetics class to calculate transition rates
-    dopants = [
-        Dopant(key, concentration)
-        for key, concentration in nanoparticle.dopant_concentrations.items()
-    ]
-    spectral_kinetics = SpectralKinetics(dopants, **spectral_kinetics_args)
-
-    # Create an NPMCInput class
-    npmc_input = NPMCInput(spectral_kinetics, nanoparticle, initial_states)
-
-    # Write files
-    _initial_state_db_args = {
-        'one_site_interaction_factor': 1,
-        'two_site_interaction_factor': 1,
-        'interaction_radius_bound': 3,
-        'distance_factor_type': 'inverse_cubic'
-    }
-    _initial_state_db_args.update(initial_state_db_args)
 
     # Check if output dir exists. If so, check if the input files match
     fresh_start = False
@@ -130,23 +115,22 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
                 warnings.warn(f'Existing run found, but missing {missing} table.'
                               f'Re-initializing the simulation')
                 fresh_start = True
+            # # Check the number of sites
+            # num_dopant_site_db = len(list(cur.execute('SELECT * from sites')))
+            # num_dopant_sites = len(nanoparticle.dopant_sites)
+            # if num_dopant_sites != num_dopant_site_db:
+            #     warnings.warn(
+            #         'Existing run found, num sites does not match.'
+            #         ' Simulation must begin from scratch')
 
-            # Check the number of sites
-            num_dopant_site_db = len(list(cur.execute('SELECT * from sites')))
-            num_dopant_sites = len(nanoparticle.dopant_sites)
-            if num_dopant_sites != num_dopant_site_db:
-                warnings.warn(
-                    'Existing run found, num sites does not match.'
-                    ' Simulation must begin from scratch')
-
-            # Check the number of interactions
-            num_interactions_db = len(
-                list(cur.execute('SELECT * from interactions')))
-            num_interactions = len(get_all_interactions(spectral_kinetics))
-            if num_interactions != num_interactions_db:
-                warnings.warn(
-                    'Existing run found, number of interactions does not '
-                    'match. Simulation must begin from scratch')
+            # # Check the number of interactions
+            # num_interactions_db = len(
+            #     list(cur.execute('SELECT * from interactions')))
+            # num_interactions = len(get_all_interactions(spectral_kinetics))
+            # if num_interactions != num_interactions_db:
+            #     warnings.warn(
+            #         'Existing run found, number of interactions does not '
+            #         'match. Simulation must begin from scratch')
 
             cur.close()
 
@@ -167,22 +151,47 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
                 'Existing run found, but some files are missing. ')
             fresh_start = True
 
-    if override or os.path.exists(output_dir) is False or fresh_start:
-        if os.path.exists(output_dir):
-            # delete the directory, so we can start from scratch
-            shutil.rmtree(output_dir)
+    if fresh_start or os.path.exists(output_dir) is False:
+        if override or os.path.exists(output_dir) is False:
+            # Generate Nanoparticle
+            nanoparticle = DopedNanoparticle(constraints, dopant_specifications,
+                                             doping_seed, prune_hosts=True)
+            nanoparticle.generate()
 
-        # Make the directory
-        os.mkdir(output_dir)
+            # Initialize Spectral Kinetics class to calculate transition rates
+            dopants = [
+                Dopant(key, concentration)
+                for key, concentration in nanoparticle.dopant_concentrations().items()
+            ]
+            spectral_kinetics = SpectralKinetics(dopants, **spectral_kinetics_args)
 
-        npmc_input.generate_initial_state_database(
-            files['initial_state_db_path'], **_initial_state_db_args)
-        npmc_input.generate_nano_particle_database(files['np_db_path'])
-        with open(files['npmc_input'], 'w') as f:
-            json.dump(npmc_input, f, cls=MontyEncoder)
-    else:
-        raise RuntimeError(
-            'Existing run found. Override is set to false, terminating')
+            # Create an NPMCInput class
+            npmc_input = NPMCInput(spectral_kinetics, nanoparticle, initial_states)
+
+            # Write files
+            _initial_state_db_args = {
+                'one_site_interaction_factor': 1,
+                'two_site_interaction_factor': 1,
+                'interaction_radius_bound': 3,
+                'distance_factor_type': 'inverse_cubic'
+            }
+            _initial_state_db_args.update(initial_state_db_args)
+
+            if os.path.exists(output_dir):
+                # delete the directory, so we can start from scratch
+                shutil.rmtree(output_dir)
+
+            # Make the directory
+            os.mkdir(output_dir)
+
+            npmc_input.generate_initial_state_database(
+                files['initial_state_db_path'], **_initial_state_db_args)
+            npmc_input.generate_nano_particle_database(files['np_db_path'])
+            with open(files['npmc_input'], 'w') as f:
+                json.dump(npmc_input, f, cls=MontyEncoder)
+        else:
+            raise RuntimeError(
+                'Existing run found. Override is set to false, terminating')
 
     # Initialize the wrapper class to run NPMC
     npmc_runner = NPMCRunner(
@@ -209,17 +218,29 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
                            f' Expected {npmc_args["num_sims"]} trajectories, '
                            f'found {len(data[0].keys())}.')
 
+    # Check that all the simulations are complete
+    if 'simulation_time' in npmc_args.keys():
+        for seed, simulation_time in data[0].items():
+            if simulation_time < npmc_args['simulation_time']:
+                raise RuntimeError(f'Run did not successfully complete.'
+                                   f' Simulation {seed} did not complete. Simulated'
+                                   f' {simulation_time} s of {npmc_args["simulation_time"]} s')
+
     # get population by shell
 
     # Generate documents
     result_docs = simulation_replayer.generate_docs(data)
-    for doc in result_docs:
-        doc['initial_state_db_args'] = _initial_state_db_args
+    for i, _ in enumerate(result_docs):
+        result_docs[i]['initial_state_db_args'] = _initial_state_db_args
+        result_docs[i]['metadata'] = metadata
+
+        # Add metadata to trajectory doc
+        result_docs[i]['trajectory_doc']['metadata'] = metadata
 
     return result_docs
 
 
-def tables_exist(cur, tables: Union[List, Set]):
+def tables_exist(cur, tables: List | Set):
     if isinstance(tables, list):
         expected_tables = set(tables)
     sql_search = " OR ".join([f"name='{table}'" for table in expected_tables])

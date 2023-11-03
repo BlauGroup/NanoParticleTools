@@ -1,11 +1,12 @@
+from NanoParticleTools.inputs.nanoparticle import SphericalConstraint, DopedNanoparticle
+from NanoParticleTools.species_data.species import Dopant
+from NanoParticleTools.inputs import SpectralKinetics
+
 import json
 import os
 from pathlib import Path
 
 import numpy as np
-from NanoParticleTools.inputs.spectral_kinetics import SpectralKinetics
-
-from NanoParticleTools.species_data.species import Dopant
 
 import pytest
 
@@ -154,3 +155,35 @@ def test_rate_equations():
         2.00971025e-19, 7.15003007e-20, 3.84920859e-21, -1.83440370e-20
     ])
     assert np.allclose(decay_sol[1][-1], expected_last_step)
+
+
+def test_all_elements():
+    elements = ["Yb", "Er", "Tm", "Nd", "Ho", "Eu", "Tb", "Sm", "Dy"]
+    dopants = [Dopant(el, 0.01) for el in elements]
+    sk = SpectralKinetics(dopants)
+
+    assert sk
+
+
+def test_generate_and_sk():
+    elements = [
+        "Yb", "Er", "Tm", "Nd", "Ho", "Eu", "Tb", "Sm", "Dy", "Surface",
+        "Surface3", "Surface4", "Surface5", "Surface6"
+    ]
+
+    constraints = [SphericalConstraint(20)]
+    dopant_specifications = [(0, 1 / len(elements), el, 'Y')
+                             for el in elements]
+    nanoparticle = DopedNanoparticle(constraints,
+                                     dopant_specifications,
+                                     0,
+                                     prune_hosts=True)
+    nanoparticle.generate()
+    dopants = [
+        Dopant(key, concentration)
+        for key, concentration in nanoparticle.dopant_concentrations().items()
+    ]
+
+    sk = SpectralKinetics(dopants)
+
+    assert sk

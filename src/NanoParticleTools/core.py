@@ -1,13 +1,13 @@
 import sqlite3
-from typing import Optional, Sequence, Union
+from typing import Sequence
 import subprocess
-from NanoParticleTools.inputs.nanoparticle import DopedNanoparticle
-from NanoParticleTools.inputs.spectral_kinetics import SpectralKinetics
+from NanoParticleTools.inputs import SpectralKinetics, DopedNanoparticle
 from NanoParticleTools.inputs.util import get_all_interactions, get_sites, get_species
 import signal
 import time
 from monty.json import MSONable
 from functools import lru_cache
+import os
 
 create_species_table_sql = """
     CREATE TABLE species (
@@ -123,6 +123,18 @@ create_interupt_cutoff_sql = """
 
 class NPMCInput(MSONable):
 
+    def __init__(self,
+                 spectral_kinetics: SpectralKinetics,
+                 nanoparticle: DopedNanoparticle,
+                 initial_states: Sequence[int] | None = None):
+
+        self.spectral_kinetics = spectral_kinetics
+        self.nanoparticle = nanoparticle
+        if initial_states is None:
+            self.initial_states = [0 for _ in self.sites]
+        else:
+            self.initial_states = initial_states
+
     def load_trajectory(self, seed, database_file):
         with sqlite3.connect(database_file) as con:
             cur = con.cursor()
@@ -164,18 +176,6 @@ class NPMCInput(MSONable):
 
             self.trajectories = trajectories
 
-    def __init__(self,
-                 spectral_kinetics: SpectralKinetics,
-                 nanoparticle: DopedNanoparticle,
-                 initial_states: Optional[Sequence[int]] = None):
-
-        self.spectral_kinetics = spectral_kinetics
-        self.nanoparticle = nanoparticle
-        if initial_states is None:
-            self.initial_states = [0 for _ in self.sites]
-        else:
-            self.initial_states = initial_states
-
     @property
     @lru_cache
     def interactions(self):
@@ -196,10 +196,10 @@ class NPMCInput(MSONable):
     def generate_initial_state_database(
             self,
             database_file: str,
-            one_site_interaction_factor: Optional[Union[float, int]] = 1,
-            two_site_interaction_factor: Optional[Union[float, int]] = 1,
-            interaction_radius_bound: Optional[Union[float, int]] = 3,
-            distance_factor_type: Optional[str] = 'inverse_cubic'):
+            one_site_interaction_factor: float | int = 1,
+            two_site_interaction_factor: float | int = 1,
+            interaction_radius_bound: float | int = 3,
+            distance_factor_type: str = 'inverse_cubic'):
         """
 
         Args:
@@ -296,6 +296,7 @@ class NPMCRunner:
         self.process = None
 
     def error_handler(self, _signo, _stack_frame):
+        os.kill(self.process.pid, signal.SIGTERM)
         # Sleep for 30 seconds before exiting
         time.sleep(40)
         # Kill the program
