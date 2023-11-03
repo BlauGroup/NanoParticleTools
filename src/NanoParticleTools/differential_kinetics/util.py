@@ -45,7 +45,7 @@ def get_diff_kinetics_parser():
     # add optional arguments
     parser.add_argument(
         '-d',
-        '--dopants',
+        '--possible_dopants',
         help='The possible dopants to include in the simulation',
         nargs='+',
         type=list,
@@ -87,13 +87,19 @@ def get_diff_kinetics_parser():
     return parser
 
 
-def get_templates(args):
-    for sample_id in range(args.num_samples):
+def get_templates(
+    num_samples: int = 4,
+    excitation_wavelength: list[float] = None,
+    excitation_power: list[float] = None,
+    possible_dopants: list[str] = None,
+    max_dopants: int = 4,
+):
+    for _ in range(num_samples):
         # Pick a number of dopants
-        n_dopants = np.random.choice(range(1, args.max_dopants + 1))
+        n_dopants = np.random.choice(range(1, max_dopants + 1))
 
         # Pick the dopants
-        dopants = np.random.choice(args.dopants, n_dopants, replace=False)
+        dopants = np.random.choice(possible_dopants, n_dopants, replace=False)
 
         # Get the dopant concentrations, normalizing the total concentration to 0-1
         total_conc = np.random.uniform(0, 1)
@@ -101,14 +107,13 @@ def get_templates(args):
         dopant_concs = total_conc * dopant_concs / np.sum(dopant_concs)
 
         # sample a wavelength
-        wavelength = np.random.uniform(*args.excitation_wavelength)
+        wavelength = np.random.uniform(*excitation_wavelength)
 
         # sample a power
-        power = np.random.uniform(*args.excitation_power)
+        power_limits = np.log10(excitation_power)
+        power = np.random.uniform(*power_limits)
+        power = np.power(10, power)
         yield {
-            # 'sample_id': sample_id,
-            # 'group_id': sample_id // args.max_data_per_group,
-            # 'data_id': sample_id % args.max_data_per_group,
             'dopants': dopants,
             'dopant_concs': dopant_concs,
             'excitation_wavelength': wavelength,

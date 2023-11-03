@@ -14,6 +14,9 @@ from NanoParticleTools.inputs.photo_physics import (
 from scipy.integrate import solve_ivp
 from functools import lru_cache
 from monty.json import MSONable
+import time
+
+import logging
 
 
 class SpectralKinetics(MSONable):
@@ -109,6 +112,7 @@ class SpectralKinetics(MSONable):
             raise ValueError(
                 'Error, the sum of the dopant concentrations must be <= 1')
         self.dopants = dopants
+        self.logger = logging.getLogger(type(self).__name__)
 
     @property
     def mpr_gamma(self) -> float:
@@ -597,7 +601,7 @@ class SpectralKinetics(MSONable):
         if isinstance(initial_populations, (list, np.ndarray)):
             # check if supplied populations is the proper length
             if len(initial_populations) == self.total_n_levels:
-                print('Using user input initial population')
+                self.logger.info('Using user input initial population')
             else:
                 raise ValueError(
                     "Supplied Population is invalid. Expected length of {self.total_n_levels, "
@@ -617,10 +621,14 @@ class SpectralKinetics(MSONable):
 
         if 'method' not in kwargs:
             kwargs['method'] = 'BDF'
+
+        start_time = time.time()
         sol = solve_ivp(get_dNdt_fn(self),
                         t_span=t_span,
                         y0=initial_populations,
                         **kwargs)
+        end_time = time.time()
+        self.logger.info(f'Found solution in {end_time-start_time:.2f} seconds')
 
         return sol.t, sol.y.T
 

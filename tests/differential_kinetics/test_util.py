@@ -23,13 +23,19 @@ def test_parser():
     assert args.include_spectra is False
     assert args.excitation_wavelength == (700, 1500)
     assert args.excitation_power == (10, 1e6)
-    assert args.dopants == ["Yb", "Er", "Tm", "Nd", "Ho", "Eu", "Sm", "Dy"]
+    assert args.possible_dopants == [
+        "Yb", "Er", "Tm", "Nd", "Ho", "Eu", "Sm", "Dy"
+    ]
 
 
 def test_get_templates():
     args = get_diff_kinetics_parser().parse_args(
         ['-n', '10', '-m', '2', '-o', 'test.h5'])
-    templates = get_templates(args)
+    templates = get_templates(num_samples=args.num_samples,
+                              excitation_wavelength=args.excitation_wavelength,
+                              max_dopants=args.max_dopants,
+                              excitation_power=args.excitation_power,
+                              possible_dopants=args.possible_dopants)
     assert len(list(templates)) == 10
 
 
