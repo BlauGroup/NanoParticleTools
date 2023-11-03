@@ -707,9 +707,9 @@ class DopedNanoparticle(MSONable):
             dopant_amount = {}
             for dopant in self.dopant_sites:
                 try:
-                    dopant_amount[str(dopant.specie)] += 1
+                    dopant_amount[str(dopant.specie.symbol)] += 1
                 except KeyError:
-                    dopant_amount[str(dopant.specie)] = 1
+                    dopant_amount[str(dopant.specie.symbol)] = 1
 
             return {
                 key: (item / total_num_sites)
