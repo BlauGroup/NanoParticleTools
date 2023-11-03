@@ -11,6 +11,7 @@ from scipy.ndimage import gaussian_filter1d
 from torch_geometric.data import Data
 import warnings
 from abc import ABC, abstractmethod
+from functools import lru_cache
 
 from ast import literal_eval
 
@@ -577,6 +578,7 @@ class SummedWavelengthRangeLabelProcessor(LabelProcessor):
         return self.process_doc(doc)
 
     @property
+    @lru_cache
     def spectrum_idxs(self):
         spectrum_idxs = dict()
         for key, mask in self.masks.items():
@@ -585,12 +587,14 @@ class SummedWavelengthRangeLabelProcessor(LabelProcessor):
         return spectrum_idxs
 
     @property
+    @lru_cache
     def x(self):
         dx = (self.in_range[-1] - self.in_range[0]) / self.in_bins
         return torch.linspace(self.in_range[0] + dx / 2,
                               self.in_range[-1] - dx / 2, self.in_bins)
 
     @property
+    @lru_cache
     def masks(self):
         return {
             k: self.get_mask(self.x, _range)
