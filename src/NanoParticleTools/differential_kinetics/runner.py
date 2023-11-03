@@ -46,7 +46,7 @@ class DifferentialKinetics(Builder):
         self.kwargs = kwargs
         self._file = None
 
-        super().__init__(sources=None, targets=None, chunk_size=1, **kwargs)
+        super().__init__(sources=[], targets=[], chunk_size=1000, **kwargs)
 
     def connect(self):
         # Since we aren't using stores, do nothing
