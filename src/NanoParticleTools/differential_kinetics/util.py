@@ -71,12 +71,6 @@ def get_diff_kinetics_parser():
         type=str,
         default=f'{datetime.now().strftime("%Y%m%d_%H_%M_%S_%f")}.h5')
 
-    parser.add_argument('-j',
-                        '--num_workers',
-                        help='Number of concurrent workers',
-                        type=int,
-                        default=1)
-
     parser.add_argument(
         '-g',
         '--max_data_per_group',
