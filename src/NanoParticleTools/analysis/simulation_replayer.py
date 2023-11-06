@@ -164,9 +164,10 @@ class SimulationReplayer():
 
             current_left_state = states[seed][acceptor_i][state_map_species_id[
                 _interaction['species_id_2']][_interaction['left_state_2']]]
-            current_right_state = states[seed][acceptor_i][state_map_species_id[
-                _interaction['species_id_2']][_interaction['right_state_2']]]
-            
+            current_right_state = states[seed][acceptor_i][
+                state_map_species_id[_interaction['species_id_2']][
+                    _interaction['right_state_2']]]
+
             if current_left_state == 1 and current_right_state == 0:
                 states[seed][acceptor_i][state_map_species_id[_interaction[
                     'species_id_2']][_interaction['left_state_2']]] = 0
@@ -177,8 +178,8 @@ class SimulationReplayer():
                 print('current right state', current_right_state)
                 print(states)
                 raise RuntimeError('Inconsistent simulation state encountered.'
-                                'Please rerun the simulation. If this issue'
-                                'persists, please raise a github issue')
+                                   'Please rerun the simulation. If this issue'
+                                   'persists, please raise a github issue')
 
     def save_populations(self, states, seed, time, x, population_evolution,
                          site_evolution, step_size):

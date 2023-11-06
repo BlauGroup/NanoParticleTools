@@ -147,7 +147,7 @@ def test_serialization():
     dopants = [(0, 0.1, 'Na', 'Y'), (0, 0.2, 'Yb', 'Y')]
     dnp = DopedNanoparticle(constraints, dopants)
     dnp.generate()
-    
+
     dnp_dict = dnp.as_dict()
 
     dnp_copy = DopedNanoparticle.from_dict(dnp_dict)
