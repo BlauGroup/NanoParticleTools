@@ -142,6 +142,21 @@ def test_host_species_dopant():
     assert dnp.dopant_composition == Composition({'Yb': 10})
 
 
+def test_serialization():
+    constraints = [SphericalConstraint(10)]
+    dopants = [(0, 0.1, 'Na', 'Y'), (0, 0.2, 'Yb', 'Y')]
+    dnp = DopedNanoparticle(constraints, dopants)
+    dnp.generate()
+    
+    dnp_dict = dnp.as_dict()
+
+    dnp_copy = DopedNanoparticle.from_dict(dnp_dict)
+    dnp_copy.generate()
+    assert dnp_copy.host_species == ['Na', 'Y', 'F']
+    assert len(dnp.sites) == len(dnp_copy.sites)
+    assert len(dnp.dopant_sites) == len(dnp_copy.dopant_sites)
+
+
 def test_doped_near_one():
     with pytest.raises(ValueError):
         constraints = [SphericalConstraint(10)]

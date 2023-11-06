@@ -349,20 +349,38 @@ class DopedNanoparticle(MSONable):
                  constraints: Sequence[NanoParticleConstraint],
                  dopant_specification: Sequence[Tuple],
                  seed: int = 0,
-                 prune_hosts: bool = False):
+                 prune_hosts: bool = False,
+                 host_species=None):
 
         # Check if there are zero constraints
         if len(constraints) == 0:
             raise ValueError(
                 'There are no constraints, this particle is empty')
         self.constraints = constraints
-        host_species = []
-        for constraint in constraints:
-            host_species.extend(
-                list(set(constraint.get_host_structure().species)))
 
-        host_species = [el.symbol for el in set(host_species)]
-        self.host_species = host_species
+        if host_species is None:
+            # NaYF3 is the default.
+            host_species = ['Na', 'Y', 'F']
+
+        # Check if the host species is reasonable given the structure
+        # This is necessary in case we are rebuilding the structure after
+        # pruning the host elements away.
+        struct_species = []
+        for constraint in constraints:
+            struct_species.extend(
+                list(set(constraint.get_host_structure().species)))
+        struct_species = [el.symbol for el in set(struct_species)]
+
+        # Make sure each of the species in the struct is present in the host
+        all_present = True
+        for species in struct_species:
+            if species not in host_species:
+                all_present = False
+        if all_present:
+            self.host_species = host_species
+        else:
+            # Fall back on only the species in the present structure
+            self.host_species = struct_species
 
         self.seed = seed if seed is not None else 0
 
