@@ -109,7 +109,7 @@ class SimulationReplayer():
                     for i, (state, site) in enumerate(
                             zip(self.initial_states, self.sites)):
                         _state = state_map_species_name[str(
-                            site.specie)][state]
+                            site.specie.symbol)][state]
                         states[seed][i, _state] = 1
 
                     self.save_populations(states, seed, 0, x,
@@ -128,8 +128,8 @@ class SimulationReplayer():
                                       len(x[seed]) * step_size, x,
                                       population_evolution, site_evolution,
                                       step_size)
-        return (simulation_time, event_statistics, x,
-                population_evolution, site_evolution)
+        return (simulation_time, event_statistics, x, population_evolution,
+                site_evolution)
 
     def update_state(self, states, row, state_map_species_id):
         seed = row[0]
@@ -143,18 +143,42 @@ class SimulationReplayer():
         # Update the states for the sites corresponding
         # to this interaction event
         # Apply the event to the donor site
-        states[seed][donor_i][state_map_species_id[
-            _interaction['species_id_1']][_interaction['left_state_1']]] = 0
-        states[seed][donor_i][state_map_species_id[
-            _interaction['species_id_1']][_interaction['right_state_1']]] = 1
+
+        current_left_state = states[seed][donor_i][state_map_species_id[
+            _interaction['species_id_1']][_interaction['left_state_1']]]
+        current_right_state = states[seed][donor_i][state_map_species_id[
+            _interaction['species_id_1']][_interaction['right_state_1']]]
+        if current_left_state == 1 and current_right_state == 0:
+            states[seed][donor_i][state_map_species_id[_interaction[
+                'species_id_1']][_interaction['left_state_1']]] = 0
+            states[seed][donor_i][state_map_species_id[_interaction[
+                'species_id_1']][_interaction['right_state_1']]] = 1
+        else:
+            raise RuntimeError('Inconsistent simulation state encountered. '
+                               'Please rerun the simulation. If this issue '
+                               'persists, please raise a github issue')
 
         if _interaction['number_of_sites'] == 2:
             # If this is a two-site interaction, apply
             # the event to the acceptor ion
-            states[seed][acceptor_i][state_map_species_id[_interaction[
-                'species_id_2']][_interaction['left_state_2']]] = 0
-            states[seed][acceptor_i][state_map_species_id[_interaction[
-                'species_id_2']][_interaction['right_state_2']]] = 1
+
+            current_left_state = states[seed][acceptor_i][state_map_species_id[
+                _interaction['species_id_2']][_interaction['left_state_2']]]
+            current_right_state = states[seed][acceptor_i][state_map_species_id[
+                _interaction['species_id_2']][_interaction['right_state_2']]]
+            
+            if current_left_state == 1 and current_right_state == 0:
+                states[seed][acceptor_i][state_map_species_id[_interaction[
+                    'species_id_2']][_interaction['left_state_2']]] = 0
+                states[seed][acceptor_i][state_map_species_id[_interaction[
+                    'species_id_2']][_interaction['right_state_2']]] = 1
+            else:
+                print('current left state: ', current_left_state)
+                print('current right state', current_right_state)
+                print(states)
+                raise RuntimeError('Inconsistent simulation state encountered.'
+                                'Please rerun the simulation. If this issue'
+                                'persists, please raise a github issue')
 
     def save_populations(self, states, seed, time, x, population_evolution,
                          site_evolution, step_size):
@@ -212,8 +236,8 @@ class SimulationReplayer():
         if data is None:
             data = self.run()
 
-        (simulation_time, event_statistics, x,
-            population_evolution, site_evolution) = data
+        (simulation_time, event_statistics, x, population_evolution,
+         site_evolution) = data
         species_counter = Counter(
             [site['species_id'] for site in self.npmc_input.sites.values()])
         normalization_factors = np.hstack(
@@ -339,7 +363,7 @@ class SimulationReplayer():
             site.coords for site in self.npmc_input.nanoparticle.dopant_sites
         ])
         species_names = np.array([
-            str(site.specie)
+            str(site.specie.symbol)
             for site in self.npmc_input.nanoparticle.dopant_sites
         ])
 
@@ -353,8 +377,8 @@ class SimulationReplayer():
                     np.where(constraint.sites_in_bounds(sites))[0])
 
                 for level in site_indices_by_constraint:
-                    indices_inside_constraint = (indices_inside_constraint
-                                                 - set(level))
+                    indices_inside_constraint = (indices_inside_constraint -
+                                                 set(level))
                 site_indices_by_constraint.append(
                     sorted(list(indices_inside_constraint)))
 
