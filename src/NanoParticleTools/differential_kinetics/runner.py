@@ -22,7 +22,6 @@ class DifferentialKinetics(Builder):
                  max_dopants: int = 4,
                  include_spectra: bool = True,
                  output_file: str = 'out.h5',
-                 num_workers: int = 1,
                  max_data_per_group: int = 100000,
                  **kwargs):
         if excitation_wavelength is None:
@@ -39,7 +38,6 @@ class DifferentialKinetics(Builder):
         self.max_dopants = max_dopants
         self.include_spectra = include_spectra
         self.output_file = output_file
-        self.num_workers = num_workers
         self.max_data_per_group = max_data_per_group
         self.source = None
         self.target = None
