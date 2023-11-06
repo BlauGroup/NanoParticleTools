@@ -5,9 +5,9 @@
 [coverage-image]: https://codecov.io/gh/BlauGroup/NanoParticleTools/branch/main/graph/badge.svg
 [coverage-url]: https://codecov.io/github/BlauGroup/NanoParticleTools?branch=main
 
+[![Test Coverage][coverage-image]][coverage-url]
 [![Linting Status][linting-image]][linting-url]
 [![Testing Status][testing-image]][testing-url]
-[![Test Coverage][coverage-image]][coverage-url]
 [![Requires Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg?logo=python&logoColor=white)](https://python.org/downloads)
 
 
