@@ -14,8 +14,10 @@ from NanoParticleTools.inputs import (SpectralKinetics, DopedNanoparticle,
 from NanoParticleTools.species_data.species import Dopant
 from NanoParticleTools.inputs.util import get_all_interactions
 import sqlite3
-import warnings
 import shutil
+import logging
+
+LOGGER = logging.getLogger('NPMC_Job')
 
 
 # Save 'trajectory_doc' to the trajectories store
@@ -99,7 +101,7 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
             expected_tables = ['factors', 'initial_state']
             all_tables_exist, missing = tables_exist(cur, expected_tables)
             if not all_tables_exist:
-                warnings.warn(f'Existing run found, but missing {missing} table.'
+                LOGGER.info(f'Existing run found, but missing {missing} table.'
                               f'Re-initializing the simulation')
                 fresh_start = True
 
@@ -112,14 +114,14 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
             expected_tables = ['metadata', 'species', 'sites', 'interactions']
             all_tables_exist, missing = tables_exist(cur, expected_tables)
             if not all_tables_exist:
-                warnings.warn(f'Existing run found, but missing {missing} table.'
+                LOGGER.info(f'Existing run found, but missing {missing} table.'
                               f'Re-initializing the simulation')
                 fresh_start = True
             # # Check the number of sites
             # num_dopant_site_db = len(list(cur.execute('SELECT * from sites')))
             # num_dopant_sites = len(nanoparticle.dopant_sites)
             # if num_dopant_sites != num_dopant_site_db:
-            #     warnings.warn(
+            #     Logger.info(
             #         'Existing run found, num sites does not match.'
             #         ' Simulation must begin from scratch')
 
@@ -128,7 +130,7 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
             #     list(cur.execute('SELECT * from interactions')))
             # num_interactions = len(get_all_interactions(spectral_kinetics))
             # if num_interactions != num_interactions_db:
-            #     warnings.warn(
+            #     Logger.info(
             #         'Existing run found, number of interactions does not '
             #         'match. Simulation must begin from scratch')
 
@@ -142,17 +144,18 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
 
                 table_exist, _ = tables_exist(cur, ['interupt_state'])
                 if not table_exist:
-                    print('creating interupt_state and interupt_cutoff table')
+                    LOGGER.info('creating interupt_state and interupt_cutoff table')
                     cur.execute(create_interupt_state_sql)
                     cur.execute(create_interupt_cutoff_sql)
                 cur.close()
         else:
-            warnings.warn(
+            LOGGER.info(
                 'Existing run found, but some files are missing. ')
             fresh_start = True
 
     if fresh_start or os.path.exists(output_dir) is False:
         if override or os.path.exists(output_dir) is False:
+            LOGGER.info('Writing new input files')
             # Generate Nanoparticle
             nanoparticle = DopedNanoparticle(constraints, dopant_specifications,
                                              doping_seed, prune_hosts=True)
@@ -199,6 +202,7 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
         initial_state_db_path=files['initial_state_db_path'])
 
     # Actually run NPMC
+    LOGGER.info('Invoking C++ MC simulation')
     npmc_runner.run(**npmc_args)
 
     # TODO: figure out why the nanoparticle sites gets cleared.
