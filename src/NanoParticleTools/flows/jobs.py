@@ -12,7 +12,6 @@ from NanoParticleTools.core import (NPMCInput, NPMCRunner,
 from NanoParticleTools.inputs import (SpectralKinetics, DopedNanoparticle,
                                       NanoParticleConstraint)
 from NanoParticleTools.species_data.species import Dopant
-from NanoParticleTools.inputs.util import get_all_interactions
 import sqlite3
 import shutil
 import logging
@@ -85,6 +84,13 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
         'np_db_path': os.path.join(output_dir, 'np.sqlite'),
         'npmc_input': os.path.join(output_dir, 'npmc_input.json')
     }
+    _initial_state_db_args = {
+        'one_site_interaction_factor': 1,
+        'two_site_interaction_factor': 1,
+        'interaction_radius_bound': 3,
+        'distance_factor_type': 'inverse_cubic'
+    }
+    _initial_state_db_args.update(initial_state_db_args)
 
     # Check if output dir exists. If so, check if the input files match
     fresh_start = False
@@ -176,14 +182,6 @@ def npmc_job(constraints: Sequence[NanoParticleConstraint],
                                    initial_states)
 
             # Write files
-            _initial_state_db_args = {
-                'one_site_interaction_factor': 1,
-                'two_site_interaction_factor': 1,
-                'interaction_radius_bound': 3,
-                'distance_factor_type': 'inverse_cubic'
-            }
-            _initial_state_db_args.update(initial_state_db_args)
-
             if os.path.exists(output_dir):
                 # delete the directory, so we can start from scratch
                 shutil.rmtree(output_dir)
