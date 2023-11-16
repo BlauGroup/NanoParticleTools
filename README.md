@@ -1,3 +1,5 @@
+![logo](./logo_transparent.png)
+
 [linting-image]: https://github.com/BlauGroup/NanoParticleTools/actions/workflows/flake8.yml/badge.svg
 [linting-url]: https://github.com/BlauGroup/NanoParticleTools/actions/workflows/flake8.yml
 [testing-image]: https://github.com/BlauGroup/NanoParticleTools/actions/workflows/testing.yml/badge.svg
