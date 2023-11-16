@@ -46,7 +46,7 @@ def plot_nanoparticle_from_arrays(radii: np.array,
         ax.pie(concentrations_with_y[i - 1],
                radius=radii[i] / radii[-1],
                colors=colors,
-               wedgeprops=dict(edgecolor='k', linewidth=0.25),
+               wedgeprops=dict(edgecolor='w', linewidth=0.25),
                startangle=90)
     ax.legend(elements, loc='upper left', bbox_to_anchor=(0.84, 0.95))
     plt.tight_layout()

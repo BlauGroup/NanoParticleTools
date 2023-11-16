@@ -23,8 +23,8 @@ def get_plotting_fn(feature_processor: FeatureProcessor) -> Callable:
         plot_nanoparticle_from_arrays(
             np.concatenate(([0], x[-n_constraints:])),
             x[:-n_constraints].reshape(n_constraints, -1),
-            dpi=80,
-            elements=feature_processor.possible_elements,
+            dpi=300,
+            elements=feature_processor.possible_elements
         )
         if f is not None:
             plt.text(0.1,
