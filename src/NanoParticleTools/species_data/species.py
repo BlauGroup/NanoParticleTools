@@ -84,6 +84,14 @@ class Dopant(MSONable):
 
     # The naming convention should always start with an X, since the symbol
     # cannot start with an existing element's symbol
+    LEGACY_SURFACE_NAMES = {
+        'Na': 'Surface',
+        'Al': 'Surface3',
+        'Si': 'Surface4',
+        'P': 'Surface5',
+        'Mg': 'Surface6',
+    }
+
     SURFACE_DOPANT_SYMBOLS_TO_NAMES = {
         'Xsurfaceone': 'Surface',
         'Xsurfacethree': 'Surface3',
@@ -117,7 +125,16 @@ class Dopant(MSONable):
     def __init__(self,
                  symbol: str,
                  molar_concentration: float,
-                 n_levels: int | None = None):
+                 n_levels: int | None = None,
+                 legacy_calc: bool = False):
+        self.legacy_calc = legacy_calc
+
+        if self.legacy_calc:
+            # If this is an older (legacy) calc, we need to convert the hacked
+            # surface species to the current.
+            if symbol in self.LEGACY_SURFACE_NAMES:
+                symbol = self.LEGACY_SURFACE_NAMES[symbol]
+
         if symbol in self.SURFACE_DOPANT_NAMES_TO_SYMBOLS:
             symbol = self.SURFACE_DOPANT_NAMES_TO_SYMBOLS[symbol]
         self.symbol = symbol
