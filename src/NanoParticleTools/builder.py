@@ -53,12 +53,14 @@ class UCNPBuilder(Builder):
                          **kwargs)
         self.connect()
 
-    def get_grouped_docs(self) -> List[Dict]:
+    def get_grouped_docs(self, additional_keys: List = None) -> List[Dict]:
         group_keys = [
             "data.n_dopants", "data.n_dopant_sites", "data.formula",
             "data.nanostructure_size", "data.formula_by_constraint",
             "data.excitation_power", "data.excitation_wavelength"
         ]
+        if additional_keys is not None and isinstance(additional_keys, list):
+            group_keys += additional_keys
         return self.source.groupby(keys=group_keys,
                                    criteria=self.docs_filter,
                                    properties=["_id"])
