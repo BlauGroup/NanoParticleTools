@@ -1,6 +1,5 @@
-from NanoParticleTools.util.visualization import (
-    plot_nanoparticle_from_arrays, plot_nanoparticle, plot_nanoparticle_on_ax,
-    make_animation)
+from NanoParticleTools.util.visualization import (plot_nanoparticle,
+                                                  make_animation)
 from NanoParticleTools.inputs.nanoparticle import SphericalConstraint
 
 from matplotlib import pyplot as plt
@@ -17,9 +16,9 @@ def test_plot_nanoparticle_from_arrays():
     radii = np.array([0, 20, 50])
     concentration = np.array([[0.25, 0.15, 0], [0.52, 0, 0.45]])
 
-    plot_nanoparticle_from_arrays(radii, concentration)
+    plot_nanoparticle(radii, concentration)
 
-    out = plot_nanoparticle_from_arrays(radii, concentration, as_np_array=True)
+    out = plot_nanoparticle(radii, concentration, as_np_array=True)
     assert isinstance(out, np.ndarray)
 
 
@@ -34,7 +33,7 @@ def test_plot_nanoparticle():
     dopant_specifications = [(0, 0.25, 'Yb', 'Y'), (0, 0.15, 'Nd', 'Y'),
                              (1, 0.52, 'Yb', 'Y'), (1, 0.45, 'Er', 'Y')]
 
-    plot_nanoparticle(constraints, dopant_specifications)
+    plot_nanoparticle(constraints, dopant_specifications=dopant_specifications)
 
 
 def test_plot_nanoparticle_on_ax():
@@ -50,7 +49,9 @@ def test_plot_nanoparticle_on_ax():
 
     fig = plt.figure(dpi=100)
     ax = fig.add_subplot(121)
-    plot_nanoparticle_on_ax(ax, constraints, dopant_specifications)
+    plot_nanoparticle(constraints,
+                      dopant_specifications=dopant_specifications,
+                      ax=ax)
 
 
 def test_make_animation():
@@ -68,5 +69,8 @@ def test_make_animation():
                               (1, 0.52, 'Yb', 'Y'), (1, 0.45, 'Er', 'Y')],
                              [(0, 0.25, 'Yb', 'Y'), (0, 0.15, 'Nd', 'Y'),
                               (1, 0.52, 'Yb', 'Y'), (1, 0.35, 'Er', 'Y')]]
-    frames = list(zip(constraints, dopant_specifications))
+    frames = [{
+        'radii': c,
+        'dopant_specifications': d
+    } for c, d in zip(constraints, dopant_specifications)]
     make_animation(frames, name='animation.gif')
