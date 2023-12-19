@@ -1,4 +1,4 @@
-from NanoParticleTools.util.visualization import plot_nanoparticle_from_arrays
+from NanoParticleTools.util.visualization import plot_nanoparticle
 from NanoParticleTools.machine_learning.data import FeatureProcessor
 
 from maggma.stores import Store
@@ -11,7 +11,8 @@ import torch
 from uuid import uuid4
 
 
-def get_plotting_fn(feature_processor: FeatureProcessor) -> Callable:
+def get_plotting_fn(feature_processor: FeatureProcessor,
+                    as_np_array: bool = False) -> Callable:
     n_elements = len(feature_processor.possible_elements)
 
     def plotting_fn(x, f=None, accept=None):
@@ -20,19 +21,30 @@ def get_plotting_fn(feature_processor: FeatureProcessor) -> Callable:
 
         plt.figure()
         n_constraints = len(x) // (n_elements + 1)
-        plot_nanoparticle_from_arrays(
+        fig = plot_nanoparticle(
             np.concatenate(([0], x[-n_constraints:])),
             x[:-n_constraints].reshape(n_constraints, -1),
-            dpi=80,
-            elements=feature_processor.possible_elements,
-        )
+            dpi=300,
+            elements=feature_processor.possible_elements)
         if f is not None:
             plt.text(0.1,
                      0.95,
                      f'UV Intensity={np.power(10, -f)-100:.2f}',
                      fontsize=20,
                      transform=plt.gca().transAxes)
-        return plt
+        if as_np_array:
+            # If we haven't already shown or saved the plot, then we need to
+            # draw the figure first.
+            fig.canvas.draw()
+            # Now we can save it to a numpy array.
+            data = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+            data = data.reshape(fig.canvas.get_width_height()[::-1] + (3, ))
+
+            # Close the figure to remove it from the buffer
+            plt.close(fig)
+            return data
+        else:
+            return fig
 
     return plotting_fn
 

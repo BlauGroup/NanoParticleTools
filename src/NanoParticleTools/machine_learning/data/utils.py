@@ -5,11 +5,12 @@ import warnings
 import os
 
 SUNSET_SPECIES_TABLE = {
-    1: ["Yb", "Er", "Mg"],
-    2: ["Yb", "Er"],
-    3: ["Yb", "Er", "Mg", "Tm"],
-    4: ["Yb", "Er"],
-    5: ["Yb", "Er", "Nd"]
+    1: sorted(["Yb", "Er", "Xsurfacesix"]),
+    2: sorted(["Yb", "Er"]),
+    3: sorted(["Yb", "Er", "Xsurfacesix", "Tm"]),
+    4: sorted(["Yb", "Er"]),
+    5: sorted(["Yb", "Er", "Nd"]),
+    6: sorted(['Yb', 'Er', "Xsurfacesix", 'Tm', 'Nd', 'Ho', 'Eu', 'Sm', 'Dy'])
 }
 
 

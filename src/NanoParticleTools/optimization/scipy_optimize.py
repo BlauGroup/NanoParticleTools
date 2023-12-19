@@ -12,7 +12,7 @@ import pytorch_lightning as pl
 from collections.abc import Callable
 
 
-def get_bounds(n_constraints: int, n_elements: int) -> Bounds:
+def get_bounds(n_constraints: int, n_elements: int, **kwargs) -> Bounds:
     r"""
     Get the Bounds which are utilized by scipy minimize.
 
@@ -34,7 +34,8 @@ def get_bounds(n_constraints: int, n_elements: int) -> Bounds:
         (np.zeros(num_dopant_nodes), np.zeros(n_constraints)))
     max_bounds = np.concatenate(
         (np.ones(num_dopant_nodes), np.ones(n_constraints)))
-    bounds = Bounds(min_bounds, max_bounds)
+    min_bounds[-1] = 1
+    bounds = Bounds(min_bounds, max_bounds, **kwargs)
     return bounds
 
 
