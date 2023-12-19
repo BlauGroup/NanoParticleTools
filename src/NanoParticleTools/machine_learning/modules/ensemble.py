@@ -28,7 +28,7 @@ class EnsembleModel(torch.nn.Module):
             output.append(y_hat)
 
         x = torch.cat(output, dim=-1)
-        return {'y': x, 'y_hat': x.mean(-1), 'std': x.std()}
+        return {'y': x, 'y_hat': x.mean(-1), 'std': x.std(-1)}
 
     def evaluate_step(self, data: Data) -> tuple[torch.Tensor, torch.Tensor]:
         output = []
@@ -52,6 +52,6 @@ class EnsembleModel(torch.nn.Module):
 
         x = torch.cat(output, dim=-1)
         if return_stats:
-            return {'y': x, 'y_hat': x.mean(-1), 'std': x.std()}
+            return {'y': x, 'y_hat': x.mean(-1), 'std': x.std(-1)}
         else:
             return x.mean(-1)
