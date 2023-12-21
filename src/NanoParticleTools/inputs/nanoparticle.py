@@ -620,8 +620,11 @@ class DopedNanoparticle(MSONable):
 
         if dopant_species not in self.host_species:
             # Keep track of concentrations in each shell
-            self._dopant_concentration[constraint_index][dopant_species] = len(
-                dopant_sites) / n_host_sites
+            if n_host_sites > 0:
+                self._dopant_concentration[constraint_index][dopant_species] = len(
+                    dopant_sites) / n_host_sites
+            else:
+                self._dopant_concentration[constraint_index][dopant_species] = 0
 
             # Keep track of sites with dopants
             self.dopant_indices[constraint_index].extend(dopant_sites)
