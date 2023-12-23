@@ -199,9 +199,19 @@ class Dopant(MSONable):
             symbol = self.SURFACE_DOPANT_SYMBOLS_TO_NAMES[self.symbol]
         else:
             symbol = self.symbol
-        # Load Data from json file
-        with open(os.path.join(SPECIES_DATA_PATH, f'{symbol}.json'), 'r') as f:
-            species_data = json.load(f)
+        try:
+            # Load Data from json file
+            with open(os.path.join(SPECIES_DATA_PATH, f'{symbol}.json'),
+                      'r') as f:
+                species_data = json.load(f)
+        except FileNotFoundError:
+            # File was not found, check if it is a legacy calc
+            if self.symbol in self.LEGACY_SURFACE_NAMES:
+                # This is a legacy calc. Load the corresponding calc
+                symbol = self.LEGACY_SURFACE_NAMES[self.symbol]
+                with open(os.path.join(SPECIES_DATA_PATH, f'{symbol}.json'),
+                          'r') as f:
+                    species_data = json.load(f)
 
         return species_data
 
