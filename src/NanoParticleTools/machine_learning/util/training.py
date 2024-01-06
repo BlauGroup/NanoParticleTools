@@ -39,16 +39,21 @@ def train_spectrum_model(config: dict,
                          trainer_device_config: dict | None = None,
                          additional_callbacks: list | None = None):
     """
-        params
+    Args:
+        config:
         model_cls:
-        model_config:
+        data_module:
         lr_scheduler:
-        augment_loss:
-        ray_tune: whether or not this is a ray tune run
+        lr_scheduler_kwargs:
+        num_epochs:
+        ray_tune: Whether or not this is a ray tune run
         early_stop: whether or not to use early stopping
         swa: whether or not to use stochastic weight averaging
-
-        """
+        save_checkpoints:
+        wandb_config:
+        trainer_device_config:
+        additional_callbacks:
+    """
     if lr_scheduler_kwargs is None:
         lr_scheduler_kwargs = {
             'warmup_epochs': 10,
@@ -75,9 +80,6 @@ def train_spectrum_model(config: dict,
     callbacks = []
     callbacks.append(LearningRateMonitor(logging_interval='step'))
 
-    # Disable augment loss for now. It seems to not help
-    # if augment_loss:
-    #     callbacks.append(LossAugmentCallback(aug_loss_epoch=augment_loss))
     if early_stop:
         callbacks.append(EarlyStopping(monitor='val_loss', patience=200))
     if swa:
@@ -165,15 +167,20 @@ def train_uv_model(config: dict,
                    trainer_device_config: dict | None = None,
                    additional_callbacks: list | None = None):
     """
-        params
+    Args:
+        config:
         model_cls:
-        model_config:
+        data_module:
         lr_scheduler:
-        augment_loss:
-        ray_tune: whether or not this is a ray tune run
+        lr_scheduler_kwargs:
+        num_epochs:
+        ray_tune: Whether or not this is a ray tune run
         early_stop: whether or not to use early stopping
         swa: whether or not to use stochastic weight averaging
-
+        save_checkpoints:
+        wandb_config:
+        trainer_device_config:
+        additional_callbacks:
     """
     if lr_scheduler_kwargs is None:
         lr_scheduler_kwargs = {
@@ -203,9 +210,6 @@ def train_uv_model(config: dict,
     callbacks = []
     callbacks.append(LearningRateMonitor(logging_interval='step'))
 
-    # Disable augment loss for now. It seems to not help
-    # if augment_loss:
-    #     callbacks.append(LossAugmentCallback(aug_loss_epoch=augment_loss))
     if early_stop:
         callbacks.append(
             EarlyStopping(monitor='val_loss', patience=early_stop_patience))
@@ -265,7 +269,8 @@ def train_uv_model(config: dict,
             _, _loss_d = model._step('val', batch, batch_idx, log=False)
             for key in _loss_d:
                 try:
-                    val_metrics[key] += _loss_d[key].item() * data_module.batch_size
+                    val_metrics[key] += _loss_d[key].item(
+                    ) * data_module.batch_size
                 except KeyError:
                     val_metrics[key] = _loss_d[key] * data_module.batch_size
 
@@ -282,9 +287,11 @@ def train_uv_model(config: dict,
             _, _loss_d = model._step('test', batch, batch_idx, log=False)
             for key in _loss_d:
                 try:
-                    ood_test_metrics[key] += _loss_d[key].item() * data_module.batch_size
+                    ood_test_metrics[key] += _loss_d[key].item(
+                    ) * data_module.batch_size
                 except KeyError:
-                    ood_test_metrics[key] = _loss_d[key] * data_module.batch_size
+                    ood_test_metrics[
+                        key] = _loss_d[key] * data_module.batch_size
 
         # For the testing set, batches may not be all the same size due to drop_last=False,
         # so we need to account for that.
@@ -333,15 +340,20 @@ def train_uv_model_augment(config: dict,
                            trainer_device_config: dict | None = None,
                            additional_callbacks: list | None = None):
     """
-        params
+    Args:
+        config:
         model_cls:
-        model_config:
+        data_module:
         lr_scheduler:
-        augment_loss:
-        ray_tune: whether or not this is a ray tune run
+        lr_scheduler_kwargs:
+        num_epochs:
+        ray_tune: Whether or not this is a ray tune run
         early_stop: whether or not to use early stopping
         swa: whether or not to use stochastic weight averaging
-
+        save_checkpoints:
+        wandb_config:
+        trainer_device_config:
+        additional_callbacks:
     """
     if lr_scheduler_kwargs is None:
         lr_scheduler_kwargs = {
@@ -371,9 +383,6 @@ def train_uv_model_augment(config: dict,
     callbacks = []
     callbacks.append(LearningRateMonitor(logging_interval='step'))
 
-    # Disable augment loss for now. It seems to not help
-    # if augment_loss:
-    #     callbacks.append(LossAugmentCallback(aug_loss_epoch=augment_loss))
     if early_stop:
         callbacks.append(
             EarlyStopping(monitor='val_loss', patience=early_stop_patience))
@@ -433,7 +442,8 @@ def train_uv_model_augment(config: dict,
             _, _loss_d = model._step('val', batch, batch_idx, log=False)
             for key in _loss_d:
                 try:
-                    val_metrics[key] += _loss_d[key].item() * data_module.batch_size
+                    val_metrics[key] += _loss_d[key].item(
+                    ) * data_module.batch_size
                 except KeyError:
                     val_metrics[key] = _loss_d[key] * data_module.batch_size
 
@@ -450,9 +460,11 @@ def train_uv_model_augment(config: dict,
             _, _loss_d = model._step('test', batch, batch_idx, log=False)
             for key in _loss_d:
                 try:
-                    ood_test_metrics[key] += _loss_d[key].item() * data_module.batch_size
+                    ood_test_metrics[key] += _loss_d[key].item(
+                    ) * data_module.batch_size
                 except KeyError:
-                    ood_test_metrics[key] = _loss_d[key] * data_module.batch_size
+                    ood_test_metrics[
+                        key] = _loss_d[key] * data_module.batch_size
 
         # For the testing set, batches may not be all the same size due to drop_last=False,
         # so we need to account for that.
@@ -586,7 +598,8 @@ class NPMCTrainer():
             device_ids = [None] * len(model_configs)
 
         training_runs = []
-        for model_config, model_name, device_id in zip(model_configs, wandb_name, device_ids):
+        for model_config, model_name, device_id in zip(model_configs,
+                                                       wandb_name, device_ids):
             _run_config = {
                 'model_config': model_config,
                 'wandb_name': model_name,
