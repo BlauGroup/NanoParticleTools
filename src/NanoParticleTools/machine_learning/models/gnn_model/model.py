@@ -1,13 +1,289 @@
-import torch
-import torch.nn.functional as F
-from torch import nn
-from torch_geometric import nn as pyg_nn
-import pytorch_lightning as pl
-
 from NanoParticleTools.machine_learning.core import SpectrumModelBase
 from NanoParticleTools.machine_learning.models.mlp_model.model import MLPSpectrumModel
-from typing import Optional, Callable
+from NanoParticleTools.machine_learning.modules.layer_interaction import (
+    InteractionBlock, InteractionConv)
+from NanoParticleTools.machine_learning.modules.film import FiLMLayer
+from NanoParticleTools.machine_learning.modules import NonLinearMLP
+
 from torch_scatter.scatter import scatter
+from torch.nn import functional as F
+from torch import nn
+import torch
+from torch_geometric import nn as pyg_nn
+
+from typing import Dict, List, Optional, Callable
+
+
+class GraphRepresentationModel(SpectrumModelBase):
+
+    def __init__(self,
+                 n_dopants: int,
+                 embed_dim: int = 16,
+                 nsigma: int = 5,
+                 n_message_passing: int = 3,
+                 n_output_nodes: int = 1,
+                 readout_layers: List[int] = None,
+                 dropout_probability: float = 0,
+                 activation_module: torch.nn.Module = nn.SiLU,
+                 aggregation: str = 'sum',
+                 **kwargs):
+        """_summary_
+
+        Args:
+            n_dopants: Number of dopants in the system.
+                Sets the number of embeddings the model will have
+            embed_dim: The size of the embedding vector
+            nsigma: The number of sigma values to calculate for the integrated interaction
+            n_message_passing: The number of message passing steps to use
+            n_output_nodes: The number of values output by the model.
+            readout_layers: The number of layers in the readout MLP.
+            dropout_probability: The probability of dropout in the readout.
+            activation_module: The activation function used in the readout.
+                Should be of type torch.nn.Module. Defaults to nn.ReLU.
+            aggregation: Options are 'sum' and 'mean'. Defaults to 'sum'.
+        """
+        super().__init__(**kwargs)
+
+        self.embed_dim = embed_dim
+        self.n_message_passing = n_message_passing
+        self.nsigma = nsigma
+        self.n_output_nodes = n_output_nodes
+        self.dropout_probability = dropout_probability
+        self.activation_module = activation_module
+
+        self.dopant_embedder = nn.Embedding(n_dopants, embed_dim)
+        self.dopant_film_layer = FiLMLayer(1, embed_dim, [16, 16])
+
+        self.dopant_constraint_film_layer = FiLMLayer(2, embed_dim, [16, 16])
+        self.dopant_norm = nn.BatchNorm1d(embed_dim)
+
+        self.integrated_interaction = InteractionBlock(nsigma=nsigma)
+        self.interaction_norm = nn.BatchNorm1d(nsigma)
+
+        self.convs = nn.ModuleList()
+        for _ in range(self.n_message_passing):
+            self.convs.append(
+                pyg_nn.GATv2Conv(embed_dim,
+                                 embed_dim,
+                                 edge_dim=nsigma,
+                                 concat=False,
+                                 add_self_loops=False))
+
+        if aggregation == 'sum':
+            self.aggregation = pyg_nn.aggr.SumAggregation()
+        elif aggregation == 'mean':
+            self.aggregation = pyg_nn.aggr.MeanAggregation()
+        elif aggregation == 'set2set':
+            # Use the Set2Set aggregation method to pool the graph
+            # into a single global feature vector
+            aggregation = pyg_nn.aggr.Set2Set(embed_dim, processing_steps=7)
+        elif isinstance(aggregation, nn.Module):
+            self.aggregation = aggregation()
+        else:
+            raise ValueError(
+                f'Aggregation type {aggregation} is not supported.')
+
+        if readout_layers is None:
+            readout_layers = [128]
+        self.readout_layers = readout_layers
+        if aggregation == 'set2set':
+            self.readout = NonLinearMLP(2 * self.embed_dim,
+                                        self.n_output_nodes,
+                                        self.readout_layers,
+                                        self.dropout_probability,
+                                        self.activation_module)
+        else:
+            self.readout = NonLinearMLP(self.embed_dim, self.n_output_nodes,
+                                        self.readout_layers,
+                                        self.dropout_probability,
+                                        self.activation_module)
+
+        self.save_hyperparameters()
+
+    def forward(self, dopant_concs, dopant_types, dopant_constraint_indices,
+                edge_index, radii, constraint_radii_idx, batch, **kwargs):
+        # Index the radii
+        _radii = radii[constraint_radii_idx]
+
+        # Compute the volumes of the constraints
+        volume = 4 / 3 * torch.pi * _radii**3
+        volume = volume[:, 1] - volume[:, 0]
+
+        # Embed the dopant types
+        dopant_attr = self.dopant_embedder(dopant_types)
+
+        # Use a film layer to condition the dopant embedding on the dopant concentration
+        conc_attr = dopant_concs.unsqueeze(-1)
+        dopant_attr = self.dopant_film_layer(dopant_attr, conc_attr)
+
+        # # Condition the dopant node attribute on the size of the dopant constraint
+        # geometric_features = _radii[dopant_constraint_indices]
+
+        # dopant_attr = self.dopant_constraint_film_layer(
+        #     dopant_attr, geometric_features)
+
+        # Normalize the dopant node attribute
+        dopant_attr = self.dopant_norm(dopant_attr)
+
+        # Index the radii and compute the integrated interaction
+        interaction_node_radii = _radii[dopant_constraint_indices][
+            edge_index.moveaxis(0, 1)].flatten(-2)
+        integrated_interaction = self.integrated_interaction(
+            *interaction_node_radii.T)
+
+        # Multiply the concentration into the integrated_interaction
+        interaction_node_conc = dopant_concs[edge_index.moveaxis(0, 1)]
+        conc_factor = (interaction_node_conc[:, 0] *
+                       interaction_node_conc[:, 1]).unsqueeze(-1)
+        integrated_interaction = conc_factor * integrated_interaction
+
+        # Normalize the integrated interaction
+        # Using a batch norm
+        integrated_interaction = self.interaction_norm(integrated_interaction)
+
+        out = dopant_attr
+        for conv in self.convs:
+            out = conv(out,
+                       edge_index=edge_index,
+                       edge_attr=integrated_interaction)
+        out = self.aggregation(out, batch)
+
+        return self.readout(out)
+
+
+class CustomGraphRepresentationModel(SpectrumModelBase):
+
+    def __init__(self,
+                 n_dopants: int,
+                 embed_dim: int = 16,
+                 nsigma: int = 5,
+                 n_message_passing: int = 3,
+                 n_output_nodes: int = 1,
+                 readout_layers: List[int] = None,
+                 dropout_probability: float = 0,
+                 activation_module: torch.nn.Module = nn.SiLU,
+                 aggregation: str = 'sum',
+                 **kwargs):
+        """_summary_
+
+        Args:
+            n_dopants: Number of dopants in the system.
+                Sets the number of embeddings the model will have
+            embed_dim: The size of the embedding vector
+            nsigma: The number of sigma values to calculate for the integrated interaction
+            n_message_passing: The number of message passing steps to use
+            n_output_nodes: The number of values output by the model.
+            readout_layers: The number of layers in the readout MLP.
+            dropout_probability: The probability of dropout in the readout.
+            activation_module: The activation function used in the readout.
+                Should be of type torch.nn.Module. Defaults to nn.ReLU.
+            aggregation: Options are 'sum' and 'mean'. Defaults to 'sum'.
+        """
+        super().__init__(**kwargs)
+
+        self.embed_dim = embed_dim
+        self.n_message_passing = n_message_passing
+        self.nsigma = nsigma
+        self.n_output_nodes = n_output_nodes
+        self.dropout_probability = dropout_probability
+        self.activation_module = activation_module
+        self.n_dopants = n_dopants
+
+        self.dopant_embedder = nn.Embedding(n_dopants, embed_dim)
+        self.dopant_film_layer = FiLMLayer(1, embed_dim, [16, 16])
+
+        self.dopant_constraint_film_layer = FiLMLayer(2, embed_dim, [16, 16])
+        self.dopant_norm = nn.BatchNorm1d(embed_dim)
+
+        self.integrated_interaction = InteractionBlock(nsigma=nsigma)
+        self.interaction_norm = nn.BatchNorm1d(nsigma)
+
+        self.convs = nn.ModuleList()
+        for i in range(self.n_message_passing):
+            if i == 0:
+                self.convs.append(InteractionConv(embed_dim, embed_dim,
+                                                  nsigma))
+            else:
+                self.convs.append(
+                    InteractionConv(2 * embed_dim, embed_dim, nsigma))
+
+        if aggregation == 'sum':
+            self.aggregation = pyg_nn.aggr.SumAggregation()
+        elif aggregation == 'mean':
+            self.aggregation = pyg_nn.aggr.MeanAggregation()
+        elif aggregation == 'set2set':
+            # Use the Set2Set aggregation method to pool the graph
+            # into a single global feature vector
+            aggregation = pyg_nn.aggr.Set2Set(embed_dim, processing_steps=7)
+        elif isinstance(aggregation, nn.Module):
+            self.aggregation = aggregation()
+        else:
+            raise ValueError(
+                f'Aggregation type {aggregation} is not supported.')
+
+        if readout_layers is None:
+            readout_layers = [128]
+        self.readout_layers = readout_layers
+        if aggregation == 'set2set':
+            self.readout = NonLinearMLP(self.n_dopants * 4 * self.embed_dim,
+                                        self.n_output_nodes,
+                                        self.readout_layers,
+                                        self.dropout_probability,
+                                        self.activation_module)
+        else:
+            self.readout = NonLinearMLP(self.n_dopants * 2 * self.embed_dim,
+                                        self.n_output_nodes,
+                                        self.readout_layers,
+                                        self.dropout_probability,
+                                        self.activation_module)
+
+        self.save_hyperparameters()
+
+    def forward(self,
+                dopant_concs,
+                dopant_constraint_indices,
+                edge_index,
+                radii,
+                constraint_radii_idx,
+                batch=None,
+                **kwargs):
+        # Index the radii
+        _radii = radii[constraint_radii_idx]
+
+        # Embed the dopant types
+        dopant_types = torch.arange(0, 3).expand(dopant_concs.shape)
+        dopant_attr = self.dopant_embedder(dopant_types)
+
+        # Use a film layer to condition the dopant embedding on the dopant concentration
+        conc_attr = dopant_concs.unsqueeze(-1)
+        dopant_attr = self.dopant_film_layer(dopant_attr, conc_attr)
+
+        # # Condition the dopant node attribute on the size of the dopant constraint
+        # geometric_features = _radii[dopant_constraint_indices]
+
+        # dopant_attr = self.dopant_constraint_film_layer(
+        #     dopant_attr, geometric_features)
+
+        # # Normalize the dopant node attribute
+        # dopant_attr = self.dopant_norm(dopant_attr)
+
+        # Index the radii and compute the integrated interaction
+        interaction_node_radii = _radii[dopant_constraint_indices][
+            edge_index.moveaxis(0, 1)].flatten(-2)
+        # interaction_node_conc = dopant_concs[edge_index.moveaxis(0, 1)]
+
+        out = dopant_attr
+        for conv in self.convs:
+            out = conv(out,
+                       compositions=dopant_concs,
+                       edge_index=edge_index,
+                       edge_attr=interaction_node_radii)
+            out = torch.concat((dopant_attr, out), dim=-1)
+
+        out = out.reshape(out.size(0), -1)
+        out = self.aggregation(out, batch)
+
+        return self.readout(out)
 
 
 class GATSpectrumModel(SpectrumModelBase):

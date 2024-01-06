@@ -25,7 +25,8 @@ def get_plotting_fn(feature_processor: FeatureProcessor,
             np.concatenate(([0], x[-n_constraints:])),
             x[:-n_constraints].reshape(n_constraints, -1),
             dpi=300,
-            elements=feature_processor.possible_elements)
+            elements=feature_processor.possible_elements
+        )
         if f is not None:
             plt.text(0.1,
                      0.95,
