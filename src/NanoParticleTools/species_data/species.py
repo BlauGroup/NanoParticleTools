@@ -204,7 +204,7 @@ class Dopant(MSONable):
             with open(os.path.join(SPECIES_DATA_PATH, f'{symbol}.json'),
                       'r') as f:
                 species_data = json.load(f)
-        except FileNotFoundError:
+        except FileNotFoundError as e:
             # File was not found, check if it is a legacy calc
             if self.symbol in self.LEGACY_SURFACE_NAMES:
                 # This is a legacy calc. Load the corresponding calc
@@ -212,6 +212,8 @@ class Dopant(MSONable):
                 with open(os.path.join(SPECIES_DATA_PATH, f'{symbol}.json'),
                           'r') as f:
                     species_data = json.load(f)
+            else:
+                raise e
 
         return species_data
 
