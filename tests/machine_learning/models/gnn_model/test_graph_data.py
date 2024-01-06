@@ -166,9 +166,9 @@ def test_graph_interaction_feature_processor(doc_one):
     data = feature_processor.data_cls(**_data_dict)
     assert data.radii.shape == (3, )
     assert data.constraint_radii_idx.shape == (2, 2)
-    assert torch.allclose(data.constraint_indices, torch.tensor([0, 0, 1, 1]))
-    assert data.x.shape == (4, )
-    assert torch.allclose(data.x, torch.tensor([0.499, 0.25, 0.2, 0.1]))
+    assert torch.allclose(data.dopant_constraint_indices, torch.tensor([0, 0, 1, 1]))
+    assert data.dopant_concs.shape == (4, )
+    assert torch.allclose(data.dopant_concs, torch.tensor([0.499, 0.25, 0.2, 0.1]))
     assert data.edge_index.shape == (2, 32)
 
 
@@ -180,10 +180,10 @@ def test_graph_interaction_feature_processor_zeros(doc_one):
     data = feature_processor.data_cls(**_data_dict)
     assert data.radii.shape == (3, )
     assert data.constraint_radii_idx.shape == (2, 2)
-    assert torch.allclose(data.constraint_indices,
+    assert torch.allclose(data.dopant_constraint_indices,
                           torch.tensor([0, 0, 0, 1, 1, 1]))
-    assert data.x.shape == (6, )
-    assert torch.allclose(data.x, torch.tensor([0.499, 0.25, 0, 0.2, 0.1, 0]))
+    assert data.dopant_concs.shape == (6, )
+    assert torch.allclose(data.dopant_concs, torch.tensor([0.499, 0.25, 0, 0.2, 0.1, 0]))
     assert data.edge_index.shape == (2, 72)
 
 
@@ -195,10 +195,10 @@ def test_invalid_doc(doc_one_invalid):
     data = feature_processor.data_cls(**_data_dict)
     assert data.radii.shape == (3, )
     assert data.constraint_radii_idx.shape == (2, 2)
-    assert torch.allclose(data.constraint_indices,
+    assert torch.allclose(data.dopant_constraint_indices,
                           torch.tensor([0, 0, 0, 1, 1, 1]))
-    assert data.x.shape == (6, )
-    assert torch.allclose(data.x, torch.tensor([0.499, 0.25, 0, 0.2, 0.1, 0]))
+    assert data.dopant_concs.shape == (6, )
+    assert torch.allclose(data.dopant_concs, torch.tensor([0.499, 0.25, 0, 0.2, 0.1, 0]))
     assert data.edge_index.shape == (2, 72)
 
     feature_processor = GraphInteractionFeatureProcessor(
@@ -207,9 +207,9 @@ def test_invalid_doc(doc_one_invalid):
     data = feature_processor.data_cls(**_data_dict)
     assert data.radii.shape == (3, )
     assert data.constraint_radii_idx.shape == (2, 2)
-    assert torch.allclose(data.constraint_indices, torch.tensor([0, 0, 1, 1]))
-    assert data.x.shape == (4, )
-    assert torch.allclose(data.x, torch.tensor([0.499, 0.25, 0.2, 0.1]))
+    assert torch.allclose(data.dopant_constraint_indices, torch.tensor([0, 0, 1, 1]))
+    assert data.dopant_concs.shape == (4, )
+    assert torch.allclose(data.dopant_concs, torch.tensor([0.499, 0.25, 0.2, 0.1]))
     assert data.edge_index.shape == (2, 32)
 
 
@@ -220,7 +220,7 @@ def test_grad(doc_four):
     _data_dict = feature_processor.process_doc(doc_four)
     data = feature_processor.data_cls(**_data_dict)
     assert data.radii.requires_grad
-    assert data.x.requires_grad
+    assert data.dopant_concs.requires_grad
 
     feature_processor = GraphInteractionFeatureProcessor(
         possible_elements=['Yb', 'Er', 'Mg'], input_grad=False)
@@ -228,4 +228,4 @@ def test_grad(doc_four):
     _data_dict = feature_processor.process_doc(doc_four)
     data = feature_processor.data_cls(**_data_dict)
     assert not data.radii.requires_grad
-    assert not data.x.requires_grad
+    assert not data.dopant_concs.requires_grad
