@@ -24,6 +24,9 @@ setup(name='NanoParticleTools',
           "wandb",
           "gpuparallel",
           "torch-geometric<=2.3.1",
-          "h5py"
+          "h5py",
+          "ray[tune]",
+          "torch_scatter", 
+          "matplotlib <3.10"
       ]
       )
