@@ -26,6 +26,9 @@ jobs:
       - name: Setup dependencies
         run: |
           python -m pip install --upgrade pip
+          # Install PyTorch-related dependencies first
+          pip install -r torch_requirements.txt
+          # Install the rest of the dependencies
           pip install -e .[full,test]
           pip install pytest-cov
       - name: Run tests
