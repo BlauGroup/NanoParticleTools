@@ -28,7 +28,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .[full,test]
           git clone https://github.com/rusty1s/pytorch_scatter.git
-          pip install pytorch_scatter
+          pip install pytorch_scatter/
           pip install pytest-cov
       - name: Run tests
         run: |
