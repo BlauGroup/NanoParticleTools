@@ -5,11 +5,11 @@ from NanoParticleTools.machine_learning.modules.layer_interaction import (
 from NanoParticleTools.machine_learning.modules.film import FiLMLayer
 from NanoParticleTools.machine_learning.modules import NonLinearMLP
 
-from torch_scatter.scatter import scatter
 from torch.nn import functional as F
 from torch import nn
 import torch
 from torch_geometric import nn as pyg_nn
+from torch_geometric.utils._scatter import scatter
 
 from typing import Dict, List, Optional, Callable
 
