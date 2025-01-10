@@ -28,6 +28,13 @@ or
 pip install .
 ```
 
+Finally, install torch-scatter as follows.
+```
+git clone https://github.com/rusty1s/pytorch_scatter.git
+pip install pytorch_scatter/
+```
+ Note: This package is installed separately due to some installation issues. See: https://github.com/rusty1s/pytorch_scatter/issues/265 and https://github.com/rusty1s/pytorch_scatter/issues/424
+
 ## Running Simulations
 An example of local execution can be seen below.
 
