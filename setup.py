@@ -26,7 +26,7 @@ setup(name='NanoParticleTools',
           "torch-geometric<=2.3.1",          
           "h5py", 
           "ray[tune]",
-          "torch_scatter",
+          "torch-scatter",
           "matplotlib <3.10",
       ]
       )
