@@ -43,7 +43,7 @@ Installation should take around 15 minutes on a normal desktop computer. NanoPar
 
 The functionality to train and use deep learning models to predict UCNP emission intensity using NanoParticleTools is embedded [here](https://github.com/BlauGroup/NanoParticleTools/tree/main/src/NanoParticleTools/machine_learning). 
 
-Within the demos folder, we have included Jupyter notebooks with demos for (1) training a deep learning model on pre-compiled datasets of [RNMC](https://github.com/BlauGroup/RNMC) trajectories, (2) loading pre-trained models and predicting emission intensity for an arbitrary UCNP design, and (3) loading pre-trained models and predicting emission intensity on the pre-compiled UCNP datasets. 
+Within the demos folder, we have included Jupyter notebooks with [demos](https://github.com/BlauGroup/NanoParticleTools/src/NanoParticleTools/machine_learning/demos/) for (1) training a deep learning model on pre-compiled datasets of [RNMC](https://github.com/BlauGroup/RNMC) trajectories, (2) loading pre-trained models and predicting emission intensity for an arbitrary UCNP design, and (3) loading pre-trained models and predicting emission intensity on the pre-compiled UCNP datasets. 
 
 Pre-compiled UCNP [datasets](https://figshare.com/s/49222bae78f228363897) (SUNSET) and pre-trained [models](https://figshare.com/articles/dataset/Hetero-GNN_Checkpoints/27941694/1?file=50919813)  
  can be downloaded from Figshare.
