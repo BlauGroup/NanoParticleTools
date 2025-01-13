@@ -28,6 +28,15 @@ or
 ```bash
 pip install .
 ```
+
+Finally, install torch-scatter as follows.
+```
+git clone https://github.com/rusty1s/pytorch_scatter.git
+pip install pytorch_scatter/
+```
+ Note: This package is installed separately due to some installation issues. See: https://github.com/rusty1s/pytorch_scatter/issues/265 and https://github.com/rusty1s/pytorch_scatter/issues/424
+
+
 Installation should take around 15 minutes on a normal desktop computer. NanoParticleTools can run on Python 3.10 and greater. The [setup.py](https://github.com/BlauGroup/NanoParticleTools/blob/main/setup.py) file includes pinned/constrained dependencies necessary for the installation. 
 
 ### Training and Using Machine Learning Models
@@ -38,13 +47,6 @@ Within the demos folder, we have included Jupyter notebooks with demos for (1) t
 
 Pre-compiled UCNP [datasets](https://figshare.com/s/49222bae78f228363897) (SUNSET) and pre-trained [models](https://figshare.com/articles/dataset/Hetero-GNN_Checkpoints/27941694/1?file=50919813)  
  can be downloaded from Figshare.
-
-Finally, install torch-scatter as follows.
-```
-git clone https://github.com/rusty1s/pytorch_scatter.git
-pip install pytorch_scatter/
-```
- Note: This package is installed separately due to some installation issues. See: https://github.com/rusty1s/pytorch_scatter/issues/265 and https://github.com/rusty1s/pytorch_scatter/issues/424
 
 ## Running Simulations
 An example of local execution can be seen below.
