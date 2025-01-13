@@ -13,11 +13,12 @@
 [![Requires Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg?logo=python&logoColor=white)](https://python.org/downloads)
 
 
-NanoParticleTools tools is a python module that facilitates monte carlo simulation of Upconverting Nanoparticles (UCNP) using [RNMC](https://github.com/BlauGroup/RNMC).
+NanoParticleTools tools is a python module that facilitates monte carlo simulation of Upconverting Nanoparticles (UCNP) using [RNMC](https://github.com/BlauGroup/RNMC) and analysis/prediction using deep learning, detailed in the [manuscript by Sivonxay et. al](https://chemrxiv.org/engage/chemrxiv/article-details/6769dc3a81d2151a02b75ef6). 
 
 # Using NanoParticleTools
 NanoParticleTools provides functionality to generate inputs for running Monte Carlo Simulations on nanoparticles and analyzing outputs. Monte Carlo simulation uses NMPC within the [RNMC](https://github.com/BlauGroup/RNMC) package. While NanoParticleTools provides wrapper functions to run the C++ based simulator, [RNMC](https://github.com/BlauGroup/RNMC) must be installed to perform simulations.
 
+Using only the machine learning capabilities within NanoParticleTools does not require the installation of [RNMC](https://github.com/BlauGroup/RNMC)
 ## Installation
 To install NanoParticleTools to a python environment, clone the repository and use one of the following commands from within the NanoParticleTools directory
 ```bash
@@ -27,6 +28,16 @@ or
 ```bash
 pip install .
 ```
+Installation should take around 15 minutes on a normal desktop computer. NanoParticleTools can run on Python 3.10 and greater. The [setup.py](https://github.com/BlauGroup/NanoParticleTools/blob/main/setup.py) file includes pinned/constrained dependencies necessary for the installation. 
+
+### Training and Using Machine Learning Models
+
+The functionality to train and use deep learning models to predict UCNP emission intensity using NanoParticleTools is embedded [here](https://github.com/BlauGroup/NanoParticleTools/tree/main/src/NanoParticleTools/machine_learning). 
+
+Within the demos folder, we have included Jupyter notebooks with demos for (1) training a deep learning model on pre-compiled datasets of [RNMC](https://github.com/BlauGroup/RNMC) trajectories, (2) loading pre-trained models and predicting emission intensity for an arbitrary UCNP design, and (3) loading pre-trained models and predicting emission intensity on the pre-compiled UCNP datasets. 
+
+Pre-compiled UCNP [datasets](https://figshare.com/s/49222bae78f228363897) (SUNSET) and pre-trained [models](https://figshare.com/articles/dataset/Hetero-GNN_Checkpoints/27941694/1?file=50919813)  
+ can be downloaded from Figshare.
 
 Finally, install torch-scatter as follows.
 ```
@@ -83,9 +94,6 @@ docs_store = MongoStore(<mongo credentials or URI here>)
 data_store = MongoStore(<mongo credentials or URI here>)
 ```
 Refer to the maggma [Stores documentation](https://materialsproject.github.io/maggma/getting_started/stores/) for more information.
-
-### High-throughput simulations
-
 
 ## Running the Builder
 After running simulations, you may wish to average the outputs of trajectories obtained from the same recipe (using different dopant and simulation seeds). We have included a maggma builder in NanoParticleTools to easily group documents and perform the averaging. More information on builders can be found in the maggma [Builder documentation](https://materialsproject.github.io/maggma/reference/core_builder/)
